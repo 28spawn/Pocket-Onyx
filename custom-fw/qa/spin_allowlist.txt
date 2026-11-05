@@ -1,0 +1,4 @@
+# Busy-waits on hardware registers that were reviewed and accepted (check S-07).
+# One per line: <path relative to custom-fw>::<the exact trimmed source line>
+# Add a line only after deciding the loop cannot hang the device (or that a hang there
+# is acceptable), and say why in a comment above it.

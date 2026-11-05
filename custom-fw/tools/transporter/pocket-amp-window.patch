@@ -1,0 +1,66 @@
+diff --git a/src/jieli_uboot.h b/src/jieli_uboot.h
+index d37ff73..fc26038 100644
+--- a/src/jieli_uboot.h
++++ b/src/jieli_uboot.h
+@@ -6,9 +6,13 @@
+ // JieLi WL82 UBOOT1.00 + wl82loader (LoaderV2), read-only subset.
+ // See docs/PROTOCOL.md. Core 1 only.
+ //
+-// Writes are limited to whole 4 KiB sectors inside the application area
+-// [JL_WRITE_MIN, JL_WRITE_END). Header/SPL/isd_config below 0x4000 and the
+-// device data from 0x93000 up are refused here, whatever the host asks.
++// POCKET AMP BUILD. Writes are limited to whole 4 KiB sectors inside the
++// Pocket Amp's firmware-package region [JL_WRITE_MIN, JL_WRITE_END): MBR,
++// uboot and app (0x0-0xB4FFF). Everything from 0xB5000 up - VM, BTIF, USER,
++// AM4 cab data, preset banks and settings - is refused here, whatever the
++// host asks. (The FM-1 build allows [0x4000, 0x93000).) The host tool
++// (pocket-amp custom-fw/tools/pa_transporter.py) adds its own checks and needs
++// an explicit flag for any sector below 0x4000.
+ // Deliberately absent: block/chip erase, chip-key write. RAM writes exist only
+ // for the loader upload and the ROM-stage RAM-run calls below (RAM, never flash).
+ 
+@@ -18,8 +22,8 @@
+ #define JL_IO_SIZE 512          // loader upload and flash write chunk
+ #define JL_READ_MAX 4096        // largest READ_FLASH we issue (see jl_read_chunk)
+ #define JL_SECTOR_SIZE 0x1000
+-#define JL_WRITE_MIN 0x4000
+-#define JL_WRITE_END 0x93000
++#define JL_WRITE_MIN 0x0000
++#define JL_WRITE_END 0xB5000
+ 
+ typedef struct {
+     uint16_t chip_key;
+diff --git a/src/transporter_proto.c b/src/transporter_proto.c
+index 08b7e7f..26508e2 100644
+--- a/src/transporter_proto.c
++++ b/src/transporter_proto.c
+@@ -329,8 +329,8 @@ void fm1_proto_poll(void) {
+         } else {
+             dlog("PROTO: chip key %04X, device type %u, flash id %06lX", info.chip_key,
+                  info.dev_type, (unsigned long)info.flash_id);
+-            tx_line("OK key=%04X type=%u id=%06lX", info.chip_key, info.dev_type,
+-                    (unsigned long)info.flash_id);
++            tx_line("OK key=%04X type=%u id=%06lX win=%X-%X", info.chip_key, info.dev_type,
++                    (unsigned long)info.flash_id, (unsigned)JL_WRITE_MIN, (unsigned)JL_WRITE_END);
+         }
+     } else if (!strcmp(argv[0], "read") && argc == 3) {
+         if (!fm1_host_uboot_ready()) {
+diff --git a/src/transporter_proto.h b/src/transporter_proto.h
+index 865bd40..96e2f5c 100644
+--- a/src/transporter_proto.h
++++ b/src/transporter_proto.h
+@@ -12,12 +12,12 @@
+ //   runapp                -> OK | ERR no-loader  (loader RUN_APP: boot firmware)
+ //   rekey                 -> OK rekey, then the transporter reboots into
+ //                            USB_KEY mode (for a unit stuck with USB up)
+-//   info                  -> OK key=980F type=3 id=856014 | ERR <why>
++//   info                  -> OK key=980F type=3 id=856014 win=0-B5000 | ERR <why>
+ //   read <addr> <len>     -> DATA <len>\n <len raw bytes> END <crc32>\n | ERR <why>
+ //   wsec <addr> <crc32>\n <4096 raw bytes>
+ //                         -> OK | ERR <why>   (erase + write + read-back verify)
+ //
+-// Writes are accepted only for whole 4 KiB sectors in [0x4000, 0x93000);
++// Writes are accepted only for whole 4 KiB sectors in [0x0, 0xB5000) (Pocket Amp build);
+ // see jieli_uboot.h. No block/chip erase exists.
+ 
+ // core 0: feed bytes received on CDC 1; drain queued output to CDC 1.

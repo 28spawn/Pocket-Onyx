@@ -1,0 +1,37 @@
+name: Provenance & Clean-Room Gate
+
+on:
+  push:
+    branches: [ "**" ]
+    tags: [ "**" ]
+  pull_request:
+  release:
+    types: [ published, created, edited ]
+  workflow_dispatch:
+
+jobs:
+  provenance-gate:
+    name: Verify zero vendor blobs, names, or pre-cleanup history
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full repository and history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip numpy
+
+      - name: Run provenance & stride-1 binary/package/history audit
+        run: python custom-fw/test/test_provenance.py
+
+      - name: Verify Onyx release package integrity
+        run: |
+          python custom-fw/test/test_onyx_package.py \
+            custom-fw/release/Pocket_AMP_Onyx_1.05/Pocket_AMP_Onyx_1.05.fwsc \
+            custom-fw/release/Pocket_AMP_Onyx_1.05/Pocket_AMP_Onyx_1.05.bin

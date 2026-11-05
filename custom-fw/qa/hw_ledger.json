@@ -1,0 +1,2034 @@
+{
+  "_readme": "Hardware and recovery evidence for the QA gate (custom-fw/tools/qa_gate.py). Fill it in as you do the bench work in TEST-PROTOCOL.md. Every claim needs evidence: a photo, a log or a file path. The gate reads this file; it never writes it.",
+  "device": {
+    "serial_or_label": "4150353835313708",
+    "flash_chip": "<marking>",
+    "flash_size_bytes": 1048576,
+    "flash_is_separate_8pin_chip": null,
+    "evidence": "custom-fw/qa/backups/unit1_v105/manifest.json and console.log (current baseline, firmware Pocket AMP_105, USB 3654:7756); earlier V1.03 dump in custom-fw/qa/backups/unit1. FM-1 Transporter info: key=980F type=3 id=856014",
+    "flash_evidence": {
+      "date": "2026-11-03",
+      "dump_sha256": "f67b1cb83b9efaf3194778e61d424a3edb477802c35d67f381e5a43acdf1a503",
+      "chip_size": 1048576,
+      "identical_to_fwsc": {
+        "MBR": 1.0,
+        "uboot": 1.0,
+        "app": 0.0237
+      },
+      "app_entropy_on_flash": 7.996,
+      "app_region_matches_fwsc": false
+    },
+    "flash_jedec": "0x856014"
+  },
+  "recovery": {
+    "full_dump_sha256": "f67b1cb83b9efaf3194778e61d424a3edb477802c35d67f381e5a43acdf1a503",
+    "dumps_identical": 2,
+    "dump_locations": [
+      "custom-fw/qa/backups/11c011913a04364a",
+      "custom-fw/qa/backups/66ac9ffd51172b2a",
+      "custom-fw/qa/backups/f67b1cb83b9efaf3"
+    ],
+    "routes": {
+      "spi_programmer": {
+        "status": "untested",
+        "date": "",
+        "evidence": ""
+      },
+      "jieli_isd_download": {
+        "status": "untested",
+        "date": "",
+        "evidence": ""
+      },
+      "uboot_update_mode": {
+        "status": "untested",
+        "date": "",
+        "evidence": ""
+      },
+      "button_dfu": {
+        "status": "failed",
+        "date": "2026-10-30",
+        "evidence": "Tested 7 cycles holding VOL-, PARA, HOME, VOL+ on USB insert. Stock bootloader always boots normal app mode (4C4A:C755)",
+        "vid_pid_seen": "4C4A:C755"
+      },
+      "m_upgrade_stock": {
+        "status": "untested",
+        "date": "",
+        "evidence": ""
+      },
+      "stock_enter_upgrade": {
+        "status": "untested",
+        "date": "",
+        "evidence": "",
+        "vid_pid_seen": ""
+      },
+      "usb_key_dongle": {
+        "status": "proven",
+        "date": "2026-10-30",
+        "evidence": "FM-1 Transporter method (XIAO RP2040 on D+/D-/GND, USB_KEY at power-on). 2026-10-30: dumps on V1.03 (11c01191...) and V1.05 (66ac9ffd...); full app region (0x5000-0xB5000) rewritten with stock V1.05 and booted; recovery test: app sector 0x5000 blanked -> unit dead (black screen, no USB device on the PC) -> UBOOT entered via USB_KEY -> sector restored with drill --repair -> full re-read identical to 66ac9ffd... -> booted, identity Pocket AMP_105. Logs: custom-fw/qa/backups/unit1_v105_recovery/ (break.out, repair.out, console.log).",
+        "hardware": "Seeed XIAO RP2040 with the Pocket Amp Transporter build (FM-1 Transporter a632d92, MIT, write window widened to 0x0-0xB5000; built from C:/Users/Ricardo/Downloads/pa-transporter-build), custom-fw/tools/pa_transporter.py"
+      }
+    },
+    "restore_drill": {
+      "date": "2026-10-30",
+      "route": "usb_key_dongle with the Pocket Amp Transporter build (write window 0x0-0xB5000, info reports win=0-B5000)",
+      "result": "pass: full app region 0x5000-0xB5000 (176 sectors) rewritten with the stock V1.05 bytes (identical to Pocket AMP.fwsc), each erased/written/read back; full 1 MiB re-read identical to baseline sha256 66ac9ffd...; runapp OK, unit booted, identity Pocket AMP_105",
+      "evidence": "custom-fw/qa/backups/unit1_v105_patfw/drill_app.out and console.log (176 'PROTO: write sector' lines, no failures)",
+      "not_covered": "boot area 0x0-0x5000 (restorable with --boot-area, deliberately not drilled)",
+      "recovery_test": "2026-10-30 pass: blanked 0x5000, confirmed unit dead, repaired through the ROM USB_KEY route, chip identical to baseline, unit boots as Pocket AMP_105. Evidence custom-fw/qa/backups/unit1_v105_recovery/",
+      "last_full_restore": "2026-10-30 after the custom-firmware bench session: drill 0x4000-0xB5000 --repair --full-verify over a custom image, 177 sectors, 0x0-0xB5000 identical to baseline 66ac9ffd..., unit boots stock (user confirmed). Evidence custom-fw/qa/backups/unit1_v105_restore/restore.out"
+    },
+    "partial_drills": [
+      {
+        "date": "2026-10-30",
+        "stage": 1,
+        "route": "usb_key_dongle",
+        "action": "pa_transporter.py drill unit1_v105/dump1.bin 0x92000 --full-verify: sector 0x92000 erased, rewritten with its own bytes, read back identical",
+        "result": "pass: full 1 MiB re-read identical to the baseline (sha256 66ac9ffd...); runapp OK; unit booted normally and answered identity Pocket AMP_105",
+        "evidence": "custom-fw/qa/backups/unit1_v105/console.log ('PROTO: write sector 092000')"
+      },
+      {
+        "date": "2026-10-30",
+        "stage": 2,
+        "route": "usb_key_dongle (Pocket Amp Transporter build)",
+        "action": "check dump through the new firmware",
+        "result": "pass: two reads identical to baseline 66ac9ffd...; win=0-B5000",
+        "evidence": "custom-fw/qa/backups/unit1_v105_patfw/run.out"
+      }
+    ],
+    "flash_log": [
+      {
+        "date": "2026-10-31T14:34:46",
+        "expected_sha256": "29252356e420597ed333cd0b5847fa5f0755405aaedad7b44c8077bfd5bfbc6f",
+        "sectors": 142,
+        "done": 142,
+        "result": "FAILED: final read-back differs in 2 sector(s), first 0x0B5000",
+        "journal": "flash_journal_20261031-143436.json"
+      },
+      {
+        "date": "2026-10-31T14:35:35",
+        "expected_sha256": "29252356e420597ed333cd0b5847fa5f0755405aaedad7b44c8077bfd5bfbc6f",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261031-143535.json"
+      },
+      {
+        "date": "2026-10-31T14:53:12",
+        "expected_sha256": "5bf57462198d33142aecfe9baf4f77595c1baebcd67b7b7e6c7239cfabfbdf83",
+        "sectors": 142,
+        "done": 142,
+        "result": "ok",
+        "journal": "flash_journal_20261031-145302.json"
+      },
+      {
+        "date": "2026-10-31T15:12:41",
+        "expected_sha256": "6b39c41bb0349d9c1d49f9bb1cdd129668626fe54c286d20e048718a7c952296",
+        "sectors": 126,
+        "done": 126,
+        "result": "ok",
+        "journal": "flash_journal_20261031-151232.json"
+      },
+      {
+        "date": "2026-10-31T15:19:23",
+        "expected_sha256": "e20e546ed8f77c97f48bf8d344727d1b9da4606f189da09adf5f946d6f6d2db5",
+        "sectors": 142,
+        "done": 142,
+        "result": "ok",
+        "journal": "flash_journal_20261031-151913.json"
+      },
+      {
+        "date": "2026-10-31T15:25:17",
+        "expected_sha256": "6c384dd20e67223ab8e3e2ad8f705513607765e4b888ba9657c8af5284189174",
+        "sectors": 83,
+        "done": 83,
+        "result": "ok",
+        "journal": "flash_journal_20261031-152510.json"
+      },
+      {
+        "date": "2026-10-31T15:33:34",
+        "expected_sha256": "3e54798bf1b4d35c8263482e56a1dccfe1de6089377984cce982de06f935bcd7",
+        "sectors": 142,
+        "done": 142,
+        "result": "ok",
+        "journal": "flash_journal_20261031-153325.json"
+      },
+      {
+        "date": "2026-10-31T15:58:01",
+        "expected_sha256": "ed3e6bdf95dad913e83639f8d8ce276f64840e5d59a1d885dc3d968761d04626",
+        "sectors": 142,
+        "done": 142,
+        "result": "ok",
+        "journal": "flash_journal_20261031-155751.json"
+      },
+      {
+        "date": "2026-10-31T16:02:25",
+        "expected_sha256": "bc9917f5b300f44ef1f5814a68f32ef129def0fd5c2d80cdc6ebdc55ed60faf8",
+        "sectors": 142,
+        "done": 142,
+        "result": "ok",
+        "journal": "flash_journal_20261031-160215.json"
+      },
+      {
+        "date": "2026-10-31T16:09:16",
+        "expected_sha256": "e616ba0fb2b85b8098c5b3eb4be9b1a176a2d7db0b0837d28f68d3c6de87e5ca",
+        "sectors": 47,
+        "done": 47,
+        "result": "ok",
+        "journal": "flash_journal_20261031-160911.json"
+      },
+      {
+        "date": "2026-10-31T16:14:29",
+        "expected_sha256": "48612ae9a998a2819533ce3d8834e4edf1e69a3aa9bdc888147e39c26a3b6479",
+        "sectors": 142,
+        "done": 142,
+        "result": "ok",
+        "journal": "flash_journal_20261031-161419.json"
+      },
+      {
+        "date": "2026-10-31T16:19:31",
+        "expected_sha256": "ab5a96756d809dd7f7002f8ee178bb126837c5f0a57bb763837726ee4e3141e0",
+        "sectors": 142,
+        "done": 142,
+        "result": "ok",
+        "journal": "flash_journal_20261031-161921.json"
+      },
+      {
+        "date": "2026-10-31T16:26:03",
+        "expected_sha256": "81f56edb67bf16bc26b9c7385348fbfc0d68fedf5f86a75dadf64560cb60347b",
+        "sectors": 142,
+        "done": 142,
+        "result": "ok",
+        "journal": "flash_journal_20261031-162553.json"
+      },
+      {
+        "date": "2026-10-31T16:41:07",
+        "expected_sha256": "b5d8b939ec11e9be43543853f468d5a42d4d1de61424af64bdce653a93c9cb23",
+        "sectors": 143,
+        "done": 143,
+        "result": "ok",
+        "journal": "flash_journal_20261031-164057.json"
+      },
+      {
+        "date": "2026-10-31T16:46:02",
+        "expected_sha256": "7b0b973547b7a11865a13a3894fe1214f32d4134f31395ec94f839e8f34c42fd",
+        "sectors": 143,
+        "done": 143,
+        "result": "ok",
+        "journal": "flash_journal_20261031-164551.json"
+      },
+      {
+        "date": "2026-10-31T17:01:35",
+        "expected_sha256": "c57898b7a90f701857269a5f34be9ad738c3eeaa270aafdaafe29777b5779a37",
+        "sectors": 144,
+        "done": 144,
+        "result": "ok",
+        "journal": "flash_journal_20261031-170125.json"
+      },
+      {
+        "date": "2026-10-31T17:13:51",
+        "expected_sha256": "2b1081c6c2618dc912a74e082f063dab5df1fba8ad657e45531ab2dda5dadb31",
+        "sectors": 144,
+        "done": 144,
+        "result": "ok",
+        "journal": "flash_journal_20261031-171341.json"
+      },
+      {
+        "date": "2026-10-31T17:20:41",
+        "expected_sha256": "6f16780162af66135329ad76db13c8adf7f6f1ffdda38807b83c865b0483c36d",
+        "sectors": 144,
+        "done": 144,
+        "result": "ok",
+        "journal": "flash_journal_20261031-172030.json"
+      },
+      {
+        "date": "2026-10-31T17:26:51",
+        "expected_sha256": "5b0cf284e854c961b01d0f161c696d30e438b246da6257cc78df5e6be69ffc5e",
+        "sectors": 51,
+        "done": 51,
+        "result": "ok",
+        "journal": "flash_journal_20261031-172646.json"
+      },
+      {
+        "date": "2026-10-31T17:42:13",
+        "expected_sha256": "86d89c789e1ec0adb1601de9041d0c0609a2fc5222a23a36b917e27d8ee803b3",
+        "sectors": 144,
+        "done": 144,
+        "result": "ok",
+        "journal": "flash_journal_20261031-174202.json"
+      },
+      {
+        "date": "2026-10-31T17:47:16",
+        "expected_sha256": "7dcc3ca36e7858e5981f80372fb2f3b350c5ba07beef9668dc8e9a4bb6d5fa25",
+        "sectors": 144,
+        "done": 144,
+        "result": "ok",
+        "journal": "flash_journal_20261031-174706.json"
+      },
+      {
+        "date": "2026-10-31T18:20:48",
+        "expected_sha256": "560eb428b087ab5c35bf0ad3a0a9842181282670f67381e4f06e5c25bae6befc",
+        "sectors": 86,
+        "done": 86,
+        "result": "ok",
+        "journal": "flash_journal_20261031-182041.json"
+      },
+      {
+        "date": "2026-10-31T18:33:31",
+        "expected_sha256": "a2b2bd80d0447b221bc1ef39e94feed8764233c134433b32efb5c740a56bc621",
+        "sectors": 145,
+        "done": 145,
+        "result": "ok",
+        "journal": "flash_journal_20261031-183321.json"
+      },
+      {
+        "date": "2026-10-31T18:41:06",
+        "expected_sha256": "ac06d78641f946b23a2718872ae0c48765a89bd184d446172863627f69e62c47",
+        "sectors": 145,
+        "done": 145,
+        "result": "ok",
+        "journal": "flash_journal_20261031-184056.json"
+      },
+      {
+        "date": "2026-10-31T19:04:20",
+        "expected_sha256": "1d581219e8b52ae3184199d1648771898968c6f365c25d977bb31c3ed3a15382",
+        "sectors": 145,
+        "done": 145,
+        "result": "ok",
+        "journal": "flash_journal_20261031-190409.json"
+      },
+      {
+        "date": "2026-10-31T19:14:29",
+        "expected_sha256": "ebebabba2654e69601b4929c4d96aa51ee1faeee5bc97bf585f600e531274233",
+        "sectors": 145,
+        "done": 145,
+        "result": "ok",
+        "journal": "flash_journal_20261031-191419.json"
+      },
+      {
+        "date": "2026-10-31T19:49:05",
+        "expected_sha256": "651b210395446172171b585d1e26db76c3ba188a2284c80ca218ff449f7a6c5a",
+        "sectors": 144,
+        "done": 144,
+        "result": "ok",
+        "journal": "flash_journal_20261031-194854.json"
+      },
+      {
+        "date": "2026-10-31T20:12:52",
+        "expected_sha256": "8e70949985d9afea4dfe696ee347a2092f41879ec8fd63cdc58f49c9bc8910bd",
+        "sectors": 145,
+        "done": 145,
+        "result": "ok",
+        "journal": "flash_journal_20261031-201242.json"
+      },
+      {
+        "date": "2026-10-31T20:26:02",
+        "expected_sha256": "2c2f80839521ed4d17a92c9c59e732f885c4ec1eb24404d2560d21940d6f6d4b",
+        "sectors": 145,
+        "done": 145,
+        "result": "ok",
+        "journal": "flash_journal_20261031-202552.json"
+      },
+      {
+        "date": "2026-10-31T20:42:07",
+        "expected_sha256": "793dd541d0366e04c591a19f95589208042ce80eb56b17b70675d6cd30c1a928",
+        "sectors": 145,
+        "done": 145,
+        "result": "ok",
+        "journal": "flash_journal_20261031-204157.json"
+      },
+      {
+        "date": "2026-10-31T21:00:52",
+        "expected_sha256": "f7a06a7ef699ed927165989cbacc6893ddebf41128188dd06fabfdbce127590f",
+        "sectors": 145,
+        "done": 145,
+        "result": "ok",
+        "journal": "flash_journal_20261031-210041.json"
+      },
+      {
+        "date": "2026-10-31T21:13:48",
+        "expected_sha256": "6bd606a3b26a3ae2aaa4469b104856633f1b2be904ecb56b28739633ff7f8a93",
+        "sectors": 145,
+        "done": 145,
+        "result": "ok",
+        "journal": "flash_journal_20261031-211338.json"
+      },
+      {
+        "date": "2026-10-31T21:22:58",
+        "expected_sha256": "f15060f23edc07542161274b37a2d92b86f5b6434e5119faa7b6940de422a0a4",
+        "sectors": 145,
+        "done": 145,
+        "result": "ok",
+        "journal": "flash_journal_20261031-212248.json"
+      },
+      {
+        "date": "2026-10-31T21:34:10",
+        "expected_sha256": "61b1154c7da656205cced36dddeeb4cc1923e2287de250e831719bf5d62f99ff",
+        "sectors": 144,
+        "done": 144,
+        "result": "ok",
+        "journal": "flash_journal_20261031-213359.json"
+      },
+      {
+        "date": "2026-10-31T21:48:00",
+        "expected_sha256": "192d54f5fcbd61ab295900f3a204ab49e84d89283aac93497f4b26a1c1eee566",
+        "sectors": 145,
+        "done": 145,
+        "result": "ok",
+        "journal": "flash_journal_20261031-214750.json"
+      },
+      {
+        "date": "2026-10-31T21:57:43",
+        "expected_sha256": "cacc9a8caa7ec12a2326b59836a32831dca3eb2e1f59fe98ee6f1524e6b2f5d7",
+        "sectors": 144,
+        "done": 144,
+        "result": "ok",
+        "journal": "flash_journal_20261031-215733.json"
+      },
+      {
+        "date": "2026-10-31T22:06:08",
+        "expected_sha256": "995625676d9c5694cf7aed0d52d198fa035778483a20c07cd7f549b41e7f26a1",
+        "sectors": 144,
+        "done": 144,
+        "result": "ok",
+        "journal": "flash_journal_20261031-220557.json"
+      },
+      {
+        "date": "2026-10-31T22:13:11",
+        "expected_sha256": "05487516f1ed8786aa4e93c23bd44792c8c1284bf3eff79c9a8a30052c4cba25",
+        "sectors": 144,
+        "done": 144,
+        "result": "ok",
+        "journal": "flash_journal_20261031-221301.json"
+      },
+      {
+        "date": "2026-10-31T22:51:53",
+        "expected_sha256": "e3577e8415de11ef5491c77ebe815a4fdecb3a2cfe5dfc7042ab4678d085ba9e",
+        "sectors": 130,
+        "done": 130,
+        "result": "ok",
+        "journal": "flash_journal_20261031-225144.json"
+      },
+      {
+        "date": "2026-10-31T22:56:22",
+        "expected_sha256": "2d7f81c1e4257a57ac09e891dae3470b2437671f8e3a023ea0a2cf02129f5074",
+        "sectors": 146,
+        "done": 146,
+        "result": "ok",
+        "journal": "flash_journal_20261031-225611.json"
+      },
+      {
+        "date": "2026-10-31T23:02:09",
+        "expected_sha256": "ca292a1a03cc2467cf1739918086eb554767441bff7a235035e087e7b2b5abba",
+        "sectors": 126,
+        "done": 126,
+        "result": "ok",
+        "journal": "flash_journal_20261031-230200.json"
+      },
+      {
+        "date": "2026-10-31T23:07:36",
+        "expected_sha256": "88f3fa32e1951893763af76912a0cdecc17aee2558192267d8e4aa349c6bcaec",
+        "sectors": 38,
+        "done": 38,
+        "result": "ok",
+        "journal": "flash_journal_20261031-230731.json"
+      },
+      {
+        "date": "2026-10-31T23:21:20",
+        "expected_sha256": "0c4469ef7e2c76fbea63d2cbfcf4588ca8dbd2c15a3371a2dcbe90030bb480b2",
+        "sectors": 146,
+        "done": 146,
+        "result": "ok",
+        "journal": "flash_journal_20261031-232110.json"
+      },
+      {
+        "date": "2026-10-31T23:25:26",
+        "expected_sha256": "995d0558f98dbad2b653e23ce588516f9a15412692e866cefc635c990bd398e1",
+        "sectors": 145,
+        "done": 145,
+        "result": "ok",
+        "journal": "flash_journal_20261031-232516.json"
+      },
+      {
+        "date": "2026-10-31T23:38:40",
+        "expected_sha256": "4d889111cb803ae488117eb99d761aa2d8b09c5ddf09b08e5d20f53e80b05e05",
+        "sectors": 146,
+        "done": 146,
+        "result": "ok",
+        "journal": "flash_journal_20261031-233830.json"
+      },
+      {
+        "date": "2026-10-31T23:49:20",
+        "expected_sha256": "648e66dc3049e94b4bf337c199899ef611af6c1d301cefd0cc7cdbe72168eb95",
+        "sectors": 132,
+        "done": 132,
+        "result": "ok",
+        "journal": "flash_journal_20261031-234911.json"
+      },
+      {
+        "date": "2026-10-31T23:56:59",
+        "expected_sha256": "5d1523800bd439efc6fab6dd3cffc77b0147b27d10dc4daa86d9471978d592d3",
+        "sectors": 63,
+        "done": 63,
+        "result": "ok",
+        "journal": "flash_journal_20261031-235653.json"
+      },
+      {
+        "date": "2026-11-01T00:06:20",
+        "expected_sha256": "059a9cad785f396076f4300f4a7df1a3c8a5d43182acc89c95e73912aac52274",
+        "sectors": 145,
+        "done": 145,
+        "result": "ok",
+        "journal": "flash_journal_20261101-000610.json"
+      },
+      {
+        "date": "2026-11-01T00:20:15",
+        "expected_sha256": "04ff6b31f462d0a7919633fba245842d0230d485d92001f77e5ba1b0d4b40116",
+        "sectors": 145,
+        "done": 145,
+        "result": "ok",
+        "journal": "flash_journal_20261101-002005.json"
+      },
+      {
+        "date": "2026-11-01T00:35:13",
+        "expected_sha256": "bf1a2ef11bd9df64c51eeff4cc2cd2d61e969576ada14b365e4f3e8d3eb54fa4",
+        "sectors": 145,
+        "done": 145,
+        "result": "ok",
+        "journal": "flash_journal_20261101-003503.json"
+      },
+      {
+        "date": "2026-11-01T01:17:11",
+        "expected_sha256": "3577f2d11e747edec9e41152dd4923b7d523907cb86752eb01506c742e309f47",
+        "sectors": 147,
+        "done": 147,
+        "result": "ok",
+        "journal": "flash_journal_20261101-011701.json"
+      },
+      {
+        "date": "2026-11-01T01:24:15",
+        "expected_sha256": "90d0d03bd1fe71a03b7725526a5688fdcd1ef9dac1176f8b653c0167f6808ee0",
+        "sectors": 147,
+        "done": 147,
+        "result": "ok",
+        "journal": "flash_journal_20261101-012405.json"
+      },
+      {
+        "date": "2026-11-01T01:28:09",
+        "expected_sha256": "2fa3134327c016c51039787e4720a4f11b73819a788256d2d7d2071439ba62f6",
+        "sectors": 146,
+        "done": 146,
+        "result": "ok",
+        "journal": "flash_journal_20261101-012759.json"
+      },
+      {
+        "date": "2026-11-01T01:33:52",
+        "expected_sha256": "3c76dabc049a465c4906c21fae78ca6476575fc86aed658576b4cc552ca930a8",
+        "sectors": 146,
+        "done": 146,
+        "result": "ok",
+        "journal": "flash_journal_20261101-013341.json"
+      },
+      {
+        "date": "2026-11-01T01:45:07",
+        "expected_sha256": "5ecdb928275d8975d9c1c2ca13212b811ee536a5d406a3e5bf8ba1105c1a769a",
+        "sectors": 59,
+        "done": 59,
+        "result": "ok",
+        "journal": "flash_journal_20261101-014501.json"
+      },
+      {
+        "date": "2026-11-01T02:00:32",
+        "expected_sha256": "e64ceb3cc78c0a57d3414df81a8304dc88a3af56758c31d36ca66df411ce00ac",
+        "sectors": 146,
+        "done": 146,
+        "result": "ok",
+        "journal": "flash_journal_20261101-020021.json"
+      },
+      {
+        "date": "2026-11-01T02:24:22",
+        "expected_sha256": "ecc214d37c612a6dff03f41ad47348aba1a64377c39c75c645d4650d1d1ce9ed",
+        "sectors": 13,
+        "done": 13,
+        "result": "ok",
+        "journal": "flash_journal_20261101-022419.json"
+      },
+      {
+        "date": "2026-11-01T02:29:16",
+        "expected_sha256": "fd3436cbf53e79d8fbd46a37dbbacbbf70080aa2b68b05e6be22db59da271532",
+        "sectors": 131,
+        "done": 131,
+        "result": "ok",
+        "journal": "flash_journal_20261101-022907.json"
+      },
+      {
+        "date": "2026-11-01T02:35:49",
+        "expected_sha256": "ed6c9664df053efac30d3aa9c6dc4b58a697ac889ba3fef10450ffcf753d2da2",
+        "sectors": 148,
+        "done": 148,
+        "result": "ok",
+        "journal": "flash_journal_20261101-023539.json"
+      },
+      {
+        "date": "2026-11-01T02:41:33",
+        "expected_sha256": "99d1fecfe181b0da4d56dcbe603828840473867deb9ec6e36e8a44d3ddb5e89f",
+        "sectors": 151,
+        "done": 151,
+        "result": "ok",
+        "journal": "flash_journal_20261101-024123.json"
+      },
+      {
+        "date": "2026-11-01T02:51:47",
+        "expected_sha256": "2de895a9708a37411e3d75b6b96d96fdd63840e0a29a6b9fabdab8910f7513af",
+        "sectors": 151,
+        "done": 151,
+        "result": "ok",
+        "journal": "flash_journal_20261101-025136.json"
+      },
+      {
+        "date": "2026-11-01T03:08:11",
+        "expected_sha256": "aa855f230194b89763f3bf1297fee028a006ed0941d14189b3e6c2bc566ed1c5",
+        "sectors": 153,
+        "done": 153,
+        "result": "ok",
+        "journal": "flash_journal_20261101-030801.json"
+      },
+      {
+        "date": "2026-11-01T03:20:02",
+        "expected_sha256": "cdcbfc500863f95cbbc943b1a29fa8e55b77930a08abd9b82cf22023aa567cf5",
+        "sectors": 149,
+        "done": 149,
+        "result": "ok",
+        "journal": "flash_journal_20261101-031952.json"
+      },
+      {
+        "date": "2026-11-01T03:23:35",
+        "expected_sha256": "c8f01cfd72821fee23c123402df83efe18e47d56480e0b90b4149a2f698d049b",
+        "sectors": 152,
+        "done": 152,
+        "result": "ok",
+        "journal": "flash_journal_20261101-032324.json"
+      },
+      {
+        "date": "2026-11-01T03:44:47",
+        "expected_sha256": "d2a62f6394874dce903b6e7a64a600c5598018f7efaebac56826129fc7a10f3e",
+        "sectors": 130,
+        "done": 130,
+        "result": "ok",
+        "journal": "flash_journal_20261101-034437.json"
+      },
+      {
+        "date": "2026-11-01T04:15:46",
+        "expected_sha256": "0217038e2eeb96c489a40d430c65e28470d6373e831c81cf2414afccf0822b97",
+        "sectors": 159,
+        "done": 159,
+        "result": "ok",
+        "journal": "flash_journal_20261101-041535.json"
+      },
+      {
+        "date": "2026-11-01T04:34:07",
+        "expected_sha256": "e333c344edc1c79b25c48ed49f15e68854bed317961ee1f82fafdf41c5168356",
+        "sectors": 159,
+        "done": 159,
+        "result": "ok",
+        "journal": "flash_journal_20261101-043356.json"
+      },
+      {
+        "date": "2026-11-01T04:43:02",
+        "expected_sha256": "e6c8f5b4b6894972ed06e4151e2c17caeee919f6aa71e20222a4f9da3664f544",
+        "sectors": 154,
+        "done": 154,
+        "result": "ok",
+        "journal": "flash_journal_20261101-044251.json"
+      },
+      {
+        "date": "2026-11-01T12:11:24",
+        "expected_sha256": "e875c36996052fa661bcf4bd2a9aedc0c47e9196e967329dbec00f63873f55ea",
+        "sectors": 154,
+        "done": 154,
+        "result": "ok",
+        "journal": "flash_journal_20261101-121113.json"
+      },
+      {
+        "date": "2026-11-01T12:22:39",
+        "expected_sha256": "b884e47e00fe4b20f269b157884adc4d336f280618e39c5593122601dc1b1ea4",
+        "sectors": 144,
+        "done": 144,
+        "result": "ok",
+        "journal": "flash_journal_20261101-122229.json"
+      },
+      {
+        "date": "2026-11-01T12:31:07",
+        "expected_sha256": "a6371bbda2860d349402683e4f7a1a45cdb6480e5b0e428ee2fbe57201236b8c",
+        "sectors": 154,
+        "done": 154,
+        "result": "ok",
+        "journal": "flash_journal_20261101-123057.json"
+      },
+      {
+        "date": "2026-11-01T12:41:56",
+        "expected_sha256": "96f2d73aeec8e65149d42bdbdbefe726c0d8cb755dc176d676b84bbda6b47733",
+        "sectors": 152,
+        "done": 152,
+        "result": "ok",
+        "journal": "flash_journal_20261101-124146.json"
+      },
+      {
+        "date": "2026-11-01T12:51:39",
+        "expected_sha256": "dc69d109ac01f95bb6e23bb37493261bfa3c52d780f2bfb8fdd8da4f775f3e29",
+        "sectors": 160,
+        "done": 160,
+        "result": "ok",
+        "journal": "flash_journal_20261101-125128.json"
+      },
+      {
+        "date": "2026-11-01T13:00:04",
+        "expected_sha256": "689f1bf941697e31b3b61178c7d023411311285020efb267454f18430ec39d0c",
+        "sectors": 160,
+        "done": 160,
+        "result": "ok",
+        "journal": "flash_journal_20261101-125953.json"
+      },
+      {
+        "date": "2026-11-01T13:14:42",
+        "expected_sha256": "f43a692d1ce2ed6d468d43148a2a82a77f002ab9ad47f515179f43133021a451",
+        "sectors": 161,
+        "done": 161,
+        "result": "ok",
+        "journal": "flash_journal_20261101-131431.json"
+      },
+      {
+        "date": "2026-11-01T13:32:57",
+        "expected_sha256": "8e3a3edd46b2af6eb81e3759673ddfa13ca351ea5c7ea499f484c9536cb76570",
+        "sectors": 155,
+        "done": 155,
+        "result": "ok",
+        "journal": "flash_journal_20261101-133246.json"
+      },
+      {
+        "date": "2026-11-01T13:44:06",
+        "expected_sha256": "141658d45a2dc92b673be215c73d314b8bd5d9355f0a81dfc21d52725f84bb3a",
+        "sectors": 5,
+        "done": 5,
+        "result": "ok",
+        "journal": "flash_journal_20261101-134403.json"
+      },
+      {
+        "date": "2026-11-01T13:49:29",
+        "expected_sha256": "24283da5c9eb735fb5474111b9c20a7c477ac5fea9e70839402b2b0edbc98660",
+        "sectors": 161,
+        "done": 161,
+        "result": "ok",
+        "journal": "flash_journal_20261101-134918.json"
+      },
+      {
+        "date": "2026-11-01T14:06:49",
+        "expected_sha256": "41bc8fc116fba871e42cb6b73f2fe3f38bd72a303a5f4edf4509f6e590a9c888",
+        "sectors": 161,
+        "done": 161,
+        "result": "ok",
+        "journal": "flash_journal_20261101-140638.json"
+      },
+      {
+        "date": "2026-11-01T14:22:12",
+        "expected_sha256": "326b66ea4165f8286b713cbb8fcbd9a9fe6775e23a6e6bd21081b5418af10605",
+        "sectors": 161,
+        "done": 161,
+        "result": "ok",
+        "journal": "flash_journal_20261101-142201.json"
+      },
+      {
+        "date": "2026-11-01T14:41:49",
+        "expected_sha256": "4f6636004e06c429bbc76dad539a39331c98cc28f2d5b2004bcf541e4eb66790",
+        "sectors": 162,
+        "done": 162,
+        "result": "ok",
+        "journal": "flash_journal_20261101-144138.json"
+      },
+      {
+        "date": "2026-11-01T14:55:41",
+        "expected_sha256": "208ab718f0b61f86663cdd084a420a2f49f8f76f13b9752d89c4d467c7a8800a",
+        "sectors": 162,
+        "done": 162,
+        "result": "ok",
+        "journal": "flash_journal_20261101-145530.json"
+      },
+      {
+        "date": "2026-11-01T15:08:03",
+        "expected_sha256": "ef80ce3b7c6fb7a1a69c7f239986b853777b913e58edcc96397cb5571ae3955c",
+        "sectors": 162,
+        "done": 162,
+        "result": "ok",
+        "journal": "flash_journal_20261101-150752.json"
+      },
+      {
+        "date": "2026-11-01T15:23:29",
+        "expected_sha256": "981a62df0723f260382cd648d5978efa927b6cbe1a6445ba6600b5117f1d5cc8",
+        "sectors": 156,
+        "done": 156,
+        "result": "ok",
+        "journal": "flash_journal_20261101-152318.json"
+      },
+      {
+        "date": "2026-11-01T15:39:26",
+        "expected_sha256": "0d09449488285686cb835a82b7fc2a6b11ee174adf9a764adbdc33d0c2e69a91",
+        "sectors": 141,
+        "done": 141,
+        "result": "ok",
+        "journal": "flash_journal_20261101-153916.json"
+      },
+      {
+        "date": "2026-11-01T20:36:04",
+        "expected_sha256": "504155e5b6e1a82a92743e55a9c65cca4a79f106da1d476f645c4e2b34ec0863",
+        "sectors": 163,
+        "done": 163,
+        "result": "ok",
+        "journal": "flash_journal_20261101-203553.json"
+      },
+      {
+        "date": "2026-11-01T20:46:46",
+        "expected_sha256": "d590067ad6bb41eec440f22fff86ead2f0458e41c12060609b132d51100a4209",
+        "sectors": 158,
+        "done": 158,
+        "result": "ok",
+        "journal": "flash_journal_20261101-204636.json"
+      },
+      {
+        "date": "2026-11-01T21:16:04",
+        "expected_sha256": "8b973549252e27e18b75359947de20980269d60ba0fd199b7ee84cd8988a7c64",
+        "sectors": 27,
+        "done": 27,
+        "result": "ok",
+        "journal": "flash_journal_20261101-211600.json"
+      },
+      {
+        "date": "2026-11-01T21:26:28",
+        "expected_sha256": "ca313b972e0a7f407a2a44d869806363183c4a8d00bf259c48c4f9eedde79f31",
+        "sectors": 162,
+        "done": 162,
+        "result": "ok",
+        "journal": "flash_journal_20261101-212615.json"
+      },
+      {
+        "date": "2026-11-01T21:39:26",
+        "expected_sha256": "208790af6df99d1a63564cf8a542da451ce259f2655b6a6ea750c26d12265672",
+        "sectors": 147,
+        "done": 147,
+        "result": "ok",
+        "journal": "flash_journal_20261101-213915.json"
+      },
+      {
+        "date": "2026-11-01T21:48:48",
+        "expected_sha256": "60fec5d5a4dcb4a3a261cc3b60a2c51e0f0bd61f36a323db3751f3b642f17cc6",
+        "sectors": 163,
+        "done": 163,
+        "result": "ok",
+        "journal": "flash_journal_20261101-214837.json"
+      },
+      {
+        "date": "2026-11-01T21:54:54",
+        "expected_sha256": "28e59cfda352f66023b95d5411206b6147e04e7520374955b2eb54cf5d831cdf",
+        "sectors": 42,
+        "done": 42,
+        "result": "ok",
+        "journal": "flash_journal_20261101-215449.json"
+      },
+      {
+        "date": "2026-11-01T22:16:27",
+        "expected_sha256": "1f37a85483f144e5cfcb1aac0f3df28b2d3793d21ddc8675b384c2a48a05335b",
+        "sectors": 163,
+        "done": 163,
+        "result": "ok",
+        "journal": "flash_journal_20261101-221615.json"
+      },
+      {
+        "date": "2026-11-01T23:11:13",
+        "expected_sha256": "ef18d87255638013eeaabcd6dc49a0fd13e9fd752536fa83a2632c6d3a7312e8",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261101-231113.json"
+      },
+      {
+        "date": "2026-11-01T23:28:26",
+        "expected_sha256": "d884013096643dd6ebf5d3b783f87c530a3dd6b45995650a9e8ac203df250e0f",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261101-232826.json"
+      },
+      {
+        "date": "2026-11-01T23:29:48",
+        "expected_sha256": "d884013096643dd6ebf5d3b783f87c530a3dd6b45995650a9e8ac203df250e0f",
+        "sectors": 54,
+        "done": 54,
+        "result": "ok",
+        "journal": "flash_journal_20261101-232944.json"
+      },
+      {
+        "date": "2026-11-01T23:34:40",
+        "expected_sha256": "6bbff7cb740b2c24f7b07cb56e459cf04f0ecc4795e5a585bce45ef9c54e0667",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261101-233440.json"
+      },
+      {
+        "date": "2026-11-01T23:36:59",
+        "expected_sha256": "6bbff7cb740b2c24f7b07cb56e459cf04f0ecc4795e5a585bce45ef9c54e0667",
+        "sectors": 115,
+        "done": 115,
+        "result": "ok",
+        "journal": "flash_journal_20261101-233650.json"
+      },
+      {
+        "date": "2026-11-01T23:57:31",
+        "expected_sha256": "5f12a11c8d1ec9dc25a5a8b7d81a042d2ad3374290e739339d05342a862a1e7a",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261101-235731.json"
+      },
+      {
+        "date": "2026-11-01T23:58:59",
+        "expected_sha256": "5f12a11c8d1ec9dc25a5a8b7d81a042d2ad3374290e739339d05342a862a1e7a",
+        "sectors": 95,
+        "done": 95,
+        "result": "ok",
+        "journal": "flash_journal_20261101-235852.json"
+      },
+      {
+        "date": "2026-11-02T00:09:01",
+        "expected_sha256": "e7440664e108d339a220c072ff8d9fbb041456d8e938da4e56c38c6c8a53de8d",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-000901.json"
+      },
+      {
+        "date": "2026-11-02T00:10:10",
+        "expected_sha256": "e7440664e108d339a220c072ff8d9fbb041456d8e938da4e56c38c6c8a53de8d",
+        "sectors": 116,
+        "done": 116,
+        "result": "ok",
+        "journal": "flash_journal_20261102-001002.json"
+      },
+      {
+        "date": "2026-11-02T00:22:35",
+        "expected_sha256": "3131c142af165193216e1734e2a634da896b81cc1d1716aa05a7231869078fa2",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-002235.json"
+      },
+      {
+        "date": "2026-11-02T00:26:56",
+        "expected_sha256": "160ce04050757af53e5301f9d49b68e464eefa27f5307aae243b514dfedc8de7",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-002656.json"
+      },
+      {
+        "date": "2026-11-02T00:27:40",
+        "expected_sha256": "160ce04050757af53e5301f9d49b68e464eefa27f5307aae243b514dfedc8de7",
+        "sectors": 114,
+        "done": 114,
+        "result": "ok",
+        "journal": "flash_journal_20261102-002731.json"
+      },
+      {
+        "date": "2026-11-02T00:33:31",
+        "expected_sha256": "e7d9699615f05888bb559dc5687d415d53dc065b0441135a182fdf208a920e0b",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-003331.json"
+      },
+      {
+        "date": "2026-11-02T00:34:21",
+        "expected_sha256": "e7d9699615f05888bb559dc5687d415d53dc065b0441135a182fdf208a920e0b",
+        "sectors": 115,
+        "done": 115,
+        "result": "ok",
+        "journal": "flash_journal_20261102-003412.json"
+      },
+      {
+        "date": "2026-11-02T00:41:43",
+        "expected_sha256": "03c0e77790902152dd00d519d19118d3de80b8e6c3ed8e9a87e7c3a791ad1479",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-004143.json"
+      },
+      {
+        "date": "2026-11-02T00:42:34",
+        "expected_sha256": "03c0e77790902152dd00d519d19118d3de80b8e6c3ed8e9a87e7c3a791ad1479",
+        "sectors": 111,
+        "done": 111,
+        "result": "ok",
+        "journal": "flash_journal_20261102-004226.json"
+      },
+      {
+        "date": "2026-11-02T00:46:57",
+        "expected_sha256": "16aef50a3e411f290dfa8d2652b4a4b2443b1621822cc463763299ba45380ca6",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-004657.json"
+      },
+      {
+        "date": "2026-11-02T00:47:36",
+        "expected_sha256": "16aef50a3e411f290dfa8d2652b4a4b2443b1621822cc463763299ba45380ca6",
+        "sectors": 116,
+        "done": 116,
+        "result": "ok",
+        "journal": "flash_journal_20261102-004727.json"
+      },
+      {
+        "date": "2026-11-02T00:57:51",
+        "expected_sha256": "92e163395d28bdf8590dae87c62d97f71c3fd3fb2a0496a059d1b292911be9ad",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-005751.json"
+      },
+      {
+        "date": "2026-11-02T00:59:16",
+        "expected_sha256": "92e163395d28bdf8590dae87c62d97f71c3fd3fb2a0496a059d1b292911be9ad",
+        "sectors": 54,
+        "done": 54,
+        "result": "ok",
+        "journal": "flash_journal_20261102-005911.json"
+      },
+      {
+        "date": "2026-11-02T08:59:53",
+        "expected_sha256": "ea8c29521c37abb28811c3a5b01579a58939553c0d315c6bd095a38df0033010",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-085953.json"
+      },
+      {
+        "date": "2026-11-02T09:02:54",
+        "expected_sha256": "ea8c29521c37abb28811c3a5b01579a58939553c0d315c6bd095a38df0033010",
+        "sectors": 115,
+        "done": 115,
+        "result": "ok",
+        "journal": "flash_journal_20261102-090246.json"
+      },
+      {
+        "date": "2026-11-02T09:16:17",
+        "expected_sha256": "d5eeebbeff0fa4ae85f72f15c95566e00f15970c5ae12b69e0dda770edc094b1",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-091617.json"
+      },
+      {
+        "date": "2026-11-02T09:17:12",
+        "expected_sha256": "d5eeebbeff0fa4ae85f72f15c95566e00f15970c5ae12b69e0dda770edc094b1",
+        "sectors": 116,
+        "done": 116,
+        "result": "ok",
+        "journal": "flash_journal_20261102-091703.json"
+      },
+      {
+        "date": "2026-11-02T09:42:01",
+        "expected_sha256": "5be8f7e53ad622cca16b77901bc152febd5496e61d717ea661a9a9552484a618",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-094201.json"
+      },
+      {
+        "date": "2026-11-02T09:46:21",
+        "expected_sha256": "5be8f7e53ad622cca16b77901bc152febd5496e61d717ea661a9a9552484a618",
+        "sectors": 111,
+        "done": 111,
+        "result": "ok",
+        "journal": "flash_journal_20261102-094612.json"
+      },
+      {
+        "date": "2026-11-02T09:55:03",
+        "expected_sha256": "66ac9ffd51172b2aed3deeee35583cc29a4e9e8047341a00fffc9c0ee69a4522",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-095503.json"
+      },
+      {
+        "date": "2026-11-02T09:55:38",
+        "expected_sha256": "66ac9ffd51172b2aed3deeee35583cc29a4e9e8047341a00fffc9c0ee69a4522",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-095537.json"
+      },
+      {
+        "date": "2026-11-02T10:02:58",
+        "expected_sha256": "66ac9ffd51172b2aed3deeee35583cc29a4e9e8047341a00fffc9c0ee69a4522",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-100246.json"
+      },
+      {
+        "date": "2026-11-02T10:32:05",
+        "expected_sha256": "5be8f7e53ad622cca16b77901bc152febd5496e61d717ea661a9a9552484a618",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-103154.json"
+      },
+      {
+        "date": "2026-11-02T11:20:43",
+        "expected_sha256": "318d71f1547339946cf76e0286140235c4bf8db113d69728394d586f3be54a4f",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-112043.json"
+      },
+      {
+        "date": "2026-11-02T11:23:47",
+        "expected_sha256": "81f9868f9315d6dc11ec255840ad74f8ffaeea7d471b9bac40e4f0c04675a138",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-112347.json"
+      },
+      {
+        "date": "2026-11-02T11:24:40",
+        "expected_sha256": "81f9868f9315d6dc11ec255840ad74f8ffaeea7d471b9bac40e4f0c04675a138",
+        "sectors": 124,
+        "done": 124,
+        "result": "ok",
+        "journal": "flash_journal_20261102-112431.json"
+      },
+      {
+        "date": "2026-11-02T11:34:47",
+        "expected_sha256": "e6f160d9469869ae392cb57cc9748a993b4b57a206321f84b47d41c5203d8931",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-113447.json"
+      },
+      {
+        "date": "2026-11-02T11:35:26",
+        "expected_sha256": "e6f160d9469869ae392cb57cc9748a993b4b57a206321f84b47d41c5203d8931",
+        "sectors": 124,
+        "done": 124,
+        "result": "ok",
+        "journal": "flash_journal_20261102-113517.json"
+      },
+      {
+        "date": "2026-11-02T11:44:34",
+        "expected_sha256": "e17fa43d0871a8a1b3fb065832afb3631fd2d8adbb1c65e5d20bfd2e4ff350f9",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-114434.json"
+      },
+      {
+        "date": "2026-11-02T11:45:12",
+        "expected_sha256": "e17fa43d0871a8a1b3fb065832afb3631fd2d8adbb1c65e5d20bfd2e4ff350f9",
+        "sectors": 124,
+        "done": 124,
+        "result": "ok",
+        "journal": "flash_journal_20261102-114502.json"
+      },
+      {
+        "date": "2026-11-02T11:50:57",
+        "expected_sha256": "6572f74759067213d5cd7704b9f6be419f379a35229cedd3e9c39ae05f02c303",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-115057.json"
+      },
+      {
+        "date": "2026-11-02T11:51:55",
+        "expected_sha256": "6572f74759067213d5cd7704b9f6be419f379a35229cedd3e9c39ae05f02c303",
+        "sectors": 124,
+        "done": 124,
+        "result": "ok",
+        "journal": "flash_journal_20261102-115146.json"
+      },
+      {
+        "date": "2026-11-02T12:00:06",
+        "expected_sha256": "d27574bf9323e0106b84af41d8c85149fe2ec197ac5ecd0ccd9a5b45e638215f",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-120006.json"
+      },
+      {
+        "date": "2026-11-02T12:02:49",
+        "expected_sha256": "d27574bf9323e0106b84af41d8c85149fe2ec197ac5ecd0ccd9a5b45e638215f",
+        "sectors": 124,
+        "done": 124,
+        "result": "ok",
+        "journal": "flash_journal_20261102-120240.json"
+      },
+      {
+        "date": "2026-11-02T12:09:46",
+        "expected_sha256": "c3e14544db3495dd0cb9b4e36c0ee66f28d98c069c60e2026b913ae603cee84a",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-120946.json"
+      },
+      {
+        "date": "2026-11-02T12:10:41",
+        "expected_sha256": "c3e14544db3495dd0cb9b4e36c0ee66f28d98c069c60e2026b913ae603cee84a",
+        "sectors": 124,
+        "done": 124,
+        "result": "ok",
+        "journal": "flash_journal_20261102-121031.json"
+      },
+      {
+        "date": "2026-11-02T12:17:43",
+        "expected_sha256": "e13ce4554343c77019947fb802fad59d9823fc3a983bc93babbe214838c10960",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-121743.json"
+      },
+      {
+        "date": "2026-11-02T12:19:38",
+        "expected_sha256": "5e644689570e2d0e0a9677864aa252b17597aa79b465cafa5a3c76628af7e13f",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-121938.json"
+      },
+      {
+        "date": "2026-11-02T12:21:04",
+        "expected_sha256": "5e644689570e2d0e0a9677864aa252b17597aa79b465cafa5a3c76628af7e13f",
+        "sectors": 92,
+        "done": 92,
+        "result": "ok",
+        "journal": "flash_journal_20261102-122057.json"
+      },
+      {
+        "date": "2026-11-02T13:53:47",
+        "expected_sha256": "b2fab89ef0ff559debaf92826e0ebdb0e4ad30b6ea7a01654921718bcd67ca8b",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-135347.json"
+      },
+      {
+        "date": "2026-11-02T13:55:13",
+        "expected_sha256": "b2fab89ef0ff559debaf92826e0ebdb0e4ad30b6ea7a01654921718bcd67ca8b",
+        "sectors": 124,
+        "done": 124,
+        "result": "ok",
+        "journal": "flash_journal_20261102-135503.json"
+      },
+      {
+        "date": "2026-11-02T13:58:56",
+        "expected_sha256": "f57c0845bb24b1a04ce46aba5f2199b7ff60640498f5b521bca7a950ba063a71",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-135856.json"
+      },
+      {
+        "date": "2026-11-02T14:02:11",
+        "expected_sha256": "f57c0845bb24b1a04ce46aba5f2199b7ff60640498f5b521bca7a950ba063a71",
+        "sectors": 7,
+        "done": 7,
+        "result": "ok",
+        "journal": "flash_journal_20261102-140209.json"
+      },
+      {
+        "date": "2026-11-02T14:08:01",
+        "expected_sha256": "b8bd9778f16fab422365e474c346efac531c6a3790dfd609bd08609626bbf971",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-140801.json"
+      },
+      {
+        "date": "2026-11-02T14:08:34",
+        "expected_sha256": "b8bd9778f16fab422365e474c346efac531c6a3790dfd609bd08609626bbf971",
+        "sectors": 124,
+        "done": 124,
+        "result": "ok",
+        "journal": "flash_journal_20261102-140825.json"
+      },
+      {
+        "date": "2026-11-02T14:20:02",
+        "expected_sha256": "7543fce84e00805e11c5bb392d2bef6d62c205b4bece52f53876cf399db26ce8",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-142002.json"
+      },
+      {
+        "date": "2026-11-02T14:20:33",
+        "expected_sha256": "7543fce84e00805e11c5bb392d2bef6d62c205b4bece52f53876cf399db26ce8",
+        "sectors": 91,
+        "done": 91,
+        "result": "ok",
+        "journal": "flash_journal_20261102-142026.json"
+      },
+      {
+        "date": "2026-11-02T14:25:40",
+        "expected_sha256": "0f74ad7ecbbd364702f1d900a92a4dead6c4b23f2a21fcae3984d6de8b5a14b6",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-142540.json"
+      },
+      {
+        "date": "2026-11-02T14:28:02",
+        "expected_sha256": "0f74ad7ecbbd364702f1d900a92a4dead6c4b23f2a21fcae3984d6de8b5a14b6",
+        "sectors": 124,
+        "done": 124,
+        "result": "ok",
+        "journal": "flash_journal_20261102-142753.json"
+      },
+      {
+        "date": "2026-11-02T14:29:19",
+        "expected_sha256": "1bb3831245342573b6ff0be4450e0347d2b036a7ee02fa5b846591754b3cf4c4",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-142918.json"
+      },
+      {
+        "date": "2026-11-02T14:32:24",
+        "expected_sha256": "311c112258ea3208aa6edf1344303949c74c41962475dd35780235536ee65fe0",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-143224.json"
+      },
+      {
+        "date": "2026-11-02T14:34:13",
+        "expected_sha256": "311c112258ea3208aa6edf1344303949c74c41962475dd35780235536ee65fe0",
+        "sectors": 124,
+        "done": 124,
+        "result": "ok",
+        "journal": "flash_journal_20261102-143404.json"
+      },
+      {
+        "date": "2026-11-02T14:37:59",
+        "expected_sha256": "78d1d8c391489bcfde86ec59dba1104f5a47244685445c7ef420e2cdfa462267",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-143759.json"
+      },
+      {
+        "date": "2026-11-02T14:53:14",
+        "expected_sha256": "78d1d8c391489bcfde86ec59dba1104f5a47244685445c7ef420e2cdfa462267",
+        "sectors": 124,
+        "done": 124,
+        "result": "ok",
+        "journal": "flash_journal_20261102-145305.json"
+      },
+      {
+        "date": "2026-11-02T14:59:45",
+        "expected_sha256": "6ee24caf88a40e46083ebe9b4b4b0335ba1a3079b7698d9aa180982ea7483f9f",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-145945.json"
+      },
+      {
+        "date": "2026-11-02T15:01:50",
+        "expected_sha256": "6ee24caf88a40e46083ebe9b4b4b0335ba1a3079b7698d9aa180982ea7483f9f",
+        "sectors": 124,
+        "done": 124,
+        "result": "ok",
+        "journal": "flash_journal_20261102-150140.json"
+      },
+      {
+        "date": "2026-11-02T15:24:22",
+        "expected_sha256": "24127e97702235ce7a058f4d213cd4e8ebceb6bad34871c1fe828f462ed1aeac",
+        "sectors": 124,
+        "done": 124,
+        "result": "ok",
+        "journal": "flash_journal_20261102-152413.json"
+      },
+      {
+        "date": "2026-11-02T16:25:01",
+        "expected_sha256": "5f3668e637eb837aab1f74afddcadc3566101250a6d5a329ac01dfcc6759e6e3",
+        "sectors": 125,
+        "done": 125,
+        "result": "ok",
+        "journal": "flash_journal_20261102-162451.json"
+      },
+      {
+        "date": "2026-11-02T16:45:44",
+        "expected_sha256": "c8c9a65d42434a956d3f4c3edc7c368824a8c46c37f2913e00b0688ab7a20fa0",
+        "sectors": 125,
+        "done": 125,
+        "result": "ok",
+        "journal": "flash_journal_20261102-164535.json"
+      },
+      {
+        "date": "2026-11-02T16:57:10",
+        "expected_sha256": "d8789627a6929a928ee57cf03472c1e430b2216f99dc62d61ddb3c773adacefe",
+        "sectors": 125,
+        "done": 125,
+        "result": "ok",
+        "journal": "flash_journal_20261102-165701.json"
+      },
+      {
+        "date": "2026-11-02T17:11:09",
+        "expected_sha256": "2fa3a6c8b1bccd897fb35d5b547af48238f743f49db7e01c266eba0aa4723bec",
+        "sectors": 125,
+        "done": 125,
+        "result": "ok",
+        "journal": "flash_journal_20261102-171100.json"
+      },
+      {
+        "date": "2026-11-02T17:23:39",
+        "expected_sha256": "66ac9ffd51172b2aed3deeee35583cc29a4e9e8047341a00fffc9c0ee69a4522",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-172327.json"
+      },
+      {
+        "date": "2026-11-02T17:39:07",
+        "expected_sha256": "a13e478556896262fc04a2b73e7b512a3243dff06f40bb51c4a13426c1f06796",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-173856.json"
+      },
+      {
+        "date": "2026-11-02T18:01:32",
+        "expected_sha256": "66ac9ffd51172b2aed3deeee35583cc29a4e9e8047341a00fffc9c0ee69a4522",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-180120.json"
+      },
+      {
+        "date": "2026-11-02T18:08:41",
+        "expected_sha256": "bff64abe02586a1c96ef4a77f7391ed205e612dce825dcba10563334c8e68fe0",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261102-180831.json"
+      },
+      {
+        "date": "2026-11-02T18:11:31",
+        "expected_sha256": "fc9191ee329b7034a3c2d07cb35650fecdac3ef7a5c4563f95a34fe02dc8580d",
+        "sectors": 125,
+        "done": 125,
+        "result": "ok",
+        "journal": "flash_journal_20261102-181122.json"
+      },
+      {
+        "date": "2026-11-02T18:24:38",
+        "expected_sha256": "b1a0cbbad54f7bbca6e61b6ae563ec8aa3ca1be3e2155ab588a1bf3e87c9099d",
+        "sectors": 125,
+        "done": 125,
+        "result": "ok",
+        "journal": "flash_journal_20261102-182429.json"
+      },
+      {
+        "date": "2026-11-02T20:21:30",
+        "expected_sha256": "8c5d14d49899492c9fb9d1896fc60b59ee7715e65d379fe911b5c60106528a97",
+        "sectors": 126,
+        "done": 126,
+        "result": "ok",
+        "journal": "flash_journal_20261102-202121.json"
+      },
+      {
+        "date": "2026-11-02T20:25:35",
+        "expected_sha256": "9c4e8e0b497838d95bd26af358b6cf9c34fce828ccbac4e845d0f4a288cd5fc3",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261102-202526.json"
+      },
+      {
+        "date": "2026-11-02T20:34:16",
+        "expected_sha256": "a33b9e9194f5fc9aa0d249e7bb2be5f68c8f967734d591e2b01428c5d999c7ed",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261102-203407.json"
+      },
+      {
+        "date": "2026-11-02T20:46:55",
+        "expected_sha256": "a26297effa691c5f5f1d27d1ccade395985256f7fc826969d98bc0fc6b49ebee",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261102-204646.json"
+      },
+      {
+        "date": "2026-11-02T20:56:21",
+        "expected_sha256": "6a955ad76e8f2049cef066abb1111264acbabab523bd152843ad277018319727",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261102-205612.json"
+      },
+      {
+        "date": "2026-11-02T21:05:25",
+        "expected_sha256": "ea95154f1398ab54d5fa706fe1be4531674332b5c1e515b71574ca67c643be9f",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261102-210516.json"
+      },
+      {
+        "date": "2026-11-02T21:14:23",
+        "expected_sha256": "7df8f2846d09264b05ab700f673b5c3c405dc909f8db95f62dfeaa1f91340dbc",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261102-211413.json"
+      },
+      {
+        "date": "2026-11-02T21:20:26",
+        "expected_sha256": "5fc23ac34ea63c20c375477570cc836b621f014f4933ada109812c6c64710604",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261102-212017.json"
+      },
+      {
+        "date": "2026-11-02T21:27:45",
+        "expected_sha256": "6a955ad76e8f2049cef066abb1111264acbabab523bd152843ad277018319727",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261102-212736.json"
+      },
+      {
+        "date": "2026-11-02T21:29:12",
+        "expected_sha256": "5fc23ac34ea63c20c375477570cc836b621f014f4933ada109812c6c64710604",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261102-212903.json"
+      },
+      {
+        "date": "2026-11-02T21:55:52",
+        "expected_sha256": "952823e77eca32e619e8939ad4ead420178c339627ea8b2de6f2ce660e8d605d",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261102-215543.json"
+      },
+      {
+        "date": "2026-11-02T22:10:31",
+        "expected_sha256": "26eda227978b8efe08a11729ed2b3c49a58c05f3217e72a7e6b3ee2571a98045",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261102-221021.json"
+      },
+      {
+        "date": "2026-11-02T22:28:23",
+        "expected_sha256": "7eeef173fa63e132decfc9c777038954ef1a13cef4ac84c92140241d361e9706",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261102-222814.json"
+      },
+      {
+        "date": "2026-11-02T22:34:07",
+        "expected_sha256": "c052f6cf172388e3447968ef37dc9ee5ebdb60d09c5d4da6b09b07e885c595a0",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261102-223358.json"
+      },
+      {
+        "date": "2026-11-02T22:38:59",
+        "expected_sha256": "7da0268427371cac54ee41b1eef5279b375621a4408a8f23887b19398d69829d",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261102-223850.json"
+      },
+      {
+        "date": "2026-11-02T22:48:36",
+        "expected_sha256": "89d981bcfe3c64bc48a777c3cd6cee1204b1ea758f3f37f254657bd2f7c0d732",
+        "sectors": 18,
+        "done": 18,
+        "result": "ok",
+        "journal": "flash_journal_20261102-224833.json"
+      },
+      {
+        "date": "2026-11-02T22:54:19",
+        "expected_sha256": "750899d72bdb4bd411bf7f6a99a8768744fea37767de1d819529634f08ee9e76",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261102-225410.json"
+      },
+      {
+        "date": "2026-11-02T23:22:35",
+        "expected_sha256": "0f237965c48b5b06b7f52fda84fe8428bc90423201fa097b48a25973a95d11bb",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261102-232226.json"
+      },
+      {
+        "date": "2026-11-02T23:32:41",
+        "expected_sha256": "0d56c3b5a4f19ff2f0b6333b0de3090b97035b63f5380b2c80b38ede41d0f726",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261102-233232.json"
+      },
+      {
+        "date": "2026-11-02T23:38:57",
+        "expected_sha256": "f95d53b7e948fa16f9e2507b7294ad0dea6cd65ba811d194f191fb508004d6f9",
+        "sectors": 128,
+        "done": 128,
+        "result": "ok",
+        "journal": "flash_journal_20261102-233848.json"
+      },
+      {
+        "date": "2026-11-02T23:56:09",
+        "expected_sha256": "23e143787fe5883b3f2e47d82d4cc773e7fe949b4392f15c5a22cbf44e550617",
+        "sectors": 128,
+        "done": 128,
+        "result": "ok",
+        "journal": "flash_journal_20261102-235600.json"
+      },
+      {
+        "date": "2026-11-03T09:49:55",
+        "expected_sha256": "8346c4988f0515d09cf1d6d243f964f68669a35ca2cce459b89afdacb7d9f5c7",
+        "sectors": 53,
+        "done": 53,
+        "result": "ok",
+        "journal": "flash_journal_20261103-094950.json"
+      },
+      {
+        "date": "2026-11-03T10:06:32",
+        "expected_sha256": "6644247f2dda5365436c69824b4c00043609507aad6827382a0fa638d62ba87d",
+        "sectors": 55,
+        "done": 55,
+        "result": "ok",
+        "journal": "flash_journal_20261103-100627.json"
+      },
+      {
+        "date": "2026-11-03T10:55:52",
+        "expected_sha256": "0d77654a2727f577689220d4b035cdaac6d091021a7f1bc5ce3c2b8ac82de6d8",
+        "sectors": 66,
+        "done": 66,
+        "result": "ok",
+        "journal": "flash_journal_20261103-105546.json"
+      },
+      {
+        "date": "2026-11-03T11:57:00",
+        "expected_sha256": "2db79a8b63852aeb4feb217d333625557c074eac914babf7d209b091a5e298a2",
+        "sectors": 4,
+        "done": 4,
+        "result": "ok",
+        "journal": "flash_journal_20261103-115657.json"
+      },
+      {
+        "date": "2026-11-03T12:54:50",
+        "expected_sha256": "66ac9ffd51172b2aed3deeee35583cc29a4e9e8047341a00fffc9c0ee69a4522",
+        "sectors": 177,
+        "done": 177,
+        "result": "ok",
+        "journal": "flash_journal_20261103-125438.json"
+      },
+      {
+        "date": "2026-11-03T14:32:34",
+        "expected_sha256": "7c035a8bd8f1ea8178d6737d1e6a8eae05d42b317e57b328dd6f44128d7f77a8",
+        "sectors": 143,
+        "done": 143,
+        "result": "ok",
+        "journal": "flash_journal_20261103-143225.json"
+      },
+      {
+        "date": "2026-11-03T15:42:23",
+        "expected_sha256": "536ff24f2ab955c8f3ffd6721f81e36ef3bfd23441744adc6db08e7fa1e724a0",
+        "sectors": 125,
+        "done": 125,
+        "result": "ok",
+        "journal": "flash_journal_20261103-154214.json"
+      },
+      {
+        "date": "2026-11-03T16:23:01",
+        "expected_sha256": "f2ac56257f04746f707103d61e5c0a32bdd1b52fcbe780b48494870ff8a04ac1",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261103-162251.json"
+      },
+      {
+        "date": "2026-11-03T16:42:49",
+        "expected_sha256": "e7c44ec5e1ba0b37af70e50731b1dc1f1bba9a8cb628a7d900304b619f095b04",
+        "sectors": 127,
+        "done": 127,
+        "result": "ok",
+        "journal": "flash_journal_20261103-164240.json"
+      },
+      {
+        "date": "2026-11-03T19:01:06",
+        "expected_sha256": "a0b6d170f4f1bf7add8abfe018a85fc3a9d48a903d2786de1bc71d2abf549b68",
+        "sectors": 128,
+        "done": 128,
+        "result": "ok",
+        "journal": "flash_journal_20261103-190056.json"
+      },
+      {
+        "date": "2026-11-03T20:02:21",
+        "expected_sha256": "72e52b07d54e7b2a309b66ad1507d0c25647c7b837c5bcd18dcf7b962a9cdf94",
+        "sectors": 128,
+        "done": 128,
+        "result": "ok",
+        "journal": "flash_journal_20261103-200212.json"
+      },
+      {
+        "date": "2026-11-03T21:02:22",
+        "expected_sha256": "0fb7f8259fc01a40002928299ac298f2c085bddc9d740b889d352ab1242022a8",
+        "sectors": 124,
+        "done": 124,
+        "result": "ok",
+        "journal": "flash_journal_20261103-210213.json"
+      },
+      {
+        "date": "2026-11-03T21:21:18",
+        "expected_sha256": "fc1451a2d5ec5f1ba1b302a3ae480391cf4386d8e774181cffe6a48dd93240d4",
+        "sectors": 128,
+        "done": 128,
+        "result": "ok",
+        "journal": "flash_journal_20261103-212109.json"
+      },
+      {
+        "date": "2026-11-03T21:43:39",
+        "expected_sha256": "c2d037307123952c7c3c6ff2613de006f0e878832cac236e8e11b6891a7b3da7",
+        "sectors": 128,
+        "done": 128,
+        "result": "ok",
+        "journal": "flash_journal_20261103-214329.json"
+      },
+      {
+        "date": "2026-11-03T21:52:17",
+        "expected_sha256": "2ec280ff479cf0f846f7a6e4f8b0ff0f435b834e66006888b520d3627ef9d2ef",
+        "sectors": 124,
+        "done": 124,
+        "result": "ok",
+        "journal": "flash_journal_20261103-215208.json"
+      },
+      {
+        "date": "2026-11-03T22:41:22",
+        "expected_sha256": "1fa4fd02db7ea39d4c38671bd939ec3a726b71f68d9d00f701334ff9d2817833",
+        "sectors": 129,
+        "done": 129,
+        "result": "ok",
+        "journal": "flash_journal_20261103-224112.json"
+      },
+      {
+        "date": "2026-11-03T23:21:16",
+        "expected_sha256": "43a0fbc4b5163ac56c3696e6a0e3b66e59c57d24ba3d24a821914a79e8adb6b1",
+        "sectors": 129,
+        "done": 129,
+        "result": "ok",
+        "journal": "flash_journal_20261103-232107.json"
+      },
+      {
+        "date": "2026-11-03T23:32:27",
+        "expected_sha256": "b3b85768932f3abab15a6127a5a0ef6f200bb395fbe4e999c31254b45b818e4b",
+        "sectors": 6,
+        "done": 6,
+        "result": "ok",
+        "journal": "flash_journal_20261103-233225.json"
+      },
+      {
+        "date": "2026-11-03T23:56:58",
+        "expected_sha256": "5139d7439e1aa7497011d9399ee9c8910f74ba6d9474deb41e6cb86ecf6e0fa5",
+        "sectors": 124,
+        "done": 124,
+        "result": "ok",
+        "journal": "flash_journal_20261103-235649.json"
+      },
+      {
+        "date": "2026-11-04T00:04:10",
+        "expected_sha256": "affbd070204d6d26203f4ba8ad005af60a81aeaf05f3eac2b767d23f96c70ae0",
+        "sectors": 129,
+        "done": 129,
+        "result": "ok",
+        "journal": "flash_journal_20261104-000400.json"
+      },
+      {
+        "date": "2026-11-04T00:13:32",
+        "expected_sha256": "af0065390d5148d922a1d6a3f5fe116afaf4e5cff0c43a72c8b1fe1ad1ae0313",
+        "sectors": 129,
+        "done": 129,
+        "result": "ok",
+        "journal": "flash_journal_20261104-001323.json"
+      },
+      {
+        "date": "2026-11-04T00:19:22",
+        "expected_sha256": "6bbe0cb530624238d49a22c6ca2c0956d7fc80850cb3db2833ce6308a1345f66",
+        "sectors": 6,
+        "done": 6,
+        "result": "ok",
+        "journal": "flash_journal_20261104-001920.json"
+      },
+      {
+        "date": "2026-11-04T00:29:51",
+        "expected_sha256": "b9d3dc29b1d47a8452d59d5030b9c67f8f5e03a0848ac8becdeb522837126a47",
+        "sectors": 129,
+        "done": 129,
+        "result": "ok",
+        "journal": "flash_journal_20261104-002942.json"
+      },
+      {
+        "date": "2026-11-04T07:28:53",
+        "expected_sha256": "6617e4ac744aec447cba585cbc8dbdbbe22d8d3321e13b147bd9d8c23a6fcb3b",
+        "sectors": 86,
+        "done": 86,
+        "result": "ok",
+        "journal": "flash_journal_20261104-072846.json"
+      },
+      {
+        "date": "2026-11-04T07:44:07",
+        "expected_sha256": "b2bae900ad2cf8fbb4ecac054a2f5a297ce06e023bb5dde050f316de721f2037",
+        "sectors": 73,
+        "done": 73,
+        "result": "ok",
+        "journal": "flash_journal_20261104-074401.json"
+      },
+      {
+        "date": "2026-11-04T08:07:40",
+        "expected_sha256": "1e77ee5b59d62e868e2772e94debd70e3653897b5ee89fb696fd0f4512e958d5",
+        "sectors": 128,
+        "done": 128,
+        "result": "ok",
+        "journal": "flash_journal_20261104-080731.json"
+      },
+      {
+        "date": "2026-11-04T08:30:26",
+        "expected_sha256": "fc61fa1bc0ae2cbccca045bf98440c0158be223e455e784690d0eb64ad53dab8",
+        "sectors": 129,
+        "done": 129,
+        "result": "ok",
+        "journal": "flash_journal_20261104-083016.json"
+      },
+      {
+        "date": "2026-11-04T09:10:41",
+        "expected_sha256": "923c228792698faaa0672220909d12f312291d69138812182311f3eb9625dd1d",
+        "sectors": 130,
+        "done": 130,
+        "result": "ok",
+        "journal": "flash_journal_20261104-091031.json"
+      },
+      {
+        "date": "2026-11-04T09:25:16",
+        "expected_sha256": "5687940623b68580a10b667ac27a145ccf83dc408b9b6e814f9042ad06e3accc",
+        "sectors": 129,
+        "done": 129,
+        "result": "ok",
+        "journal": "flash_journal_20261104-092507.json"
+      },
+      {
+        "date": "2026-11-04T09:41:23",
+        "expected_sha256": "1b3dbe378b366716eefec4e625346103c3eb2fc4411eedd685a2566b143f9408",
+        "sectors": 10,
+        "done": 10,
+        "result": "ok",
+        "journal": "flash_journal_20261104-094120.json"
+      },
+      {
+        "date": "2026-11-04T09:53:44",
+        "expected_sha256": "2c50e3d12f5c50adc12ead82b449ca25c7207d686a19ee3007b09e7de230d845",
+        "sectors": 103,
+        "done": 103,
+        "result": "ok",
+        "journal": "flash_journal_20261104-095336.json"
+      },
+      {
+        "date": "2026-11-04T10:53:12",
+        "expected_sha256": "ec45a45fd03fea5d0ae86f84dd63c6e97338a42ef44b751b5ab0c3c1ab3fa823",
+        "sectors": 130,
+        "done": 130,
+        "result": "ok",
+        "journal": "flash_journal_20261104-105303.json"
+      },
+      {
+        "date": "2026-11-04T11:08:19",
+        "expected_sha256": "6d09480c7a7d8ec75cb92373696b250cda4e817e461c959d45c77f0edc9bcf7c",
+        "sectors": 126,
+        "done": 126,
+        "result": "ok",
+        "journal": "flash_journal_20261104-110810.json"
+      },
+      {
+        "date": "2026-11-04T11:18:55",
+        "expected_sha256": "a43023af389db3f3c099b00b0a0bd5bf78f4e3adf9bde710d7baca77bf26243d",
+        "sectors": 130,
+        "done": 130,
+        "result": "ok",
+        "journal": "flash_journal_20261104-111846.json"
+      },
+      {
+        "date": "2026-11-04T11:38:27",
+        "expected_sha256": "24098dd0bced56d43aa5ef8f1aa4f96482a58cd5295ae86fa2dff9a7e041cf5f",
+        "sectors": 130,
+        "done": 130,
+        "result": "ok",
+        "journal": "flash_journal_20261104-113817.json"
+      },
+      {
+        "date": "2026-11-04T12:47:24",
+        "expected_sha256": "de8f2df99a190b7c8227d1b7ae7c7714b29218f43772b16272ba07329296b88b",
+        "sectors": 131,
+        "done": 131,
+        "result": "ok",
+        "journal": "flash_journal_20261104-124714.json"
+      },
+      {
+        "date": "2026-11-04T13:08:00",
+        "expected_sha256": "0de0202d92c598d69a7e25b85f7f08b97997e04a71c657b5ab24a3d7a3573940",
+        "sectors": 130,
+        "done": 130,
+        "result": "ok",
+        "journal": "flash_journal_20261104-130750.json"
+      },
+      {
+        "date": "2026-11-04T13:29:44",
+        "expected_sha256": "10bf3ca0df52063dfda1bdcd7ff925aed09c10e8ad769c3d08c0a5edcfdcfd92",
+        "sectors": 130,
+        "done": 130,
+        "result": "ok",
+        "journal": "flash_journal_20261104-132934.json"
+      },
+      {
+        "date": "2026-11-04T14:07:22",
+        "expected_sha256": "741e9c595035605836341263d726b4be0e59ec7e43a73ad9026f59733ffa22ab",
+        "sectors": 132,
+        "done": 132,
+        "result": "ok",
+        "journal": "flash_journal_20261104-140713.json"
+      },
+      {
+        "date": "2026-11-04T15:24:52",
+        "expected_sha256": "6b9624aa67a9a67c18e4796855cc40768545b9a7eea5baf08759fe111a09bdb0",
+        "sectors": 132,
+        "done": 132,
+        "result": "ok",
+        "journal": "flash_journal_20261104-152442.json"
+      },
+      {
+        "date": "2026-11-04T17:45:09",
+        "expected_sha256": "47b5d53dd5da7d7e2e208da76cacdb94d78f303eeda481c42aee402c73ee6bd1",
+        "sectors": 130,
+        "done": 130,
+        "result": "FAILED: final read-back differs in 2 sector(s), first 0x086000",
+        "journal": "flash_journal_20261104-174509.json"
+      },
+      {
+        "date": "2026-11-04T17:45:21",
+        "expected_sha256": "47b5d53dd5da7d7e2e208da76cacdb94d78f303eeda481c42aee402c73ee6bd1",
+        "sectors": 130,
+        "done": 130,
+        "result": "ok",
+        "journal": "flash_journal_20261104-174521.json"
+      },
+      {
+        "date": "2026-11-04T18:01:04",
+        "expected_sha256": "1fee9db2623ce7a9e12a444b94ab9980c2c06b7c0530a7feb7b9accfa1569ce8",
+        "sectors": 130,
+        "done": 130,
+        "result": "ok",
+        "journal": "flash_journal_20261104-180055.json"
+      },
+      {
+        "date": "2026-11-04T18:19:25",
+        "expected_sha256": "ba3ff9a08f901fbca2196c1dd14c90921cb542ea1b2321d2c5de5573d05c599e",
+        "sectors": 128,
+        "done": 128,
+        "result": "ok",
+        "journal": "flash_journal_20261104-181915.json"
+      },
+      {
+        "date": "2026-11-04T18:27:12",
+        "expected_sha256": "e81aeade279ca6e858e8ca21e7ebbe9efd22d116a02d0b13abe3a4bf3fa4ef48",
+        "sectors": 128,
+        "done": 128,
+        "result": "ok",
+        "journal": "flash_journal_20261104-182703.json"
+      },
+      {
+        "date": "2026-11-04T20:49:04",
+        "expected_sha256": "3addca586d6a76ed1cac73d1d12ffc8e64e04670508ff0b15e3281c127c4f5e0",
+        "sectors": 128,
+        "done": 128,
+        "result": "ok",
+        "journal": "flash_journal_20261104-204854.json"
+      },
+      {
+        "date": "2026-11-04T21:53:39",
+        "expected_sha256": "faef03c6f4762ae72c53901dea1f7c618c46439d14c5908946eb5b233ad5ea55",
+        "sectors": 129,
+        "done": 129,
+        "result": "ok",
+        "journal": "flash_journal_20261104-215330.json"
+      },
+      {
+        "date": "2026-11-04T22:10:49",
+        "expected_sha256": "66ac9ffd51172b2aed3deeee35583cc29a4e9e8047341a00fffc9c0ee69a4522",
+        "sectors": 6,
+        "done": 6,
+        "result": "ok",
+        "journal": "flash_journal_20261104-221047.json"
+      },
+      {
+        "date": "2026-11-04T23:18:44",
+        "expected_sha256": "1348d577707441dfe068594a1b615bb1d502a7e9fe5c6f6090e8f93e629fb262",
+        "sectors": 129,
+        "done": 129,
+        "result": "FAILED: final read-back differs in 1 sector(s), first 0x0B4000",
+        "journal": "flash_journal_20261104-231835.json"
+      },
+      {
+        "date": "2026-11-05T17:07:41",
+        "expected_sha256": "d41dd14fb73b306dbee0be1efbbd96152f574c57e0c50fcc17fc6f96b543a0ce",
+        "sectors": 67,
+        "done": 67,
+        "result": "FAILED: final read-back differs in 1 sector(s), first 0x0B4000",
+        "journal": "flash_journal_20261105-170735.json"
+      }
+    ]
+  },
+  "layout_proofs": [
+    {
+      "layout": "jl-app-area@0x4120-start0x2000120",
+      "date": "2026-10-30",
+      "sha256": "78755f3236d9f6f2690096d347449a02223edb3535a72039f8d8b644e0141991",
+      "custom_ui_seen": true,
+      "observed": "custom UI (preset strip DYN/DRIVE/AMP A2/CAB) plus the debug overlay drawn by the custom firmware; booted from a normal power-on with nothing attached, so the V1.05 uboot accepted the repacked app area",
+      "evidence": "custom-fw/qa/backups/unit1_v105_debugflash/photo_debug2_overlay.webp"
+    }
+  ],
+  "hw_runs": [],
+  "bench_findings": [
+    {
+      "date": "2026-10-30",
+      "image": "custom debug builds (Pocket_AMP_Custom_debug*.fwsc in custom-fw/qa/backups/unit1_v105_debugflash)",
+      "proven": [
+        "the repacked app area boots from a normal power-on (uboot accepts it, V1.05 trailer kept)",
+        "pa_transporter flash/drill/blackbox work; black box at 0x01C7C000 survives a reset into UBOOT"
+      ],
+      "found": [
+        "OTA reboot flag corrupted within ms of boot -> self reboot into download mode (fixed: magic value)",
+        "RAM corruption across .bss (UI P99/LOCK, BPM 1050, counters) even with an 8x audio DMA buffer",
+        "audio RX DMA filled the whole 8 KB guard buffer (SHN semantics unverified)",
+        "main loop starved (LOOP 4 in 35 s); with audio off the screen only flickers and the chip does not reset",
+        "button GPIOs read correctly when idle (PORTA 0x40F, PORTH 0x3FF)"
+      ],
+      "next": "verify timer/interrupt/ALNK/GPIO init configuration before next flash"
+    }
+  ]
+}

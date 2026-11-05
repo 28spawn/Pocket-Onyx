@@ -1,0 +1,74 @@
+# The source manifest - the ONLY place that says which modules each target
+# compiles.
+#
+# The DEVICE compiles every .c under custom-fw/src: it is the whole firmware.
+# The other targets compile the same tree MINUS the board files they replace
+# themselves.
+#
+# This file exists because each build script used to carry its own hand-written
+# list, and a new module was silently missing from one of them - which is how
+# the emulator's build broke three times (pa_audio_core.c, pa_input.c, and the
+# modules the Makefile and build.ps1 had but the two emu/*.ps1 scripts did not).
+#
+# tools/check_sources.py reads this file and fails the build if:
+#   - an excluded path does not exist (a stale entry),
+#   - a module is in no target at all (nobody builds it),
+#   - a target excludes something that is not part of the board layer.
+#
+# Syntax
+#   [name]                    a target, or a group if the name starts with "g_"
+#   include = a, b, @grp      compile exactly these (globs and @groups allowed)
+#   exclude = a, b            compile everything under src/ EXCEPT these
+#
+# Why each target excludes what it excludes:
+#   src/board/main.c        the device's main(); each host has its own entry
+#   src/board/audio_alnk.c  the ALNK0 driver (the host has its own I/O)
+#   src/board/st7735s.c    the panel driver (the host draws into a buffer)
+#   src/board/spi_nor.c     the NOR flash driver (the browser has a RAM image)
+#   src/board/gpio_scan.c   the GPIO scanner (the browser has DOM buttons)
+#   src/board/usb_ble.c    the USB/BLE driver (the browser has no USB audio)
+#   src/sys/smp_cpu1.c      the dual-core offload, compiled but dead
+#
+# paths are relative to custom-fw/
+
+# ---------------------------------------------------------------- the groups --
+[g_dsp]
+include = src/dsp/*.c
+
+[g_nam]
+include = src/nam/*.c
+
+[g_fx]
+include = src/fx/*.c
+
+[g_sys]
+include = src/sys/*.c
+
+[g_board]
+include = src/board/*.c
+
+# ---------------------------------------------------------------- the targets --
+[device]
+exclude =
+
+[emu]
+exclude = src/board/main.c, src/board/audio_alnk.c, src/board/st7735s.c, src/sys/smp_cpu1.c, src/board/ota_hw.c
+
+[wasm]
+exclude = src/board/main.c, src/board/audio_alnk.c, src/board/st7735s.c, src/sys/smp_cpu1.c, src/board/spi_nor.c, src/board/gpio_scan.c, src/board/usb_ble.c, src/board/ota_hw.c
+
+# ------------------------------------------------------------ the host suites --
+[host_meter]
+include = src/sys/cpu_meter.c
+
+[host_reclaim]
+include = @g_fx, src/dsp/hw_accel.c, src/dsp/pa_biquad.c, src/sys/pa_pool.c, src/sys/cpu_meter.c
+
+[host_dsp]
+include = @g_dsp, @g_nam, @g_fx, src/sys/pa_pool.c, src/sys/cpu_meter.c
+
+[host_full]
+exclude = src/board/main.c, src/board/audio_alnk.c, src/board/st7735s.c, src/board/gpio_scan.c, src/sys/smp_cpu1.c, src/sys/sysex.c, src/board/ota_hw.c
+
+[host_robust]
+include = src/sys/preset.c, src/sys/pa_pool.c, src/board/spi_nor.c

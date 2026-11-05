@@ -1,0 +1,980 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Onyx Web Editor</title>
+<style>
+:root { --bg:#0c0c0e; --surf:#18181c; --raise:#26262c; --line:#2c2c33; --text:#d4d4da; --mid:#8e8e99; --dim:#5b5b66; --acc:#ff7a1a; --ok:#35c46a; --bad:#ff4d4d; --r:6px; color-scheme:dark; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg:#f3f3f5; --surf:#e6e6ea; --raise:#d6d6dc; --line:#c6c6ce; --text:#1d1d22; --mid:#5d5d68; --dim:#8c8c97; --acc:#d85f00; --ok:#1e8f4a; --bad:#c62828; color-scheme:light; } }
+* { box-sizing:border-box; }
+[hidden] { display:none !important; }
+body { margin:0; background:var(--bg); color:var(--text); font:400 14px/1.5 "Inter Tight","Inter",system-ui,sans-serif; }
+header { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:12px 16px; background:var(--surf); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+h1 { font-size:1.05rem; font-weight:600; letter-spacing:.04em; margin:0 8px 0 0; }
+h1 b { color:var(--acc); }
+button, select, input[type=file] { font:inherit; color:var(--text); background:var(--raise); border:0; border-radius:var(--r); padding:6px 12px; min-height:32px; cursor:pointer; }
+button:hover:not(:disabled) { filter:brightness(1.2); }
+button:disabled { opacity:.4; cursor:default; }
+button.pri { background:var(--acc); color:#111; font-weight:600; }
+#status { margin-left:auto; color:var(--mid); font-size:.85rem; }
+#status.on { color:var(--ok); }
+nav { display:flex; gap:2px; padding:8px 16px 0; overflow-x:auto; }
+nav button { background:transparent; border-radius:var(--r) var(--r) 0 0; color:var(--mid); }
+nav button.sel { background:var(--surf); color:var(--text); box-shadow:inset 0 2px 0 var(--acc); }
+main { padding:0 16px 40px; }
+section { background:var(--surf); border-radius:0 var(--r) var(--r) var(--r); padding:16px; }
+.chain { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; }
+.blk { background:var(--bg); border:1px solid var(--line); border-radius:var(--r); overflow:hidden; }
+.blk.off { opacity:.55; }
+.bh { display:flex; align-items:center; gap:8px; padding:6px 8px; color:#111; font-weight:600; font-size:.8rem; letter-spacing:.06em; }
+.bh { position:relative; cursor:grab; user-select:none; touch-action:none; }
+.bh::after { content:""; position:absolute; left:0; bottom:0; height:3px; width:0; background:#fff; }
+.blk.holding .bh::after { width:100%; transition:width 1s linear; }
+.blk.lifted { position:relative; z-index:20; box-shadow:0 10px 30px rgba(0,0,0,.6); outline:2px solid var(--acc); cursor:grabbing; }
+.blk.target { outline:2px dashed var(--acc); }
+#toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--acc); color:#111; font-weight:600; padding:10px 18px; border-radius:var(--r); opacity:0; pointer-events:none; transition:opacity .25s; z-index:30; }
+#toast.on { opacity:1; }
+.tbl { width:100%; border-collapse:collapse; margin:6px 0; }
+.tbl td { padding:4px 6px; border-bottom:1px solid var(--line); }
+.tbl td button { min-height:26px; padding:2px 10px; }
+a { color:var(--acc); }
+.bh button { margin-left:auto; min-height:22px; padding:0 8px; font-size:.7rem; background:rgba(0,0,0,.25); color:#fff; }
+.bb { padding:8px; display:flex; flex-direction:column; gap:6px; }
+.bb select { width:100%; }
+.knob { display:grid; grid-template-columns:62px 1fr 34px; align-items:center; gap:6px; font-size:.78rem; color:var(--mid); }
+.knob.dead { opacity:.3; }
+.knob output { text-align:right; color:var(--text); font-variant-numeric:tabular-nums; }
+input[type=range] { width:100%; accent-color:var(--acc); }
+.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:10px 18px; }
+.row { display:grid; grid-template-columns:130px 1fr 54px; align-items:center; gap:8px; }
+.row.sel2 { grid-template-columns:130px 1fr; }
+h2 { font-size:.8rem; text-transform:uppercase; letter-spacing:.1em; color:var(--mid); margin:20px 0 8px; font-weight:600; }
+button.small { padding:2px 8px; font-size:12px; margin-left:8px; }
+h2:first-child { margin-top:0; }
+.big { font-size:1.4rem; font-weight:600; }
+.pre { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.note { color:var(--mid); font-size:.82rem; }
+.warn { color:var(--bad); }
+.drop { border:1px dashed var(--line); border-radius:var(--r); padding:14px; margin:8px 0; }
+.kv { font-variant-numeric:tabular-nums; color:var(--mid); font-size:.82rem; }
+.kv b { color:var(--text); font-weight:500; }
+#log { background:var(--bg); border:1px solid var(--line); border-radius:var(--r); margin-top:16px; padding:8px; height:130px; overflow:auto; font:12px/1.4 ui-monospace,Consolas,monospace; color:var(--mid); white-space:pre-wrap; }
+progress { width:100%; height:8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1><b>ONYX</b> WEB EDITOR</h1>
+  <button id="bUsb" class="pri">Connect USB / MIDI</button>
+  <button id="bBle">Connect Bluetooth</button>
+  <select id="port" hidden title="MIDI port"></select>
+  <label class="note"><input type="checkbox" id="live"> live sync</label>
+  <span id="status">not connected</span>
+</header>
+<nav id="tabs"></nav>
+<main>
+<section id="t-chain">
+  <div class="pre" style="margin-bottom:12px"><span class="big" id="pName">-</span><span class="note" id="pIdx"></span>
+    <button id="pPrev">&lsaquo; prev</button><button id="pNext">next &rsaquo;</button><button id="pRead" title="Read the unit's current preset and settings now (live sync is off)">read unit</button><button id="pSave" title="CC 88: save the current sound in the current preset">save</button>
+    <label class="note">preset <select id="pSel"></select></label></div>
+  <div class="chain" id="chain"></div>
+  <h2>Level</h2>
+  <div class="grid" id="levels"></div>
+</section>
+<section id="t-global" hidden><div class="grid" id="globals"></div></section>
+<section id="t-groove" hidden>
+  <div class="grid" id="groove"></div>
+  <h2>Stomp keys (STOMP mode: VOL-, VOL+, &lt;, &gt;)</h2>
+  <div class="grid" id="stomp"></div>
+  <h2>Tuner</h2>
+  <div class="pre"><button id="bTuner">open / close tuner (CC 85)</button><span class="note" id="tunerState"></span></div>
+</section>
+<section id="t-files" hidden>
+  <h2>Amp captures <span class="note" id="namCount"></span> <button id="namClear" class="small" disabled title="needs the custom firmware (a state record from the unit)">Clear all captures</button></h2>
+  <p class="note"><b>USB only</b> (a capture is 7.5 KB: Bluetooth is too slow for it). A ToneHunt <b>.nam</b> is read here: the JSON is stripped and its A2 Lite model (1870 weights) is packed into the unit's 7,504-byte capture, named from the file's metadata. A <b>.namb</b> container is cut to its model struct (3852 B), a raw struct or a <b>WAVE</b> blob is sent as it is. Up to 8192 B. The unit keeps up to 10 captures; delete or replace one to make room. Presets name a capture by its number, so deleting one leaves a gap instead of renumbering the others.</p>
+  <table class="tbl" id="namTable"></table>
+  <div class="drop"><input type="file" id="namFile" accept=".namb,.nam,.bin,.am3,.am4,.wave"><div class="kv" id="namInfo">no file</div>
+    <p><button id="namSend" class="pri" disabled>Store in the first free slot</button></p></div>
+  <h2>Cabinets <span class="note" id="cabCount"></span> <button id="cabClear" class="small" disabled title="needs the custom firmware (a state record from the unit)">Clear all cabinets</button></h2>
+  <p class="note">A <b>WAV</b> impulse response (16/24/32-bit PCM or float, any sample rate) is resampled to 44.1 kHz, trimmed and cut to 1024 taps in the browser; a raw file is the unit's own format (Q18 taps, int32 little-endian, 16 to 1024). The unit keeps up to 15 cabinets in the flash. "Try live" loads one into the cabinet block without storing it (gone at the next cabinet change or power-off).</p>
+  <table class="tbl" id="cabTable"></table>
+  <div class="drop"><input type="file" id="cabFile" accept=".wav,.bin,.cab,.q18,.ir"><div class="kv" id="cabInfo">no file</div>
+    <p class="pre"><button id="cabSend" class="pri" disabled>Store in the first free slot</button><button id="cabLive" disabled>Try live</button></p></div>
+  <input type="file" id="replaceFile" hidden>
+  <progress id="up" max="100" value="0" hidden></progress>
+</section>
+<section id="t-fw" hidden>
+  <h2>Firmware update</h2>
+  <p class="note">Over USB MIDI, in one click, the way the Pendel installer does it: the running firmware checks the package and stages its update loader, the loader writes the firmware and the unit restarts. Chrome or Edge (Web MIDI with SysEx), the unit connected directly by a USB data cable, no other program using it. Do not unplug while it works; if it is cut off the unit stays in update mode and the same button continues.</p>
+  <h2>Install a firmware</h2>
+  <div class="drop"><input type="file" id="fwFile" accept=".fwsc,.bin,.ufw"><div class="kv" id="fwInfo">pick the <code>Pocket_AMP_Custom.fwsc</code> the build writes</div></div>
+  <div class="pre"><button id="fwInstall" class="pri" disabled>Install this firmware</button><span class="note">works from the original firmware and from this one. It rewrites the app area and the area behind it: <b>your stored captures and cabinets are erased</b> (the PC tool below keeps them). The Onyx update loader (an install of an Onyx package) writes the app area only.</span></div>
+  <h2>Back to the original M-VAVE firmware</h2>
+  <div class="drop"><input type="file" id="fwOrigFile" accept=".fwsc"><div class="kv" id="fwOrigInfo">pick the unmodified <code>Pocket AMP.fwsc</code> from m-vave.com/download (it is checked by its SHA-256 and never sent anywhere)</div></div>
+  <div class="pre"><button id="fwRestore" class="pri" disabled>Restore the original firmware</button><span class="note">also the way out of a stuck update: if the unit is in update mode this continues it</span></div>
+  <progress id="fwBar2" max="100" value="0" hidden></progress>
+  <div class="kv" id="fwOneInfo"></div>
+  <details style="margin-top:18px"><summary class="note">The PC tool route (keeps stored captures and cabinets, dumps and checks the whole chip first)</summary>
+    <div class="drop"><input type="file" id="fwDumpFile" accept=".bin"><div class="kv" id="fwDumpInfo">optional, instant dry run: a whole-chip dump file (<code>dump1.bin</code> from the download-mode dump, 1 MB)</div></div>
+    <div class="kv" id="fwPlan">needs the firmware file and a dump file for the dry run</div>
+    <div class="pre"><button id="fwEnter" disabled>Put the unit in download mode</button><span class="note">the unit resets into the chip's ROM download mode (a disk named WL82 UBOOT1.00, black screen) and leaves USB MIDI</span></div>
+    <div class="kv"><code id="fwCmd">python custom-fw/tools/flash_unit.py --image &lt;the file&gt;</code><br>It dumps the whole chip twice and compares, shows the dry run, asks you to type WRITE, flashes sector by sector and reads the chip back to confirm. The original <code>Pocket AMP.fwsc</code> as the image puts the original firmware back.</div>
+  </details>
+  <h2>Check what the unit holds</h2>
+  <div class="pre"><button id="fwVerify" disabled>Compare the unit's flash with the file</button><label class="note"><input type="checkbox" id="fwFull"> every byte (a few minutes) instead of every sector at four places (about 10 s)</label></div>
+  <progress id="fwBar" max="100" value="0" hidden></progress>
+  <div class="kv" id="fwConfirm">connect over USB, pick the firmware file above, then compare.</div>
+</section>
+<div id="toast"></div>
+<div id="log"></div>
+</main>
+<script>
+/*TABLES-BEGIN (tools/gen_editor_tables.py: do not edit)*/
+const TABLES = {"models":{"DYN":["GATE","BOOST+GATE","COMP+GATE","AI GATE MS","COMP"],"DRIVE":["TS-808","KLON","OCD","RAT","BIG MUFF","FUZZ FACE"],"EQ":["5-BAND","LOW/HIGH CUT","PARAMETRIC-3"],"MOD":["CHORUS","PHASER","FLANGER","TREMOLO","VIBRATO","UNIVIBE","AUTO FILTER"],"DLY":["ANALOG","DUCKING","TAPE","DUAL","LO-FI","DIGITAL","PING PONG","REVERSE","SLAPBACK"],"REV":["ROOM","HALL","SWELL","SPRING","SHIMMER","CLOUD","PLATE","AMBIENCE"]},"params":{"DYN":[["THRESH","RELEASE","ATTACK","LEVEL"],["THRESH","RELEASE","---","BOOST"],["THRESH","RATIO","ATTACK","LEVEL"],["THRESH","RELEASE","ATTACK","LEVEL"],["THRESH","RATIO","ATTACK","LEVEL"]],"DRIVE":["DRIVE","TONE","LEVEL"],"AMP":["GAIN","BASS","MID","TREBLE","PRES","MASTER"],"CAB":["LEVEL","LOWCUT","HICUT"],"EQ":[["100","400","1k","3k","8k"],["LOWCUT","HICUT","LEVEL"],["LOW","MID","FREQ","HIGH"]],"MOD":[["RATE","DEPTH","MIX","---"],["RATE","DEPTH","MIX","FDBK"],["RATE","DEPTH","MIX","FDBK"],["RATE","DEPTH","---","---"],["RATE","DEPTH","---","---"],["RATE","DEPTH","MIX","FDBK"],["RATE","RANGE","MIX","RESO"]],"DLY":[["TIME","FDBK","MIX"],["MOD","RELEASE","GRIT","RATIO","GRIT","TONE","TONE","TONE","TONE"]],"REV":["DECAY","LOWCUT","TONE","MIX"]},"counts":{"DYN":4,"DRIVE":3,"AMP":6,"CAB":3,"MOD":4,"DLY":4,"REV":4,"EQ":[5,3,4]}};
+/*TABLES-END*/
+//CORE-BEGIN
+// ---- the unit's SysEx framing: F0 <8->7 bit packed inner frame> F7, inner = 00 59 cmd len:u24le payload chk (tools/mvave_device.py) ----
+const MAX_PAYLOAD = 256;
+function pack8to7(data) {
+  const out = []; let bits = 0, n = 0;
+  for (const b of data) { bits |= (b & 0xFF) << n; n += 8; while (n >= 7) { out.push(bits & 0x7F); bits >>= 7; n -= 7; } }
+  if (n) out.push(bits & 0x7F);
+  return out;
+}
+function unpack7to8(data) {
+  const out = []; let bits = 0, n = 0;
+  for (const b of data) { bits |= (b & 0x7F) << n; n += 7; if (n >= 8) { out.push(bits & 0xFF); bits >>= 8; n -= 8; } }
+  return out;
+}
+function buildFrame(cmd, payload) {
+  payload = Array.from(payload || []);
+  if (payload.length > MAX_PAYLOAD) throw new Error("payload over " + MAX_PAYLOAD + " bytes");
+  const l = payload.length, inner = [0x00, 0x59, cmd, l & 0xFF, (l >> 8) & 0xFF, (l >> 16) & 0xFF, ...payload];
+  let s = cmd + inner[3] + inner[4] + inner[5]; for (const b of payload) s += b;
+  inner.push((~s) & 0xFF);
+  return [0xF0, ...pack8to7(inner), 0xF7];
+}
+// a reply frame -> {type, data} or null
+function parseReply(frame) {
+  if (!frame || frame[0] !== 0xF0 || frame[frame.length - 1] !== 0xF7) return null;
+  const inner = unpack7to8(frame.slice(1, -1));
+  if (inner.length < 7 || inner[0] !== 0 || inner[1] !== 0x59) return null;
+  const len = inner[3] | (inner[4] << 8) | (inner[5] << 16);
+  if (inner.length < 7 + len) return null;
+  const data = inner.slice(6, 6 + len);
+  let s = inner[2] + inner[3] + inner[4] + inner[5]; for (const b of data) s += b;
+  if (inner[6 + len] !== ((~s) & 0xFF)) return null;
+  return { type: inner[2], data };
+}
+// ---- BLE-MIDI 1.0 packets (src/board/ble_midi.c): [hdr][ts] F0 data.. | [hdr] data.. | .. [ts] F7 ----
+function bleFrames(msg, chunkMax, ts) {
+  ts = (ts === undefined ? Date.now() : ts) & 0x1FFF;
+  const hdr = 0x80 | (ts >> 7), lo = 0x80 | (ts & 0x7F), pkts = [];
+  if (msg[0] !== 0xF0) return [[hdr, lo, ...msg]];
+  const body = msg.slice(0, -1);                       // F0 + data (the F7 is added with a timestamp)
+  let i = 0, first = true;
+  while (i < body.length) {
+    const head = first ? [hdr, lo] : [hdr];
+    const room = chunkMax - head.length - 2;           // keep two bytes free for the closing [ts, F7]
+    const take = Math.min(room, body.length - i);
+    pkts.push([...head, ...body.slice(i, i + take)]); i += take; first = false;
+  }
+  pkts[pkts.length - 1].push(lo, 0xF7);
+  return pkts;
+}
+class BleUnframer {                                    // device notifications -> complete SysEx frames
+  constructor() { this.buf = []; this.inSx = false; }
+  push(p) {
+    const out = [];
+    for (let i = 1; i < p.length; i++) {
+      const b = p[i];
+      if (b === 0xF0) { this.buf = [0xF0]; this.inSx = true; }
+      else if (b === 0xF7) { if (this.inSx) { this.buf.push(0xF7); out.push(this.buf); } this.buf = []; this.inSx = false; }
+      else if (b & 0x80) { /* a timestamp, or a status byte outside SysEx */ }
+      else if (this.inSx) this.buf.push(b);
+    }
+    return out;
+  }
+}
+// ---- MIDI control (MIDI-MAP-CUSTOM.md) ----
+const SLOTS = ["DYN", "DRIVE", "AMP", "CAB", "EQ", "MOD", "DLY", "REV"];               // the firmware's slot ids 0..7, in signal order
+const SLOT_MODULE = [0, 6, 1, 5, 7, 2, 3, 4];                                          // slot id -> NRPN module / CC 28+n number
+const pc = (n) => [0xC0, n & 0x7F];
+const cc = (c, v) => [0xB0, c & 0x7F, v & 0x7F];
+function nrpn(module, param, d, raw) {                 // modules 0..7: d is a percent; 8..10: d is the raw number
+  const out = [...cc(99, module), ...cc(98, param)];
+  if (raw) { if (d < 128) out.push(...cc(6, d)); else out.push(...cc(6, d >> 7), ...cc(38, d & 127)); }
+  else { const v = Math.round(Math.max(0, Math.min(100, d)) * 16383 / 100); out.push(...cc(6, v >> 7), ...cc(38, v & 127)); }
+  return out;
+}
+// ---- the state record (cmd 80, 128 bytes) ----
+function decodeState(r) {
+  if (!r || r.length < 117 || r[0] !== 1) return null;
+  const s = { view: r[1], preset: r[2], flags: r[3], presetVol: r[4], outLevel: r[5], slots: [], g: {}, stomp: [r[111], r[112], r[113], r[114]], namCount: r[115], userCab: r[116], cabCount: r[125], namFree: r[126], cabFree: r[127] };
+  s.name = String.fromCharCode(...r.slice(6, 22).filter((x) => x)).trim();
+  for (let i = 0; i < 8; i++) { const o = 22 + i * 8; s.slots.push({ on: r[o], type: r[o + 1], knobs: r.slice(o + 2, o + 8) }); }
+  s.g = { inGain: r[86] - 12, gate: r[87] - 80, outType: r[88], cabLine: r[89], limiter: r[90], fizz: r[91], width: r[92], routing: r[93], balance: r[94] - 50, geq: r[95], bands: [96, 97, 98, 99, 100].map((i) => r[i] - 12), tunerRef: r[101] + 430, tunerMute: r[102], loopback: (r[3] >> 3) & 1, usbMode: (r[3] >> 5) & 3, bpm: r[106] | (r[107] << 8), pattern: r[108], gVol: r[109], drums: r[110] };
+  s.order = r.length >= 125 && isOrder(r.slice(117, 125)) ? r.slice(117, 125) : [0, 1, 2, 3, 4, 5, 6, 7];
+  return s;
+}
+function isOrder(a) { return a.length === 8 && [0, 1, 2, 3, 4, 5, 6, 7].every((x) => a.includes(x)); }
+// the unit's own move (ui_app.c): the slot goes to position `to`, the ones between shift by one
+function chainMove(order, slot, to) {
+  const o = order.slice(), from = o.indexOf(slot);
+  if (from < 0 || to < 0 || to > 7 || from === to) return o;
+  o.splice(from, 1); o.splice(to, 0, slot);
+  return o;
+}
+const chainMoveMsg = (slot, to) => nrpn(10, 7, slot * 8 + to, true);
+// ---- uploads ----
+function nonZero(a) { return a.some((x) => x); }
+// the NAM file the unit takes: no conversion, only the wrapper is cut off. Returns {bytes, how} or {error}
+function stripNam(f, filename) {
+  const n = f.length, m4 = String.fromCharCode(...f.slice(0, 4));
+  { let i = 0; if (f[0] === 0xEF && f[1] === 0xBB && f[2] === 0xBF) i = 3; while (i < n && (f[i] === 0x20 || f[i] === 0x0A || f[i] === 0x0D || f[i] === 0x09)) i++; if (f[i] === 0x7B) return namJson(f, filename); }
+  if (m4 === "WAVE") { return n <= 8192 ? { bytes: f, how: "WaveNet blob, sent as it is" } : { error: "a WaveNet blob over 8192 bytes does not fit the unit" }; }
+  if (n === 3852 || n === 4040) return { bytes: f.slice(0, 3852), how: "raw " + n + " B struct, first 3852 B" };
+  if (m4.startsWith("@M") || m4 === "NAM\0") {
+    if (n >= 6204 + 3852) return { bytes: f.slice(6204, 6204 + 3852), how: m4.replace("\0", "") + " container, model struct at +6204 (3852 B)" };
+    if (n >= 3852) return { bytes: f.slice(0, 3852), how: m4.replace("\0", "") + " short container, first 3852 B" };
+  }
+  return { error: "unknown format (" + n + " bytes): expected a .namb container, a 3852 / 4040 B struct or a WAVE blob" };
+}
+// ---- a .nam file (JSON) -> the unit's WaveNet blob: 'WAVE', weight count u32, head scale f32, flags u32 (1 = the capture has its cabinet baked in), input trim f32, then the f32 weights.
+// Same rules as emu/nam_loader.py: a ToneHunt A2 SlimmableContainer is read for its LITE submodel (1870 / 1871 weights, 7,504 bytes: the Full one, 12,146 weights, is 48 KB and does not fit the unit),
+// the head scale is appended when the weights are 1870, the name comes from the metadata, a capture whose name says CAB (and not "cab free" / "no cab") is flagged as having its cabinet, and a
+// recorded input level calibrates the input trim against the unit's ADC reference (4 dBu). ----
+const NAM_ADC_REF_DBU = 4.0;
+function namHasBakedCab(gear, name, file) {
+  const names = [name.toLowerCase(), file.toLowerCase()];
+  if (names.some((n) => /cab[ _\-]*free|no[ _\-]*cab|without[ _\-]*cab|w\/o[ _\-]*cab|cabless|cab[ _\-]*less|amp[ _\-]*only/.test(n))) return false;
+  return gear.includes("cab") || names.some((n) => n.includes("cab"));
+}
+function namInputLevel(meta, data) {
+  for (const o of [meta, data.metadata, data.config, data]) {
+    if (o && typeof o === "object") for (const k of ["input_level_dbu", "input_level", "input_dBu", "calibration_dBu"]) if (o[k] !== undefined && o[k] !== null && !Number.isNaN(Number(o[k]))) return Number(o[k]);
+  }
+  return null;
+}
+function namJson(f, filename) {
+  let data;
+  try { data = JSON.parse(new TextDecoder("utf-8").decode(f).replace(/^\uFEFF/, "")); } catch (e) { return { error: "this file is not valid JSON (" + e.message + ")" }; }
+  let m = null, ws = null;
+  if (data && data.architecture === "SlimmableContainer") {
+    const subs = (data.config && data.config.submodels) || [];
+    for (const sm of subs) { const w = (sm.model && sm.model.weights) || []; if (w.length === 1870 || w.length === 1871) { m = sm.model; ws = w; break; } }
+    if (!m) return { error: "this capture has no A2 Lite model (3 channels, 1870 / 1871 weights): the unit takes the Lite one, the Full model is 48 KB and does not fit its 8 KB slot" };
+  } else if (data && data.architecture === "WaveNet" && Array.isArray(data.weights) && (data.weights.length === 1870 || data.weights.length === 1871)) { m = data; ws = data.weights; }
+  else return { error: "unknown .nam: expected a ToneHunt A2 capture (SlimmableContainer with a Lite WaveNet) or a 3-channel WaveNet" };
+  const head = Number(((m.config && m.config.head_scale) !== undefined ? m.config.head_scale : 1.0));
+  const weights = ws.map(Number); if (weights.length === 1870) weights.push(head);
+  if (weights.some((x) => !Number.isFinite(x))) return { error: "the weights contain a value that is not a number" };
+  const meta = m.metadata || data.metadata || {}, name = String(meta.name || meta.gear_model || filename || "NAM");
+  const gear = String(meta.gear_type || "").toLowerCase(), cab = namHasBakedCab(gear, name, filename || "");
+  const lvl = namInputLevel(meta, data), trim = lvl === null ? 1.0 : Number((Math.pow(10, (NAM_ADC_REF_DBU - lvl) / 20)).toFixed(4));
+  const out = new Uint8Array(20 + weights.length * 4), dv = new DataView(out.buffer);
+  out.set([0x57, 0x41, 0x56, 0x45], 0); dv.setUint32(4, weights.length, true); dv.setFloat32(8, head, true); dv.setUint32(12, cab ? 1 : 0, true); dv.setFloat32(16, trim, true);
+  weights.forEach((w, i) => dv.setFloat32(20 + i * 4, w, true));
+  return { bytes: out, name, how: "ToneHunt .nam converted: A2 Lite WaveNet, " + weights.length + " weights" + (cab ? ", cabinet baked in" : "") + (lvl !== null ? ", input trim " + trim : "") };
+}
+function checkCab(f) {
+  if (f.length > 12 && String.fromCharCode(f[0], f[1], f[2], f[3]) === "RIFF") { const r = wavToCab(f); return r.error ? r : { bytes: r.bytes, taps: r.taps, peak: r.peak, how: r.how }; }
+  const n = f.length;
+  if (n % 4 || n < 64 || n > 4096) return { error: "a cabinet is 16..1024 int32 taps (64..4096 bytes); this file is " + n + " bytes" };
+  const dv = new DataView(f.buffer, f.byteOffset, n); let peak = 0;
+  for (let i = 0; i < n; i += 4) peak = Math.max(peak, Math.abs(dv.getInt32(i, true)));
+  if (!peak) return { error: "the impulse is all zeros" };
+  return { bytes: f, taps: n / 4, peak: peak / 262144 };
+}
+// ---- a WAV impulse response -> the unit's cabinet format (raw Q18 taps at 44.1 kHz, at most 1024) ----
+const CAB_RATE = 44100, CAB_MAX_TAPS = 1024;
+function parseWav(f) {
+  const dv = new DataView(f.buffer, f.byteOffset, f.length), tag = (o) => String.fromCharCode(f[o], f[o + 1], f[o + 2], f[o + 3]);
+  if (f.length < 44 || tag(0) !== "RIFF" || tag(8) !== "WAVE") return { error: "not a WAV file" };
+  let fmt = null, data = null;
+  for (let o = 12; o + 8 <= f.length; ) {
+    const id = tag(o), n = dv.getUint32(o + 4, true);
+    if (id === "fmt ") fmt = { code: dv.getUint16(o + 8, true), ch: dv.getUint16(o + 10, true), rate: dv.getUint32(o + 12, true), bits: dv.getUint16(o + 22, true) };
+    if (id === "data") { data = { o: o + 8, n: Math.min(n, f.length - o - 8) }; break; }
+    o += 8 + n + (n & 1);
+  }
+  if (!fmt || !data) return { error: "no fmt or data chunk in the WAV" };
+  if (fmt.code === 0xFFFE) fmt.code = dv.getUint16(40, true);            // WAVE_FORMAT_EXTENSIBLE: the sub-format code
+  const bytes = fmt.bits >> 3, frames = Math.floor(data.n / (bytes * fmt.ch)), x = new Float64Array(frames);
+  const rd = (o) => fmt.code === 3 ? (fmt.bits === 32 ? dv.getFloat32(o, true) : dv.getFloat64(o, true))
+    : fmt.bits === 16 ? dv.getInt16(o, true) / 32768 : fmt.bits === 24 ? ((dv.getUint8(o) | (dv.getUint8(o + 1) << 8) | (dv.getInt8(o + 2) << 16)) / 8388608) : fmt.bits === 32 ? dv.getInt32(o, true) / 2147483648 : NaN;
+  if (fmt.code !== 1 && fmt.code !== 3) return { error: "WAV format " + fmt.code + " is not PCM or float" };
+  if (![16, 24, 32, 64].includes(fmt.bits) || (fmt.code === 1 && fmt.bits === 64)) return { error: fmt.bits + "-bit samples are not supported" };
+  for (let i = 0; i < frames; i++) x[i] = rd(data.o + i * bytes * fmt.ch);     // the first channel
+  return { x, rate: fmt.rate, ch: fmt.ch };
+}
+function resample(x, from, to) {                                         // Lanczos 3
+  if (from === to) return x;
+  const n = Math.floor(x.length * to / from), y = new Float64Array(n), r = from / to, a = 3, fc = Math.min(1, to / from);
+  const sinc = (t) => (t === 0 ? 1 : Math.sin(Math.PI * t) / (Math.PI * t));
+  for (let i = 0; i < n; i++) {
+    const c = i * r; let acc = 0;
+    for (let j = Math.ceil(c - a / fc); j <= Math.floor(c + a / fc); j++) { if (j < 0 || j >= x.length) continue; const t = (c - j) * fc; acc += x[j] * fc * sinc(t) * sinc(t / a); }
+    y[i] = acc;
+  }
+  return y;
+}
+function wavToCab(f) {
+  const w = parseWav(f); if (w.error) return w;
+  let y = resample(w.x, w.rate, CAB_RATE), peak = 0, first = 0;
+  for (const v of y) peak = Math.max(peak, Math.abs(v));
+  if (!peak) return { error: "the impulse is silent" };
+  while (first < y.length && Math.abs(y[first]) < 0.05 * peak) first++;       // the lead-in before the response starts
+  first = Math.max(0, first - 4);
+  y = y.slice(first, first + CAB_MAX_TAPS);
+  if (y.length < 16) return { error: "the impulse is shorter than 16 samples" };
+  const fade = Math.min(128, y.length >> 2);
+  for (let i = 0; i < fade; i++) y[y.length - 1 - i] *= 0.5 - 0.5 * Math.cos(Math.PI * i / fade);      // a half-Hann tail: no click from the cut
+  const k = 0.9 * 262144 / peak, out = new Uint8Array(y.length * 4), dv = new DataView(out.buffer);
+  y.forEach((v, i) => dv.setInt32(i * 4, Math.max(-2147483648, Math.min(2147483647, Math.round(v * k))), true));
+  return { bytes: out, taps: y.length, peak: 0.9, how: "WAV " + w.rate + " Hz, " + w.x.length + " samples" + (w.rate !== CAB_RATE ? " resampled to 44.1 kHz" : "") + (first ? ", " + first + " lead-in samples removed" : "") + (w.x.length - first > CAB_MAX_TAPS ? ", cut to 1024 taps with a soft tail" : "") };
+}
+// cmd 25 begin, cmd 34 chunks, cmd 48 commit: the frames of one upload (target 1 NAM, 2 CAB)
+function uploadFrames(bytes, target, slot, chunk) {
+  const n = bytes.length, fr = [buildFrame(25, [n & 0xFF, (n >> 8) & 0xFF, (n >> 16) & 0xFF, target, slot || 0])];
+  for (let i = 0; i < n; i += chunk) fr.push(buildFrame(34, bytes.slice(i, i + chunk)));
+  fr.push(buildFrame(48, []));
+  return fr;
+}
+// ---- firmware pack check (no write) ----
+const APP_BASE = 0x4000, APP_SIZE = 532480;
+function checkFirmware(f) {
+  const o = { size: f.length };
+  if (f.length !== APP_SIZE) { o.error = "an app image is " + APP_SIZE + " bytes (0x4000 to the end of the app partition); this file is " + f.length; return o; }
+  if (!nonZero(f.slice(0, 64)) || f.slice(0, 64).every((x) => x === 0xFF)) o.error = "the image starts blank";
+  o.base = APP_BASE;
+  return o;
+}
+// ---- the vendor update loader (firmware update route; the frames are documented in HARDWARE-BRINGUP-STATUS.md section 4) ----
+// query F0 00 32 45 00 00 00 40 7F F7 -> a 34-byte ID block; "enter upgrade" F0 22 24 35 7F F7; then the loader REQUESTS blocks of the image:
+//   inner 00 59 30 | 08 00 00 | flash_type | addr:u32le | len:u24le | chk       (chk = ~sum(flash_type..len))
+// and the host answers with the same frame carrying the data; addr 0xE0000000 (verify done) and 0xF0000000 (finished) are answered "success\0".
+const OTA_QUERY = [0xF0, 0x00, 0x32, 0x45, 0x00, 0x00, 0x00, 0x40, 0x7F, 0xF7], OTA_UPGRADE = [0xF0, 0x22, 0x24, 0x35, 0x7F, 0xF7];   // 7F: the update session (the unit pulls the package)
+const OTA_SOFTKEY = [0xF0, 0x22, 0x24, 0x35, 0x7D, 0xF7];                                                                          // 7D: into the chip's ROM download mode (the PC flasher's way in)
+const OFFICIAL_SHA256 = "9584e81da98215e8e70ddffc28311423ceaa1a5a8a12a478dc68f4679e10902b", OFFICIAL_SIZE = 767028, OFFICIAL_PRODUCT = "Pocket AMP_105";   // the unmodified M-VAVE Pocket AMP.fwsc (the same digest the Pendel installer pins)
+const OTA_VERIFY_DONE = 0xE0000000, OTA_FINISH = 0xF0000000, OTA_MAX_REQ = 512;
+function otaParseRequest(frame) {
+  if (!frame || frame[0] !== 0xF0 || frame[frame.length - 1] !== 0xF7) return null;
+  const u = unpack7to8(frame.slice(1, -1));
+  if (u.length !== 15 || u[0] !== 0 || u[1] !== 0x59 || u[2] !== 0x30) return null;
+  let sum = 0; for (let i = 6; i < 14; i++) sum += u[i];
+  if (((~sum) & 0xFF) !== u[14]) return null;
+  return { type: u[6], addr: (u[7] | (u[8] << 8) | (u[9] << 16) | (u[10] << 24)) >>> 0, len: u[11] | (u[12] << 8) | (u[13] << 16) };
+}
+function otaResponse(req, data) {
+  const n = data.length, inner = [0x00, 0x59, 0x30, (n + 8) & 0xFF, ((n + 8) >> 8) & 0xFF, 0, req.type, req.addr & 0xFF, (req.addr >>> 8) & 0xFF, (req.addr >>> 16) & 0xFF, (req.addr >>> 24) & 0xFF, n & 0xFF, (n >> 8) & 0xFF, 0, ...data];
+  let sum = 0; for (let i = 6; i < inner.length; i++) sum += inner[i];
+  inner.push((~sum) & 0xFF);
+  return [0xF0, ...pack8to7(inner), 0xF7];
+}
+function otaRequestFrame(r) {                    // what the loader sends (the tests and the probe build it)
+  const inner = [0, 0x59, 0x30, 8, 0, 0, r.type, r.addr & 0xFF, (r.addr >>> 8) & 0xFF, (r.addr >>> 16) & 0xFF, (r.addr >>> 24) & 0xFF, r.len & 0xFF, (r.len >> 8) & 0xFF, 0];
+  let sum = 0; for (let i = 6; i < 14; i++) sum += inner[i];
+  inner.push((~sum) & 0xFF);
+  return [0xF0, ...pack8to7(inner), 0xF7];
+}
+// The image both steps pull from is the PACKAGE as the unit addresses it: the .fwsc without its 20 marker bytes (a .ufw: the flash.bin the loader writes, the loader itself ota.bin, ...). The unit asks, the page answers;
+// a request outside the package or longer than 512 bytes is never answered. (What the loader then writes is the vendor loader's business: for our packs everything outside the app area is the unit's own bytes.)
+class PkgServer {
+  constructor(image) { this.image = image; this.served = 0; }
+  handle(frame) {
+    const r = otaParseRequest(frame);
+    if (!r) return { kind: "ignored" };
+    if (r.addr === OTA_VERIFY_DONE || r.addr === OTA_FINISH) return { kind: "mark", req: r, reply: otaResponse(r, [...new TextEncoder().encode("success"), 0]) };
+    if (r.len > OTA_MAX_REQ || r.len === 0 || r.addr + r.len > this.image.length) return { kind: "refused", why: "the unit asked for 0x" + r.addr.toString(16) + " +" + r.len + ": outside the package (" + this.image.length + " bytes)", req: r };
+    this.served++;
+    return { kind: "data", req: r, reply: otaResponse(r, Array.from(this.image.subarray(r.addr, r.addr + r.len))) };
+  }
+}
+// ---- the unit's own diagnostic flash read (pa_diag.c): inner 7D 01 addr:u32le len:u16le -> reply inner 7D 81 got:u16le addr:u32le data (no 00 59 header, no checksum) ----
+function diagReadFrame(addr, n) {
+  return [0xF0, ...pack8to7([0x7D, 0x01, addr & 255, (addr >>> 8) & 255, (addr >>> 16) & 255, (addr >>> 24) & 255, n & 255, (n >> 8) & 255]), 0xF7];
+}
+function diagParse(frame) {
+  if (!frame || frame[0] !== 0xF0 || frame[frame.length - 1] !== 0xF7) return null;
+  const u = unpack7to8(frame.slice(1, -1));
+  if (u.length < 4 || u[0] !== 0x7D || u[1] !== 0x81) return null;
+  if (u[2] === 0xFF && u[3] === 0xFF) return { refused: true };
+  if (u.length < 8) return null;
+  const got = u[2] | (u[3] << 8);
+  return { addr: (u[4] | (u[5] << 8) | (u[6] << 16) | (u[7] << 24)) >>> 0, data: u.slice(8, 8 + got) };
+}
+// ---- the app area is stored scrambled (JieLi ENC: 32-byte blocks, key 0x980F ^ ((addr - 0x4000) >> 2), its own inverse). The unit's flash read goes through the XIP window, which
+// shows the app area UNSCRAMBLED so a dump of it has to be scrambled again to be the
+// bytes that are in the flash, and the unit's flash is compared with the plain image after an update. ----
+const CHIP_KEY = 0x980F;
+function encStream(key) { const o = new Uint8Array(32); let k = key; for (let i = 0; i < 32; i++) { o[i] = k & 255; k = ((k << 1) ^ ((k & 0x8000) ? 0x1021 : 0)) & 0xFFFF; } return o; }
+function scramble(data, addr) {
+  if ((addr - APP_BASE) % 32) throw new Error("scramble starts on a 32-byte block");
+  const out = Uint8Array.from(data);
+  for (let o = 0; o < out.length; o += 32) {
+    const s = encStream((CHIP_KEY ^ (((addr + o - APP_BASE) >>> 2) & 0xFFFF)) & 0xFFFF), n = Math.min(32, out.length - o);
+    for (let i = 0; i < n; i++) out[o + i] ^= s[i];
+  }
+  return out;
+}
+// a whole-chip dump as the diagnostic read returns it -> the bytes that are in the flash. The XIP window covers the app image (0x4000..0x85FFF) and, on the builds before pack 192, the rest of
+// the app partition to 0xB4FFF: that part is plain when its first bytes are 0xFF (the partition's scrambled padding reads as 0xFF through the window).
+function rawFromDump(d) {
+  const dump = d instanceof Uint8Array ? d : Uint8Array.from(d), raw = Uint8Array.from(dump);
+  raw.set(scramble(dump.subarray(0x4000, 0x86000), 0x4000), 0x4000);
+  let ff = true; for (let i = 0; i < 32; i++) if (dump[0x86000 + i] !== 0xFF) ff = false;
+  if (ff) raw.set(scramble(dump.subarray(0x86000, 0xB5000), 0x86000), 0x86000);
+  return raw;
+}
+// ---- the firmware files: a .fwsc is a .ufw with 20 marker bytes (one after every 47 bytes), a .ufw has a flash.bin entry, and flash.bin is the chip image; the app area is its 0x4000..0x85FFF.
+// The page accepts the .fwsc the build writes, the .ufw, a whole-chip dump, or the app area .bin itself; it refuses a file that is not OUR firmware (no recovery marker in the unscrambled app). ----
+function xorHeader(d, key) {
+  const p = Uint8Array.from(d); let k = key === undefined ? 0xFFFF : key;
+  for (let i = 0; i < p.length; i++) { p[i] ^= k & 0xFF; k = ((k << 1) ^ ((k & 0x8000) ? 0x1021 : 0)) & 0xFFFF; }
+  return p;
+}
+function unwrapFwsc(b) {
+  const img = new Uint8Array(b.length - 20); let product = "";
+  for (let i = 0; i < 20; i++) { img.set(b.subarray(i * 48, i * 48 + 47), i * 47); const m = b[i * 48 + 47]; if (m !== 125) product += String.fromCharCode((m - i - 1) & 0xFF); }
+  img.set(b.subarray(960), 940);
+  return { ufw: img, product };
+}
+function ufwFlash(u) {
+  if (u.length < 144) return null;
+  const h = xorHeader(u.subarray(0, 32));
+  if (String.fromCharCode(...h.subarray(16, 22)) !== "AC791N") return null;
+  const e0 = xorHeader(u.subarray(64, 144)), dv = new DataView(e0.buffer);
+  let name = ""; for (let i = 64; i < 80 && e0[i]; i++) name += String.fromCharCode(e0[i]);
+  if (dv.getUint16(0, true) !== 0 || name !== "flash.bin") return null;
+  const off = dv.getUint32(8, true), size = dv.getUint32(12, true);
+  return off + size <= u.length ? u.subarray(off, off + size) : null;
+}
+function hasOurMarker(area) {                       // the recovery marker of our app.bin, found in the UNSCRAMBLED area
+  const plain = scramble(area, APP_BASE), m = [0x52, 0x43, 0x52, 0x45, 0x43, 0x31, 0x3A, 0x50, 0x41, 0x3A];
+  outer: for (let i = 0; i + m.length <= plain.length; i++) { if (plain[i] !== 0x52) continue; for (let k = 1; k < m.length; k++) if (plain[i + k] !== m[k]) continue outer; return true; }
+  return false;
+}
+// -> { area, how } or { error }
+function areaFromFile(d) {
+  const b = d instanceof Uint8Array ? d : Uint8Array.from(d);
+  let area = null, how = "";
+  if (b.length === IMAGE_SIZE) { area = b; how = "the app area image"; }
+  else {
+    let flash = null;
+    if (b.length > 1000) {
+      const plainHdr = String.fromCharCode(...b.subarray(16, 28)) === "AC791N_STORY";
+      if (plainHdr && b.length >= 0x86000) { flash = b; how = "a whole-chip dump"; }
+      if (!flash) { try { const w = unwrapFwsc(b); flash = ufwFlash(w.ufw); if (flash) how = ".fwsc (" + w.product + ")"; } catch (_) { /* not a .fwsc */ } }
+      if (!flash) { flash = ufwFlash(b); if (flash) how = ".ufw"; }
+    }
+    if (!flash) return { error: "this is not a firmware file the page knows: " + b.length + " bytes. Pick the .fwsc the build writes, or Pocket_AMP_Custom_app_area.bin" };
+    if (flash.length < 0x86000) return { error: "the flash image inside is only " + flash.length + " bytes" };
+    area = flash.slice(APP_BASE, USER_STORE_BASE);
+  }
+  if (!hasOurMarker(area)) return { error: "this is not the custom firmware (the recovery marker is missing from its app): the page will not flash it. The ORIGINAL firmware (the M-VAVE Pocket AMP.fwsc) is put back with the PC tool: flash_unit.py --image \"Pocket AMP.fwsc\"" };
+  return { area, how };
+}
+// ---- the firmware update plan: the dump of what the unit holds now against the image that would be written (nothing is written here) ----
+const SECTOR = 4096, USER_STORE_BASE = 0x86000, IMAGE_SIZE = USER_STORE_BASE - APP_BASE;
+function dryRun(dump, image) {                       // dump = the RAW flash (rawFromDump), at least 0 .. 0x85FFF, image = flash 0x4000 .. 0x85FFF
+  const r = { ok: false, sectors: [], same: 0, notes: [] };
+  if (image.length !== IMAGE_SIZE) { r.notes.push("the image is " + image.length + " bytes, an app image is " + IMAGE_SIZE); return r; }
+  if (dump.length < USER_STORE_BASE) { r.notes.push("the dump covers only " + dump.length + " bytes, it must cover flash 0 to 0x85FFF"); return r; }
+  for (let a = APP_BASE; a < USER_STORE_BASE; a += SECTOR) {
+    let diff = false;
+    for (let i = 0; i < SECTOR; i++) if (dump[a + i] !== image[a - APP_BASE + i]) { diff = true; break; }
+    if (diff) r.sectors.push(a); else r.same++;
+  }
+  r.ok = true;
+  r.notes.push(r.sectors.length + " of " + (IMAGE_SIZE / SECTOR) + " sectors differ and would be rewritten; " + r.same + " are identical");
+  r.notes.push("the boot area (0 to 0x3FFF) and the user store (0x86000 up) are not touched: the image starts at 0x4000 and ends at 0x85FFF");
+  return r;
+}
+// a check of the unit's flash against the image after the update: every sector at a few places (quick) or entirely
+function verifyOffsets(full) { return full ? [[0, SECTOR]] : [[0, 16], [0x400, 16], [0x800, 16], [0xFF0, 16]]; }
+//CORE-END
+if (typeof document !== "undefined") {
+const $ = (id) => document.getElementById(id);
+const logEl = $("log");
+function log(m) { logEl.textContent += m + "\n"; logEl.scrollTop = logEl.scrollHeight; }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const hex = (a) => Array.from(a, (b) => b.toString(16).padStart(2, "0")).join(" ");
+
+// ---- transports ----
+const MIDI_SVC = "03b80e5a-ede8-4b33-a751-6ce34ec4c700", MIDI_CHR = "7772e5db-3868-4112-a1a9-f2669d106bf3";
+let link = null, rx = [], waiter = null, state = null, names = { amp: [], cab: [], firstAmp: 20, firstCab: 20, rev: 0 }, busy = false;
+function onFrame(fr) { if (diagWait) { const d = diagParse(fr); if (d) { diagWait(d); return; } } const r = parseReply(fr); if (!r) return; if (waiter && waiter.type === r.type) { const w = waiter; waiter = null; w.res(r.data); } }
+async function openMidi() {
+  if (!navigator.requestMIDIAccess) throw new Error("Web MIDI is not available in this browser (use Chrome or Edge)");
+  const acc = await navigator.requestMIDIAccess({ sysex: true });
+  const ins = [...acc.inputs.values()], outs = [...acc.outputs.values()];
+  const pick = (l) => l.find((p) => /custom midi|pocket|donner/i.test(p.name)) || l[0];
+  const i = pick(ins), o = pick(outs);
+  if (!i || !o) throw new Error("no MIDI port found: plug the unit in (USB) or pair it first");
+  const sel = $("port"); sel.hidden = false; sel.innerHTML = ""; outs.forEach((p) => { const e = document.createElement("option"); e.textContent = p.name; e.value = p.name; sel.appendChild(e); }); sel.value = o.name;
+  let cur = { i, o };
+  const bind = () => { cur.i.onmidimessage = (e) => { if (e.data[0] === 0xF0) onFrame(Array.from(e.data)); }; };
+  bind();
+  sel.onchange = () => { cur.i.onmidimessage = null; cur = { i: ins.find((p) => p.name === sel.value) || i, o: outs.find((p) => p.name === sel.value) || o }; bind(); };
+  return { name: cur.o.name, chunk: 200, send: async (b) => cur.o.send(b), sendFrame: async (b) => cur.o.send(b) };
+}
+async function openBle() {
+  if (!navigator.bluetooth) throw new Error("Web Bluetooth is not available in this browser (use Chrome or Edge)");
+  const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [MIDI_SVC] }], optionalServices: [MIDI_SVC] });
+  const srv = await dev.gatt.connect(), svc = await srv.getPrimaryService(MIDI_SVC), ch = await svc.getCharacteristic(MIDI_CHR);
+  const un = new BleUnframer();
+  ch.addEventListener("characteristicvaluechanged", (e) => { for (const f of un.push(new Uint8Array(e.target.value.buffer))) onFrame(f); });
+  await ch.startNotifications();
+  dev.addEventListener("gattserverdisconnected", () => { setStatus(false); log("Bluetooth link closed"); link = null; });
+  const wr = async (p) => { const a = Uint8Array.from(p); if (ch.writeValueWithoutResponse) await ch.writeValueWithoutResponse(a); else await ch.writeValue(a); };
+  return { name: dev.name || "BLE MIDI", chunk: 100, send: async (b) => wr(bleFrames(b, 20)[0]), sendFrame: async (b) => { for (const p of bleFrames(b, 20)) { await wr(p); await sleep(6); } } };
+}
+async function sendShort(bytes) {       // channel messages, three bytes each (a BLE-MIDI packet or a USB MIDI message)
+  if (!link) return;
+  for (let i = 0; i < bytes.length; i += 3) { await link.send(bytes.slice(i, i + 3)); if (link.ble) await sleep(4); }
+}
+async function request(cmd, payload, type, ms) {
+  const p = new Promise((res, rej) => { waiter = { type, res }; setTimeout(() => { if (waiter && waiter.res === res) { waiter = null; rej(new Error("no reply to command " + cmd)); } }, ms || (link && link.ble ? 8000 : 1500)); });      // a long reply over Bluetooth is dozens of notifications, a few per connection event
+  await link.sendFrame(buildFrame(cmd, payload));
+  return p;
+}
+let toastTimer = null;
+function toast(t) { const e = $("toast"); e.textContent = t; e.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => e.classList.remove("on"), 3500); }
+function setStatus(on, t) { const s = $("status"); s.className = on ? "on" : ""; s.textContent = t || (on ? "connected" : "not connected"); }
+
+// ---- the page ----
+const TABS = [["chain", "Chain"], ["global", "Global"], ["groove", "Groove / Stomp"], ["files", "NAM / Cab"], ["fw", "Firmware"]];
+const COLORS = ["#8c8c99", "#e0a030", "#ff7a1a", "#b070e0", "#5fb0e0", "#40c0a0", "#e05a8a", "#6a8cff"];
+const nav = $("tabs");
+TABS.forEach(([id, t], i) => { const b = document.createElement("button"); b.textContent = t; b.onclick = () => { TABS.forEach(([x]) => $("t-" + x).hidden = x !== id); [...nav.children].forEach((c, j) => c.className = j === i ? "sel" : ""); }; if (!i) b.className = "sel"; nav.appendChild(b); });
+
+const sendQueue = {}; let dragging = null;
+function throttled(key, fn) { clearTimeout(sendQueue[key]); sendQueue[key] = setTimeout(fn, 40); }
+function slider(label, min, max, get, onSet, fmt) {
+  const el = document.createElement("div"); el.className = "row";
+  const lb = document.createElement("span"); lb.textContent = label;
+  const r = document.createElement("input"); r.type = "range"; r.min = min; r.max = max;
+  const o = document.createElement("output");
+  r.oninput = () => { o.textContent = fmt ? fmt(+r.value) : r.value; dragging = r; throttled(label, () => onSet(+r.value)); };
+  r.onchange = () => { dragging = null; };
+  el.append(lb, r, o); el.set = (v) => { if (dragging === r) return; r.value = v; o.textContent = fmt ? fmt(v) : v; };
+  return el;
+}
+function select(label, opts, onSet) {
+  const el = document.createElement("div"); el.className = "row sel2";
+  const lb = document.createElement("span"); lb.textContent = label; const s = document.createElement("select");
+  opts.forEach((t, i) => { const o = document.createElement("option"); o.value = i; o.textContent = t; s.appendChild(o); });
+  s.onchange = () => onSet(+s.value); el.append(lb, s); el.set = (v) => { s.value = v; }; return el;
+}
+const toggle = (label, onSet) => select(label, ["off", "on"], onSet);
+
+// chain blocks
+const blocks = [];
+function buildChain() {
+  const host = $("chain"); host.innerHTML = ""; blocks.length = 0;
+  SLOTS.forEach((nm, slot) => {
+    const mod = SLOT_MODULE[slot], card = document.createElement("div"); card.className = "blk";
+    const h = document.createElement("div"); h.className = "bh"; h.style.background = COLORS[slot]; h.textContent = nm;
+    const on = document.createElement("button"); on.onclick = () => { const v = card.classList.contains("off") ? 127 : 0; card.classList.toggle("off", !v); on.textContent = v ? "ON" : "OFF"; sendShort(cc(28 + mod, v)); };
+    h.appendChild(on);
+    const body = document.createElement("div"); body.className = "bb";
+    const sel = document.createElement("select"); sel.onchange = () => sendShort(nrpn(mod, 0x40, +sel.value + 0x20, true));
+    const knobs = [];
+    for (let k = 0; k < 6; k++) {
+      const row = document.createElement("div"); row.className = "knob"; const l = document.createElement("span"), r = document.createElement("input"), o = document.createElement("output");
+      r.type = "range"; r.min = 0; r.max = 100; r.oninput = () => { o.textContent = r.value; dragging = r; throttled(slot + "k" + k, () => sendShort(nrpn(mod, 0x60 + k, +r.value))); }; r.onchange = () => { dragging = null; };
+      row.append(l, r, o); body.appendChild(row); knobs.push({ row, l, r, o });
+    }
+    body.prepend(sel); card.append(h, body); host.appendChild(card); blocks.push({ card, on, sel, knobs, slot, nm });
+    attachHold(blocks[blocks.length - 1], h);
+  });
+}
+// click and hold the header for 1 s: the block lifts, move it over another block and let go; the unit follows (NRPN module 10 parameter 7)
+const HOLD_MS = 1000; let lift = null;
+function attachHold(b, h) {
+  let timer = null, sx = 0, sy = 0;
+  const cancel = () => { clearTimeout(timer); timer = null; b.card.classList.remove("holding"); };
+  const cards = () => state.order.map((s) => blocks[s]);
+  const nearest = (x, y) => { let best = null, bd = 1e9; cards().forEach((c, i) => { const r = c.card.getBoundingClientRect(), d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2)); if (d < bd) { bd = d; best = i; } }); return best; };
+  h.addEventListener("pointerdown", (e) => {
+    if (e.target.tagName === "BUTTON" || !link || !state) return;
+    sx = e.clientX; sy = e.clientY; h.setPointerCapture(e.pointerId); b.card.classList.add("holding");
+    timer = setTimeout(() => { timer = null; b.card.classList.remove("holding"); b.card.classList.add("lifted"); lift = { b, to: state.order.indexOf(b.slot) }; log("lifted " + b.nm + ": move it over another block and let go"); }, HOLD_MS);
+  });
+  h.addEventListener("pointermove", (e) => {
+    if (!lift || lift.b !== b) { if (timer && Math.hypot(e.clientX - sx, e.clientY - sy) > 10) cancel(); return; }
+    b.card.style.transform = "translate(" + (e.clientX - sx) + "px," + (e.clientY - sy) + "px)";
+    const t = nearest(e.clientX, e.clientY); cards().forEach((c, i) => c.card.classList.toggle("target", i === t && c !== b)); lift.to = t;
+  });
+  const end = async (e) => {
+    cancel();
+    if (!lift || lift.b !== b) return;
+    const to = lift.to; lift = null; b.card.classList.remove("lifted"); b.card.style.transform = ""; blocks.forEach((c) => c.card.classList.remove("target"));
+    if (e.type === "pointercancel" || to === state.order.indexOf(b.slot)) return;
+    state.order = chainMove(state.order, b.slot, to); render();
+    await sendShort(chainMoveMsg(b.slot, to)); log(b.nm + " moved to position " + (to + 1));
+    setTimeout(refresh, 300);
+  };
+  h.addEventListener("pointerup", end); h.addEventListener("pointercancel", end);
+}
+function fillModels(b) {
+  const t = TABLES.models, list = b.nm === "AMP" ? names.amp : b.nm === "CAB" ? names.cab : t[b.nm];
+  b.sel.innerHTML = ""; (list || []).forEach((n, i) => { if (!n) return; const o = document.createElement("option"); o.value = i; o.textContent = n; b.sel.appendChild(o); });    // a deleted capture / cabinet has an empty name: no entry, its number stays
+  b.filled = (list || []).length; b.rev = names.rev;
+}
+function knobLabels(nm, type) {
+  const p = TABLES.params[nm], c = TABLES.counts[nm];
+  if (nm === "DYN" || nm === "MOD") return { l: p[type % p.length], n: c };
+  if (nm === "EQ") return { l: p[type % 3], n: c[type % 3] };
+  if (nm === "DLY") return { l: [...p[0], p[1][type % p[1].length]], n: c };
+  if (nm === "REV") return { l: type === 7 ? ["SIZE", ...p.slice(1)] : p, n: c };
+  return { l: p, n: c };
+}
+function render() {
+  if (!state) return;
+  $("pName").textContent = state.name || "-"; $("pIdx").textContent = "P" + String(state.preset + 1).padStart(2, "0") + (state.flags & 1 ? "  STOMP" : "");
+  $("pSel").value = state.preset;
+  if (!lift) state.order.forEach((sl) => $("chain").appendChild(blocks[sl].card));     // the chain in the unit's signal order
+  blocks.forEach((b) => {
+    const s = state.slots[b.slot], want = b.nm === "AMP" ? names.amp.length : b.nm === "CAB" ? names.cab.length : (TABLES.models[b.nm] || []).length;
+    if (b.filled !== want || b.rev !== names.rev) fillModels(b);
+    if (b.nm === "CAB" && state.userCab) { if (![...b.sel.options].some((o) => o.value === "u")) { const o = document.createElement("option"); o.value = "u"; o.textContent = "USER CAB (live)"; b.sel.appendChild(o); } b.sel.value = "u"; }
+    else { const u = [...b.sel.options].find((o) => o.value === "u"); if (u) u.remove(); b.sel.value = s.type; }
+    b.on.textContent = s.on ? "ON" : "OFF"; b.card.classList.toggle("off", !s.on);
+    const kl = knobLabels(b.nm, s.type);
+    b.knobs.forEach((k, i) => { const dead = i >= kl.n || !kl.l[i] || kl.l[i] === "---"; k.row.hidden = i >= kl.n; k.row.classList.toggle("dead", dead); k.l.textContent = kl.l[i] || ""; if (dragging !== k.r) { k.r.value = s.knobs[i]; k.o.textContent = s.knobs[i]; } });
+  });
+  levels.preset.set(state.presetVol); levels.out.set(state.outLevel);
+  for (const g of GLOBALS) g.el.set(g.get(state.g));
+  gr.play.set(state.flags & 4 ? 1 : 0); gr.bpm.set(state.g.bpm); gr.pat.set(state.g.pattern); gr.vol.set(state.g.gVol); gr.drums.set(state.g.drums);
+  stompEls.forEach((e, i) => e.set(SLOT_MODULE[state.stomp[i]] ?? 0));
+  $("tunerState").textContent = state.flags & 2 ? "tuner is open on the unit" : "";
+}
+const levels = { preset: slider("Preset volume", 0, 100, null, (v) => sendShort(nrpn(10, 0, v, true))), out: slider("Output level", 0, 100, null, (v) => sendShort(nrpn(8, 2, v, true))) };
+$("levels").append(levels.preset, levels.out);
+// global settings: module 8
+const OPT = { outType: ["phones", "line"], limiter: ["brickwall", "soft", "off"], routing: ["stereo", "mono", "left", "right", "swap"] };
+const GLOBALS = [
+  { id: 0, mk: () => slider("Input gain", 0, 24, 0, (v) => sendShort(nrpn(8, 0, v, true)), (v) => (v - 12) + " dB"), get: (g) => g.inGain + 12 },
+  { id: 1, mk: () => slider("Input gate", 0, 50, 0, (v) => sendShort(nrpn(8, 1, v, true)), (v) => v === 0 ? "off" : (v - 80) + " dB"), get: (g) => g.gate + 80 },
+  { id: 3, mk: () => select("Output", OPT.outType, (v) => sendShort(nrpn(8, 3, v, true))), get: (g) => g.outType },
+  { id: 4, mk: () => toggle("Cab on line out", (v) => sendShort(nrpn(8, 4, v, true))), get: (g) => g.cabLine },
+  { id: 5, mk: () => select("Limiter", OPT.limiter, (v) => sendShort(nrpn(8, 5, v, true))), get: (g) => g.limiter },
+  { id: 6, mk: () => slider("Fizz filter", 0, 3, 0, (v) => sendShort(nrpn(8, 6, v, true))), get: (g) => g.fizz },
+  { id: 7, mk: () => slider("Stereo width", 0, 100, 0, (v) => sendShort(nrpn(8, 7, v, true))), get: (g) => g.width },
+  { id: 8, mk: () => select("Routing", OPT.routing, (v) => sendShort(nrpn(8, 8, v, true))), get: (g) => g.routing },
+  { id: 9, mk: () => slider("Balance", 0, 100, 0, (v) => sendShort(nrpn(8, 9, v, true)), (v) => v - 50), get: (g) => g.balance + 50 },
+  { id: 10, mk: () => toggle("Global EQ", (v) => sendShort(nrpn(8, 10, v, true))), get: (g) => g.geq },
+  ...[0, 1, 2, 3, 4].map((i) => ({ id: 11 + i, mk: () => slider("EQ " + ["100", "400", "1k", "3k", "8k"][i], 0, 24, 0, (v) => sendShort(nrpn(8, 11 + i, v, true)), (v) => (v - 12) + " dB"), get: (g) => g.bands[i] + 12 })),
+  { id: 16, mk: () => slider("Tuner reference", 0, 20, 0, (v) => sendShort(nrpn(8, 16, v, true)), (v) => (430 + v) + " Hz"), get: (g) => g.tunerRef - 430 },
+  { id: 17, mk: () => toggle("Tuner muted", (v) => sendShort(nrpn(8, 17, v, true))), get: (g) => g.tunerMute },
+  { id: 19, mk: () => select("USB audio mode", ["AMP (the unit's sound + the PC's)", "INTERFACE (the PC's audio only; the PC records the dry guitar)", "INTERFACE + direct monitor (the dry guitar is also heard)"], (v) => sendShort(nrpn(8, 19, v, true))), get: (g) => g.usbMode },
+  { id: 18, mk: () => toggle("USB loopback (the recording includes what the PC plays; off breaks a monitoring loop)", (v) => sendShort(nrpn(8, 18, v, true))), get: (g) => g.loopback },
+];
+GLOBALS.forEach((g) => { g.el = g.mk(); $("globals").appendChild(g.el); });
+const gr = {
+  play: toggle("Groove playing", (v) => sendShort(cc(86, v ? 127 : 0))),
+  bpm: slider("BPM", 40, 260, 0, (v) => sendShort(nrpn(9, 1, v - 40, true))),
+  pat: slider("Pattern", 0, 39, 0, (v) => sendShort(nrpn(9, 2, v, true)), (v) => v + 1),
+  vol: slider("Groove volume", 0, 100, 0, (v) => sendShort(nrpn(9, 3, v, true))),
+  drums: toggle("Drums on", (v) => sendShort(nrpn(9, 4, v, true))),
+};
+$("groove").append(gr.play, gr.bpm, gr.pat, gr.vol, gr.drums);
+const MODNAMES = ["DYN", "AMP", "MOD", "DLY", "REV", "CAB", "DRIVE", "EQ"];
+const stompEls = ["VOL-", "VOL+", "<", ">"].map((t, i) => { const e = select("Key " + t, MODNAMES, (v) => sendShort(nrpn(10, 3 + i, v, true))); $("stomp").appendChild(e); return e; });
+$("bTuner").onclick = () => sendShort(cc(85, 127));
+
+// presets
+for (let i = 0; i < 80; i++) { const o = document.createElement("option"); o.value = i; o.textContent = "P" + String(i + 1).padStart(2, "0"); $("pSel").appendChild(o); }
+$("pSel").onchange = () => sendShort(pc(+$("pSel").value));
+$("pPrev").onclick = () => sendShort(cc(81, 127)); $("pNext").onclick = () => sendShort(cc(80, 127));
+$("pRead").onclick = async () => { await refresh(); if (state) toast("On the unit now: P" + String(state.preset + 1).padStart(2, "0") + "  " + (state.name || "(empty)")); };
+$("pSave").onclick = () => { sendShort(cc(88, 127)); log("save sent (CC 88)"); };
+buildChain();
+
+async function readNames(kind) {
+  const out = []; let first = 20;
+  for (let start = 0, total = 1; start < total; ) {
+    const d = await request(81, [kind, start], 0x61); total = d[1]; const n = d[3]; first = d[4];
+    for (let i = 0; i < n; i++) out.push(String.fromCharCode(...d.slice(5 + i * 16, 21 + i * 16).filter((x) => x)));       // "" = a deleted slot: its number stays, presets use it
+    if (!n) break; start += n;
+  }
+  if (kind === 0) { names.amp = out; names.firstAmp = first; } else { names.cab = out; names.firstCab = first; }
+  names.rev++;
+}
+async function refresh() {
+  if (!link || busy) return;
+  try { state = decodeState(await request(80, [], 0x60)); render(); renderStore(); } catch (e) { log("state: " + e.message); }
+}
+async function connect(open) {
+  try {
+    link = await open(); link.ble = open === openBle;
+    setStatus(true, "connected: " + link.name); log("connected to " + link.name);
+    await readNames(0); await readNames(1);
+    try { const d = await request(81, [255, 0], 0x61); buildCode = String.fromCharCode(...d.slice(5, 5 + d[3])); log("firmware build " + buildCode); } catch (_) { buildCode = ""; }   // the pack-and-build code (own field: the OTA ID block the vendor updater reads is not touched)
+    log(names.amp.filter((x) => x).length + " amp models, " + names.cab.filter((x) => x).length + " cabinets");
+    await refresh();
+    if (state) { const t = "P" + String(state.preset + 1).padStart(2, "0") + "  " + (state.name || "(empty)"); setStatus(true, "connected: " + link.name + (buildCode ? " (build " + buildCode + ")" : "") + "  |  " + t); toast("On the unit now: " + t); log("preset on the unit: " + t); }
+  } catch (e) { log("connect: " + e.message); setStatus(false, e.message); link = null; }
+  fwRefresh();
+}
+$("bUsb").onclick = () => connect(openMidi);
+$("bBle").onclick = () => connect(openBle);
+setInterval(() => { if ($("live").checked && !dragging) refresh(); }, 1500);
+
+// ---- stored captures and cabinets: the lists, delete, rename, replace, store ----
+const KINDS = [{ n: "capture", max: 10, table: "namTable", count: "namCount", first: () => names.firstAmp, list: () => names.amp, free: () => state.namFree, have: () => state.namCount, cap: 23 },
+               { n: "cabinet", max: 15, table: "cabTable", count: "cabCount", first: () => names.firstCab, list: () => names.cab, free: () => state.cabFree, have: () => state.cabCount, cap: 15 }];
+let buildCode = "", replaceTarget = null, namBytes = null, cabBytes = null, namFileName = "", cabFileName = "";
+function storedRows(kind) { const K = KINDS[kind], l = K.list(), first = K.first(), rows = []; for (let t = first; t < l.length; t++) if (l[t]) rows.push({ type: t, idx: t - first, name: l[t] }); return rows; }
+function renderStore() {
+  if (!state) return;
+  KINDS.forEach((K, kind) => {
+    const tb = $(K.table); tb.innerHTML = "";
+    storedRows(kind).forEach((r) => {
+      const tr = document.createElement("tr"), td = (t) => { const c = document.createElement("td"); if (typeof t === "string") c.textContent = t; else c.appendChild(t); tr.appendChild(c); return c; };
+      td(String(r.idx + 1)); td(r.name);
+      const bt = (t, f, cls) => { const b = document.createElement("button"); b.textContent = t; b.onclick = f; if (cls) b.className = cls; return b; };
+      td(bt("Rename", () => renameItem(kind, r))); td(bt("Replace", () => { replaceTarget = { kind, idx: r.idx, name: r.name }; $("replaceFile").value = ""; $("replaceFile").click(); })); td(bt("Delete", () => deleteItem(kind, r)));
+      tb.appendChild(tr);
+    });
+    if (!tb.children.length) tb.innerHTML = '<tr><td class="note">nothing stored</td></tr>';
+    $(K.count).textContent = "(" + K.have() + " of " + K.max + " stored, " + K.free() + " free)";
+  });
+  $("namSend").disabled = !namBytes || !link || link.ble || state.namFree === 0; $("cabSend").disabled = !cabBytes || !link || state.cabFree === 0; $("cabLive").disabled = !cabBytes || !link;
+  $("namClear").disabled = $("cabClear").disabled = !link;
+  $("namSend").title = link.ble ? "amp captures go over USB only" : (state.namFree === 0 ? "all 10 slots are used: delete or replace one" : ""); $("cabSend").title = state.cabFree === 0 ? "all 15 slots are used: delete or replace one" : "";
+}
+async function userOp(op, kind, idx, name) {
+  const nm = name ? Array.from(name, (c) => c.charCodeAt(0) & 0x7F) : [];
+  const d = await request(82, [op, kind, idx, ...nm], 0x62, op === 2 ? 15000 : undefined); return d[3] === 0 ? 0 : d[3] - 256;
+}
+async function deleteItem(kind, r) {
+  const K = KINDS[kind];
+  if (!confirm("Delete the " + K.n + " \"" + r.name + "\" from the unit?\n\nA preset that uses it falls back to the first stock model. This cannot be undone.")) return;
+  const rc = await userOp(0, kind, r.idx);
+  log(rc === 0 ? K.n + " \"" + r.name + "\" deleted" : "the unit refused the delete (" + rc + ")");
+  await readNames(kind); await refresh();
+}
+// "Clear all": the unit erases every stored item of that kind AND the whole flash area behind it (leftovers of interrupted uploads included). Offered only while the unit answers with the
+// custom firmware's state record; a firmware that does not know the command answers with an error and nothing is touched.
+async function clearAll(kind) {
+  const K = KINDS[kind]; if (!link || !state) { log("clear: the custom firmware is not connected"); return; }
+  if (!confirm("Clear ALL " + K.n + "s from the unit?\n\nEvery stored " + K.n + " (" + K.have() + " now) is erased and the flash area for them is wiped clean. Presets that use one fall back to the first stock model. This cannot be undone.")) return;
+  if (prompt("Type CLEAR to confirm:") !== "CLEAR") { log("clear cancelled"); return; }
+  busy = true;
+  try {
+    const rc = await userOp(2, kind, 0);
+    log(rc === 0 ? "all " + K.n + "s cleared and the area wiped" : "the unit refused (" + rc + "): this firmware may not support it");
+  } catch (e) { log("clear failed: " + e.message); }
+  busy = false; await readNames(kind); await refresh();
+}
+$("namClear").onclick = () => clearAll(0); $("cabClear").onclick = () => clearAll(1);
+async function renameItem(kind, r) {
+  const K = KINDS[kind], nm = prompt("New name for the " + K.n + " (at most " + K.cap + " characters):", r.name); if (!nm) return;
+  const rc = await userOp(1, kind, r.idx, nm.slice(0, K.cap)); log(rc === 0 ? "renamed to \"" + nm.slice(0, K.cap) + "\"" : "the unit refused the rename (" + rc + ")");
+  await readNames(kind); await refresh();
+}
+const stem = (n, cap) => n.replace(/\.[^.]*$/, "").replace(/[^\x20-\x7E]/g, "_").trim().slice(0, cap);
+$("namFile").onchange = async (e) => { const f = e.target.files[0]; if (!f) return; const r = stripNam(new Uint8Array(await f.arrayBuffer()), f.name); namBytes = r.bytes || null; namFileName = r.name || f.name; $("namInfo").innerHTML = r.error ? '<span class="warn">' + r.error + "</span>" : "<b>" + f.name + "</b>: " + r.how + ", " + r.bytes.length + " bytes"; renderStoreSafe(); };
+$("cabFile").onchange = async (e) => { const f = e.target.files[0]; if (!f) return; const r = checkCab(new Uint8Array(await f.arrayBuffer())); cabBytes = r.bytes || null; cabFileName = f.name; $("cabInfo").innerHTML = r.error ? '<span class="warn">' + r.error + "</span>" : "<b>" + f.name + "</b>: " + (r.how ? r.how + ", " : "") + r.taps + " taps"; renderStoreSafe(); };
+const renderStoreSafe = () => { if (state) renderStore(); else { $("namSend").disabled = $("cabSend").disabled = $("cabLive").disabled = true; } };
+$("replaceFile").onchange = async (e) => {
+  const f = e.target.files[0], t = replaceTarget; if (!f || !t) return; const raw = new Uint8Array(await f.arrayBuffer()), r = t.kind === 0 ? stripNam(raw, f.name) : checkCab(raw);
+  if (r.error) { log("replace: " + r.error); return; }
+  if (!confirm("Replace the " + KINDS[t.kind].n + " \"" + t.name + "\" with " + f.name + "?")) return;
+  await upload(t.kind, r.bytes, t.idx, null);
+};
+// kind 0 = capture (upload target 1), 1 = cabinet (target 2); slot = the slot to replace, or 0xFF for the first free one, 0xFE (cabinet) for a live one in RAM; name = the name for a NEW item
+async function upload(kind, bytes, slot, name) {
+  if (!link) { log("not connected"); return; }
+  const K = KINDS[kind], live = slot === 0xFE, had = storedRows(kind).length;
+  busy = true; const bar = $("up"); bar.hidden = false;
+  try {
+    const fr = uploadFrames(bytes, kind === 0 ? 1 : 2, slot, link.chunk);
+    for (let i = 0; i < fr.length; i++) { await link.sendFrame(fr[i]); bar.value = Math.round(100 * (i + 1) / fr.length); await sleep(i === 0 || i === fr.length - 1 ? 150 : 25); }
+    log((live ? "live cabinet" : K.n) + " sent (" + bytes.length + " B in " + fr.length + " frames)");
+  } catch (e) { log("upload failed: " + e.message); }
+  busy = false; await sleep(500);
+  const was = new Set(storedRows(kind).map((r) => r.idx + ":" + r.name));
+  await readNames(kind); await refresh(); bar.hidden = true;
+  if (live) { log(state && state.userCab ? "the live cabinet is loaded" : "the unit did not take the cabinet"); return; }
+  const rows = storedRows(kind);
+  if (slot === 0xFF) {
+    const fresh = rows.find((r) => !was.has(r.idx + ":" + r.name));
+    if (!fresh) { log("the unit did not store it (" + (state && K.free() === 0 ? "no free slot" : "check the file") + ")"); return; }
+    if (name && stem(name, K.cap)) { await userOp(1, kind, fresh.idx, stem(name, K.cap)); await readNames(kind); await refresh(); }
+    const f2 = storedRows(kind).find((r) => r.idx === fresh.idx);
+    log(K.n + " stored in slot " + (fresh.idx + 1) + ": " + (f2 ? f2.name : fresh.name) + " (" + K.have() + " of " + K.max + ")");
+    await sendShort(nrpn(kind === 0 ? 1 : 5, 0x40, fresh.type + 0x20, true)); log("selected it on the unit");
+  } else log(K.n + " in slot " + (slot + 1) + " replaced");
+}
+$("namSend").onclick = () => upload(0, namBytes, 0xFF, namFileName);
+$("cabSend").onclick = () => upload(1, cabBytes, 0xFF, cabFileName);
+$("cabLive").onclick = () => upload(1, cabBytes, 0xFE, null);
+
+// ---- the firmware update: dump, dry run, write, restart, confirm (the loader's frames and the guard are in the core above) ----
+let fwImage = null, fwPkg = null, fwOrig = null, fwDump = null;
+const CHIP_SIZE = 0x100000;
+const hexOf = (a) => Array.from(a, (x) => x.toString(16).padStart(2, "0")).join("");
+const sha256 = async (b) => hexOf(new Uint8Array(await crypto.subtle.digest("SHA-256", b)));
+const fwRefresh = () => {
+  const idle = !oneRunning && !!navigator.requestMIDIAccess;
+  $("fwEnter").disabled = !(link && !link.ble); $("fwVerify").disabled = !(link && !link.ble && fwImage);
+  $("fwInstall").disabled = !(idle && fwPkg); $("fwRestore").disabled = !(idle && fwOrig);
+};
+function fwPlan() {
+  const el = $("fwPlan"); if (!fwImage || !fwDump) { el.textContent = "needs the firmware file and a dump file for the dry run"; return; }
+  const r = dryRun(fwDump, fwImage);
+  el.innerHTML = r.ok ? r.notes.map((n) => "<div>" + n + "</div>").join("") + "<div><b>dry run passed: nothing was written</b>" + (r.sectors.length ? "" : " (the unit already holds this image: nothing to do)") + "</div>" : '<span class="warn">' + r.notes.join("; ") + "</span>";
+}
+$("fwFile").onchange = async (e) => {
+  const f = e.target.files[0]; if (!f) return; const b = new Uint8Array(await f.arrayBuffer()), r = areaFromFile(b); fwImage = r.error ? null : r.area; fwPkg = null;
+  $("fwInfo").innerHTML = "<b>" + f.name + "</b>: " + b.length + " bytes" + (r.error ? ' - <span class="warn">' + r.error + "</span>" : " - " + r.how + ": the app area is " + r.area.length + " bytes (flash 0x4000 to 0x85FFF), sha256 " + (await sha256(r.area)).slice(0, 16) + "&hellip; <b>this is the custom firmware</b>");
+  try { const w = unwrapFwsc(b); if (!r.error && /^Pocket AMP_\d+$/.test(w.product) && ufwFlash(w.ufw)) fwPkg = { image: w.ufw, product: w.product, name: f.name }; } catch (_) { /* not a .fwsc: the one-click install needs one */ }
+  $("fwCmd").textContent = "python custom-fw/tools/flash_unit.py --image \"" + f.name + "\" --enter-download-mode"; fwPlan(); fwRefresh();
+};
+$("fwDumpFile").onchange = async (e) => {
+  const f = e.target.files[0]; if (!f) return; const b = new Uint8Array(await f.arrayBuffer()); fwDump = null;
+  if (b.length !== CHIP_SIZE) $("fwDumpInfo").innerHTML = '<span class="warn">' + f.name + " is " + b.length + " bytes: a whole-chip dump is exactly 1,048,576 bytes</span>";
+  else { fwDump = b; $("fwDumpInfo").innerHTML = "<b>" + f.name + "</b>: a whole-chip dump, sha256 " + (await sha256(b)).slice(0, 16) + "&hellip; (raw flash, as the download-mode dump reads it)"; }
+  fwPlan(); fwRefresh();
+};
+// the diagnostic flash read: 16 bytes a call, as tools/flash_store_pc.py does (32 and more came back unreliably on the bench), every call retried
+let diagWait = null;
+function diagCall(addr, n, ms) {
+  return new Promise((res, rej) => { const t = setTimeout(() => { diagWait = null; rej(new Error("timeout")); }, ms); diagWait = (r) => { clearTimeout(t); diagWait = null; res(r); }; link.sendFrame(diagReadFrame(addr, n)); });
+}
+async function diagRead(addr, n) {
+  for (let attempt = 0; attempt < 12; attempt++) {
+    if (attempt) await sleep(150 * attempt);                  // a reply that was lost or taken by another program: wait a little longer each time
+    try { const r = await diagCall(addr, n, 700); if (r.refused) throw new Error("the unit refused the read at 0x" + addr.toString(16)); if (r.addr === addr && r.data.length === n) return r.data; } catch (e) { if (String(e.message).startsWith("the unit refused")) throw e; }
+  }
+  throw new Error("no answer for the read at 0x" + addr.toString(16));
+}
+$("fwEnter").onclick = () => {
+  if (!link || link.ble) return;
+  if (!confirm("Put the unit in download mode?\n\nIt resets, leaves USB MIDI and shows on Windows as the disk WL82 UBOOT1.00 (black screen). A power cycle brings it back. Then run the PC tool shown on this tab.")) return;
+  link.send(OTA_SOFTKEY); log("soft-key frame sent: the unit resets into the ROM download mode"); setStatus(false, "the unit is in download mode");
+  $("fwConfirm").innerHTML = "<b>the command was sent.</b> The unit left USB MIDI. Now run the PC tool shown above. After it finishes and the unit has restarted, connect again and press the comparison below."; link = null; fwRefresh();
+};
+class OtaLink {                                  // one MIDI in / out pair with a SysEx queue
+  constructor(i, o) { this.i = i; this.o = o; this.q = []; this.w = null; i.onmidimessage = (ev) => { if (ev.data[0] !== 0xF0) return; this.q.push(Array.from(ev.data)); if (this.w) { const w = this.w; this.w = null; w(); } }; }
+  get lost() { return this.i.state === "disconnected" || this.o.state === "disconnected"; }
+  send(b) { try { this.o.send(b); return true; } catch (_) { return false; } }
+  async read(ms) { if (!this.q.length) { let t; await Promise.race([new Promise((r) => { this.w = r; }), new Promise((r) => { t = setTimeout(r, ms); })]); clearTimeout(t); this.w = null; } return this.q.shift() || null; }
+  close() { this.i.onmidimessage = null; }
+}
+function otaIdentity(fr) {                       // the 34-byte ID block: "Pocket AMP_105" or "ota-Pocket AMP_105"
+  const d = unpack7to8(fr.slice(1, -1)); if (d.length !== 34 || d[0] !== 0 || d[1] !== 0x59 || d[2] !== 0x11) return null;
+  const t = String.fromCharCode(...d.slice(6, 33)).replace(/\0+$/, ""); return { text: t, ota: /^ota-/i.test(t) };
+}
+async function otaFind(acc, wantOta, ms) {       // a pair that answers the query with the wanted identity; only ports that look like the unit are asked
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    const outs = [...acc.outputs.values()];
+    for (const i of acc.inputs.values()) {
+      if (i.state === "disconnected" || !/pocket|donner|custom midi|onyx|update|ota|usb-midi|composite/i.test(i.name || "")) continue;
+      const o = outs.find((x) => x.name === i.name && x.state !== "disconnected"); if (!o) continue;
+      try { await i.open(); await o.open(); } catch (_) { continue; }
+      const l = new OtaLink(i, o); l.send(OTA_QUERY);
+      for (let t = Date.now() + 1000; Date.now() < t; ) { const fr = await l.read(t - Date.now()); const id = fr && otaIdentity(fr); if (id) { if (id.ota === wantOta) return { l, id }; break; } }
+      l.close();
+    }
+    await sleep(700);
+  }
+  return null;
+}
+// ---- one click: the vendor's MIDI update, the way the Pendel installer does it (Updater there). Step 1: the running firmware (ours or the original) pulls parts of the package, stages the package's update loader and
+// restarts into it. Step 2: the loader pulls the whole package and writes it. Both are "the unit asks, we answer"; the finish addresses are 0xE0000000 (step 1) and 0xF0000000 (step 2). ----
+let oneRunning = false;
+async function otaServe(l, srv, finishAddr, idleMs, onProg) {
+  let last = Date.now();
+  for (;;) {
+    const fr = await l.read(1000);
+    if (!fr) { if (l.lost) return { served: srv.served, finished: false, lost: true }; if (Date.now() - last > idleMs) return { served: srv.served, finished: false }; continue; }
+    const r = srv.handle(fr); if (r.kind === "ignored") continue;
+    last = Date.now();
+    if (r.kind === "refused") throw new Error("refused, nothing sent: " + r.why);
+    await sleep(10); if (!l.send(r.reply)) return { served: srv.served, finished: false, lost: true };
+    if (r.kind === "data" && onProg) onProg(r.req);
+    if (r.kind === "mark" && r.req.addr === finishAddr) return { served: srv.served, finished: true };
+  }
+}
+async function oneClick(pkg, label, kind) {                // kind: "install" | "restore"
+  if (oneRunning) return; oneRunning = true; fwRefresh();
+  const info = $("fwOneInfo"), bar = $("fwBar2"), say = (t) => { info.innerHTML = t; log(t.replace(/<[^>]+>/g, "")); }, srv = new PkgServer(pkg.image);
+  bar.hidden = false; bar.value = 0; busy = true;
+  const wasLink = link; if (link && link.close) { try { link.close(); } catch (_) { /* the editor's own port: the update talks to the unit itself */ } } link = null; setStatus(false, "updating: " + label);
+  try {
+    const acc = await navigator.requestMIDIAccess({ sysex: true });
+    let ota = null, unit = await otaFind(acc, false, 4000);
+    if (!unit) ota = await otaFind(acc, true, 4000);        // already in update mode (a cut-off update): continue it
+    if (!unit && !ota) throw new Error("the unit did not answer (USB data cable, directly connected, no other program holding the MIDI port: close MIDIberry and other tabs)");
+    if (unit) {
+      say("found " + unit.id.text + ": step 1, the unit checks the package and stages the update loader...");
+      if (!/^Pocket AMP/i.test(unit.id.text)) { unit.l.close(); throw new Error("this unit reports " + unit.id.text + ": it is not a Pocket AMP"); }
+      unit.l.send(OTA_UPGRADE); await sleep(2000);
+      const s1 = await otaServe(unit.l, srv, OTA_VERIFY_DONE, 8000, (r) => { bar.value = Math.min(20, Math.round(20 * r.addr / pkg.image.length)); }); unit.l.close();
+      if (!s1.finished) throw new Error(s1.lost ? "the unit disconnected during step 1 (" + s1.served + " requests): nothing was written" : "the unit stopped asking during step 1 (" + s1.served + " requests): nothing was written. Is it running a firmware with the update session (this build or the original)?");
+      say("step 1 done: the unit restarts into the update loader..."); await sleep(3000);
+      ota = await otaFind(acc, true, 30000);
+      if (!ota) throw new Error("the update loader did not appear. Replug the USB cable and press the button again: the unit stays in update mode until it is finished.");
+    }
+    say("update loader found (" + ota.id.text + "): step 2, writing. Do not unplug.");
+    ota.l.send(OTA_UPGRADE); await sleep(2000);
+    const s2 = await otaServe(ota.l, srv, OTA_FINISH, 180000, (r) => { bar.value = 20 + Math.min(79, Math.round(80 * (r.addr + r.len) / pkg.image.length)); }); ota.l.close();
+    if (!s2.finished) throw new Error("the loader " + (s2.lost ? "was disconnected" : "stopped asking") + " after " + s2.served + " requests. Replug the USB cable and press the button again: the write continues.");
+    bar.value = 100; say("written (" + s2.served + " blocks). The unit restarts..."); await sleep(3000);
+    const back = await otaFind(acc, false, 40000);
+    if (!back) throw new Error("the unit did not come back: power-cycle it (unplug USB, then plug it in)");
+    back.l.close();
+    say("<b>done: the unit is back (" + back.id.text + ").</b> " + (kind === "restore" ? "It runs the original firmware: this editor needs the custom one." : "Connect from the top of the page to see the build code."));
+    toast(kind === "restore" ? "The original firmware is back" : "Firmware installed");
+  } catch (e) { say('<span class="warn">' + e.message + "</span>"); }
+  busy = false; bar.hidden = true; oneRunning = false; fwRefresh();
+}
+$("fwInstall").onclick = () => {
+  if (!fwPkg) return;
+  if (!confirm("Install " + fwPkg.name + " on the unit?\n\nThe unit pulls the package over USB, restarts into the update loader and the loader writes the firmware. Your stored captures and cabinets are erased. Do not unplug while it works (if it is cut off, press the button again: it continues).")) return;
+  oneClick(fwPkg, fwPkg.name, "install");
+};
+$("fwOrigFile").onchange = async (e) => {
+  const f = e.target.files[0]; fwOrig = null; if (!f) { fwRefresh(); return; } const b = new Uint8Array(await f.arrayBuffer());
+  try {
+    if (b.length !== OFFICIAL_SIZE || (await sha256(b)) !== OFFICIAL_SHA256) throw new Error("unmodified stock package required (size or SHA-256 differs)");
+    const w = unwrapFwsc(b); if (w.product !== OFFICIAL_PRODUCT) throw new Error("not the original package (" + w.product + ")");
+    fwOrig = { image: w.ufw, product: w.product, name: f.name }; $("fwOrigInfo").innerHTML = "<b>" + f.name + "</b>: the unmodified original, " + b.length + " bytes, SHA-256 " + OFFICIAL_SHA256.slice(0, 16) + "&hellip;. the update loader restores the factory firmware.";
+  } catch (err) { $("fwOrigInfo").innerHTML = '<span class="warn">' + f.name + ": " + err.message + "</span>"; }
+  fwRefresh();
+};
+$("fwRestore").onclick = () => {
+  if (!fwOrig) return;
+  if (!confirm("Restore stock firmware?\n\nThis editor and custom firmware features will be disabled until re-flashed. Do not unplug during update.")) return;
+  oneClick(fwOrig, "the original firmware", "restore");
+};
+async function fwCompare() {
+  const el = $("fwConfirm"); if (!link || link.ble || !fwImage) return;
+  setStatus(true, "connected: " + link.name); el.innerHTML = "Comparing the unit's flash with the file...";
+  const full = $("fwFull").checked, bad = [], bar = $("fwBar"), plain = scramble(fwImage, APP_BASE); bar.hidden = false; bar.value = 0; busy = true;
+  try {
+    for (let a = APP_BASE; a < USER_STORE_BASE; a += SECTOR) {
+      for (const [off, len] of verifyOffsets(full)) for (let o = off; o < off + len; o += 16) {
+        const got = await diagRead(a + o, 16), want = plain.subarray(a + o - APP_BASE, a + o - APP_BASE + 16);
+        if (got.some((v, i) => v !== want[i])) { bad.push(a); o = off + len; break; }
+      }
+      bar.value = Math.round(100 * (a - APP_BASE) / IMAGE_SIZE);
+    }
+    el.innerHTML = bad.length ? '<span class="warn">MISMATCH in ' + bad.length + " sector(s), first at 0x" + bad[0].toString(16) + ": the unit does not hold this file.</span>" : "<b>confirmed: the unit holds this firmware</b> (" + (full ? "every byte" : "every sector, checked at four places") + " compared).";
+    log(bad.length ? "firmware check: mismatch" : "firmware check: confirmed");
+  } catch (e) { el.innerHTML = '<span class="warn">the check stopped: ' + e.message + "</span>"; }
+  busy = false; bar.hidden = true;
+}
+$("fwVerify").onclick = fwCompare;
+}
+if (typeof module !== "undefined") module.exports = { PkgServer, unwrapFwsc, OTA_SOFTKEY, OFFICIAL_SHA256, OFFICIAL_SIZE, areaFromFile, namJson, scramble, rawFromDump, diagReadFrame, diagParse, dryRun, verifyOffsets, IMAGE_SIZE, otaRequestFrame, otaParseRequest, otaResponse, OTA_QUERY, OTA_UPGRADE, wavToCab, parseWav, chainMove, chainMoveMsg, isOrder, pack8to7, unpack7to8, buildFrame, parseReply, bleFrames, BleUnframer, nrpn, cc, pc, decodeState, stripNam, checkCab, uploadFrames, checkFirmware, SLOT_MODULE };
+</script>
+</body>
+</html>

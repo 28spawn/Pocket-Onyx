@@ -1,0 +1,1761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pocket Amp Workbench &mdash; the firmware in your browser</title>
+<style>
+  :root{
+    --bg:#0d0f11; --panel:#15181b; --panel2:#1d2126; --line:#2b3138;
+    --text:#e8ecef; --mute:#8b949c; --accent:#f5c542; --ok:#4cd964; --warn:#ffcc00; --bad:#ff453a;
+    --cyan:#2fc2b0; --blue:#5b6cf0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:14px/1.5 ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif}
+  header{display:flex;align-items:center;gap:10px;padding:8px 16px;background:var(--panel);
+         border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+  header h1{font-size:15px;margin:0;font-weight:650}
+  header .sub{color:var(--mute);font-size:12px}
+  .badge{font-size:10.5px;padding:2px 8px;border-radius:10px;border:1px solid var(--line);
+         color:var(--mute);text-transform:uppercase;letter-spacing:.6px;white-space:nowrap}
+  .badge.live{color:var(--ok);border-color:#215c31}
+  .badge.err{color:var(--bad);border-color:#5c2121}
+  .badge.warn{color:var(--warn);border-color:#5c4a21}
+  nav{display:flex;gap:2px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+  nav button{background:none;border:0;border-bottom:2px solid transparent;color:var(--mute);
+             padding:9px 14px;cursor:pointer;font:inherit;font-weight:550}
+  nav button:hover{color:var(--text)}
+  nav button.on{color:var(--accent);border-bottom-color:var(--accent)}
+  main{padding:16px;max-width:1500px;margin:0 auto}
+  .tab{display:none}.tab.on{display:block}
+  .grid{display:grid;grid-template-columns:590px 1fr;gap:16px;align-items:start}
+  @media(max-width:940px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px;margin-bottom:13px}
+  .card h2{font-size:12px;margin:0 0 9px;color:var(--mute);text-transform:uppercase;letter-spacing:.8px}
+  /* ========================================================================
+     Pocket Amp Authentic Hardware Enclosure (Strict Circular Geometry)
+     ======================================================================== */
+  .device-shell {
+    position: relative;
+    background: linear-gradient(155deg, #262c38 0%, #171a22 45%, #0e1015 100%);
+    border: 3.5px solid #3c4658;
+    border-radius: 42px;
+    padding: 24px 22px 22px;
+    box-shadow: 
+      0 22px 50px rgba(0,0,0,0.85),
+      0 6px 16px rgba(0,0,0,0.6),
+      inset 0 1.5px 2px rgba(255,255,255,0.2),
+      inset 0 -2px 5px rgba(0,0,0,0.85);
+    width: 580px;
+    box-sizing: border-box;
+    margin: 0 auto;
+    user-select: none;
+  }
+
+  .bumper-accent {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    border-color: #55627a;
+    border-style: solid;
+    pointer-events: none;
+  }
+  .bumper-tl { top: 7px; left: 7px; border-width: 3.5px 0 0 3.5px; border-top-left-radius: 30px; }
+  .bumper-tr { top: 7px; right: 7px; border-width: 3.5px 3.5px 0 0; border-top-right-radius: 30px; }
+  .bumper-bl { bottom: 7px; left: 7px; border-width: 0 0 3.5px 3.5px; border-bottom-left-radius: 30px; }
+  .bumper-br { bottom: 7px; right: 7px; border-width: 0 3.5px 3.5px 0; border-bottom-right-radius: 30px; }
+
+  .hw-top-edge {
+    position: absolute;
+    top: -9px;
+    left: 28px;
+    right: 28px;
+    height: 9px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: flex-end;
+    padding-right: 68px;
+    pointer-events: none;
+  }
+  .hw-power-switch {
+    width: 42px;
+    height: 8px;
+    background: #2a313e;
+    border: 1px solid #4a566d;
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    box-shadow: inset 0 1px 2px rgba(255,255,255,0.25);
+  }
+
+  .device-faceplate {
+    position: relative;
+    background: #14171f;
+    border: 2px solid #272e3d;
+    border-radius: 28px;
+    padding: 18px 20px 20px;
+    box-shadow: inset 0 3px 14px rgba(0,0,0,0.75), 0 1px 2px rgba(255,255,255,0.06);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .device-upper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 486px;
+    height: 246px;
+  }
+
+  .lcd-bezel {
+    background: #06080b;
+    border: 3.5px solid #28303f;
+    border-radius: 26px;
+    width: 236px;
+    height: 236px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 
+      inset 0 4px 14px rgba(0,0,0,0.9),
+      0 2px 6px rgba(0,0,0,0.5),
+      0 0 1px rgba(255,255,255,0.1);
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .lcd-bezel::after {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 35%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 100%);
+    border-top-left-radius: 22px;
+    border-top-right-radius: 22px;
+    pointer-events: none;
+  }
+  #lcdCanvas, canvas#lcd {
+    width: 196px !important;
+    height: 196px !important;
+    image-rendering: pixelated;
+    display: block;
+    background: #000;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.8);
+  }
+
+  .knobs-pod-container {
+    width: 210px;
+    height: 236px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  /* Tilted Pod Housing: 24.7° tilt from vertical */
+  .tilted-pod {
+    width: 98px;
+    height: 236px;
+    background: linear-gradient(145deg, #0d1016 0%, #171b23 100%);
+    border: 2.5px solid #2b3444;
+    border-radius: 49px;
+    box-shadow: 
+      inset 0 4px 14px rgba(0,0,0,0.95),
+      inset 0 -2px 6px rgba(255,255,255,0.04),
+      0 3px 10px rgba(0,0,0,0.65);
+    transform: rotate(24.7deg);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    box-sizing: border-box;
+  }
+
+  /* Knobs are strictly round (aspect-ratio: 1/1, border-radius: 50%, flex-shrink: 0) */
+  .hw-knob-housing {
+    position: relative;
+    width: 68px;
+    height: 68px;
+    flex: 0 0 68px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+
+  .hw-rotary-knob {
+    width: 68px !important;
+    height: 68px !important;
+    min-width: 68px !important;
+    min-height: 68px !important;
+    max-width: 68px !important;
+    max-height: 68px !important;
+    aspect-ratio: 1 / 1 !important;
+    border-radius: 50% !important;
+    background: radial-gradient(circle at 40% 35%, #465166 0%, #202633 55%, #13171f 100%);
+    border: 3px solid #56647c;
+    box-shadow: 
+      0 6px 14px rgba(0,0,0,0.85),
+      inset 0 2px 3px rgba(255,255,255,0.3),
+      inset 0 -3px 5px rgba(0,0,0,0.8);
+    position: relative;
+    user-select: none;
+    touch-action: none;
+    box-sizing: border-box !important;
+    flex-shrink: 0 !important;
+    transition: border-color 0.15s ease;
+  }
+  .hw-rotary-knob::before {
+    content: "";
+    position: absolute;
+    top: 5px; left: 5px; right: 5px; bottom: 5px;
+    border-radius: 50%;
+    border: 1px dashed rgba(255,255,255,0.18);
+    pointer-events: none;
+  }
+  .hw-knob-dot {
+    position: absolute;
+    width: 8px !important;
+    height: 8px !important;
+    aspect-ratio: 1 / 1 !important;
+    border-radius: 50% !important;
+    background: #ffffff;
+    box-shadow: 0 0 4px rgba(0,0,0,0.8), 0 0 2px #fff;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: none;
+    box-sizing: border-box;
+  }
+  .hw-rotary-knob.master-pot .hw-knob-dot {
+    background: #ffd54f;
+    box-shadow: 0 0 4px rgba(0,0,0,0.8), 0 0 3px #ffb300;
+  }
+
+  /* PARA Center Push-Button: Strict Round Circle Button */
+  .hw-knob-center-click {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    min-height: 38px !important;
+    max-width: 38px !important;
+    max-height: 38px !important;
+    aspect-ratio: 1 / 1 !important;
+    border-radius: 50% !important;
+    background: radial-gradient(circle at 45% 40%, #353f52 0%, #181d26 80%);
+    border: 2px solid #4a5770;
+    box-shadow: 
+      0 3px 6px rgba(0,0,0,0.6),
+      inset 0 1px 2px rgba(255,255,255,0.25);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    outline: none;
+    box-sizing: border-box !important;
+    flex-shrink: 0 !important;
+    z-index: 5;
+    transition: transform 0.08s ease, border-color 0.1s ease, box-shadow 0.1s ease;
+  }
+  .hw-knob-center-click::after {
+    content: "";
+    width: 10px !important;
+    height: 10px !important;
+    aspect-ratio: 1 / 1 !important;
+    border-radius: 50% !important;
+    background: #00e5ff;
+    box-shadow: 0 0 6px rgba(0,229,255,0.8);
+    opacity: 0.85;
+    transition: opacity 0.1s ease, box-shadow 0.1s ease;
+    pointer-events: none;
+  }
+  .hw-knob-center-click:hover {
+    border-color: #00e5ff;
+  }
+  .hw-knob-center-click:active, .hw-knob-center-click.pressed, .hw-knob-center-click.down {
+    transform: translate(-50%, -50%) scale(0.92);
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.9), 0 0 10px rgba(0,229,255,0.5);
+    border-color: #00e5ff;
+    background: #0e2e38;
+  }
+  .hw-knob-center-click:active::after, .hw-knob-center-click.pressed::after, .hw-knob-center-click.down::after {
+    opacity: 1;
+    box-shadow: 0 0 12px #00e5ff;
+  }
+
+  .hw-rotary-knob.master-pot {
+    border-color: #7a6640;
+    cursor: grab;
+  }
+  .hw-rotary-knob.master-pot:active {
+    border-color: #ffb300;
+    cursor: grabbing;
+  }
+
+  /* Labels are absolutely positioned so they never squeeze or distort the round knobs */
+  .hw-knob-label {
+    position: absolute;
+    bottom: -16px;
+    left: 50%;
+    transform: translateX(-50%) rotate(-24.7deg);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    color: #8f9bb3;
+    pointer-events: none;
+    white-space: nowrap;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  }
+
+  /* Bottom Horizontal Pill-Shaped Bar containing 5 STRICTLY ROUND tactile buttons */
+  .hw-pill-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    background: #0b0e14;
+    border: 2.5px solid #2a3344;
+    border-radius: 9999px;
+    padding: 6px 14px;
+    box-shadow: 
+      inset 0 3px 10px rgba(0,0,0,0.95),
+      0 2px 5px rgba(0,0,0,0.5),
+      0 1px 1px rgba(255,255,255,0.06);
+    width: 486px;
+    height: 66px;
+    margin-top: 18px;
+    box-sizing: border-box;
+  }
+
+  /* Every bottom button is a tactile, strictly round circular push-button */
+  .hw-pill-btn {
+    width: 50px !important;
+    height: 50px !important;
+    min-width: 50px !important;
+    min-height: 50px !important;
+    max-width: 50px !important;
+    max-height: 50px !important;
+    aspect-ratio: 1 / 1 !important;
+    border-radius: 50% !important;
+    background: radial-gradient(circle at 45% 35%, #2c3545 0%, #171d28 60%, #0f131a 100%);
+    border: 2px solid #3d4a60;
+    color: #f1f5f9;
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+    touch-action: none;
+    transition: all 0.08s ease;
+    position: relative;
+    outline: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 
+      0 3px 6px rgba(0,0,0,0.6),
+      inset 0 1px 1.5px rgba(255,255,255,0.22);
+    flex-shrink: 0 !important;
+    box-sizing: border-box !important;
+  }
+  .hw-pill-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 8px rgba(0,229,255,0.3);
+  }
+  .hw-pill-btn:active, .hw-pill-btn.down {
+    transform: translateY(2px) scale(0.94);
+    background: radial-gradient(circle at 45% 45%, #0e303a 0%, #06171d 100%);
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.9), 0 0 12px rgba(0,229,255,0.4);
+  }
+  .hw-pill-divider {
+    width: 2.5px;
+    height: 30px;
+    background: #1c222e;
+    border-radius: 2px;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.9), 1px 0 0 rgba(255,255,255,0.07);
+    flex-shrink: 0;
+  }
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  td{padding:3px 0;border-bottom:1px solid #1e2226}
+  td:last-child{text-align:right;color:var(--mute);font-variant-numeric:tabular-nums}
+  button.act{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:7px;
+             padding:7px 11px;cursor:pointer;font:inherit}
+  button.act:hover{border-color:var(--accent)}
+  button.act.primary{background:var(--accent);color:#111;border-color:var(--accent);font-weight:650}
+  button.act.on{background:var(--accent);color:#111;border-color:var(--accent);font-weight:650}
+  .note{color:var(--mute);font-size:12.5px}
+  /* the preset name fields in the library */
+  input.pname{background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    border-radius:6px;padding:3px 6px;font:inherit;font-size:12.5px;width:150px}
+  input.pname:focus{border-color:var(--accent);outline:none}
+  .row{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+  code{background:#111417;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12px}
+  pre{background:#0a0c0e;border:1px solid var(--line);border-radius:8px;padding:11px;overflow:auto;
+      font-size:12px;max-height:420px}
+  .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+  .meter{height:6px;background:#23282e;border-radius:4px;overflow:hidden;margin-top:3px}
+  .meter i{display:block;height:100%;background:var(--accent);transition:width .08s linear}
+  .meter.c i{background:var(--cyan)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Pocket Amp Workbench</h1>
+  <span class="sub">the firmware itself, compiled to WebAssembly</span>
+  <span class="badge" id="state">starting</span>
+  <span class="badge" id="budget">SRAM &mdash;</span>
+  <span class="badge" id="cpu">CPU &mdash;</span>
+  <span class="badge" id="audio">audio off</span>
+</header>
+
+<nav>
+  <button data-tab="sim" class="on">SIM</button>
+  <button data-tab="asio">ASIO</button>
+  <button data-tab="lib">LIBRARY</button>
+  <button data-tab="manual">MANUAL</button>
+</nav>
+
+<main>
+<!-- ============================ SIM ============================ -->
+<section class="tab on" id="tab-sim">
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>Device</h2>
+        <div class="device-shell">
+          <div class="hw-top-edge">
+            <div class="hw-power-switch" title="Power Switch"></div>
+          </div>
+          <div class="bumper-accent bumper-tl"></div>
+          <div class="bumper-accent bumper-tr"></div>
+          <div class="bumper-accent bumper-bl"></div>
+          <div class="bumper-accent bumper-br"></div>
+
+          <div class="device-faceplate">
+            <div class="device-upper">
+              <div class="lcd-bezel">
+                <canvas id="lcd" width="240" height="240"></canvas>
+              </div>
+
+              <div class="knobs-pod-container">
+                <div class="tilted-pod">
+                  <!-- PARA Rotary Encoder & Push Button -->
+                  <div class="hw-knob-housing">
+                    <div class="hw-rotary-knob" id="para" title="PARA: Wheel/Drag outer ring to Rotate; Click center to Enter/Edit, Hold 1s for Save">
+                      <div class="hw-knob-dot" id="paraDot"></div>
+                      <button class="hw-knob-center-click" id="paraCenterClick" title="Press PARA (Click to enter/toggle, Hold 1.2s to Save)"></button>
+                    </div>
+                    <div class="hw-knob-label">PARA</div>
+                  </div>
+
+                  <!-- MASTER Volume Potentiometer -->
+                  <div class="hw-knob-housing">
+                    <div class="hw-rotary-knob master-pot" id="master" title="MASTER: Wheel or Drag to adjust output level">
+                      <div class="hw-knob-dot" id="masterDot"></div>
+                    </div>
+                    <div class="hw-knob-label">MASTER</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bottom Tactile Pill Button Strip -->
+            <div class="hw-pill-bar">
+              <button class="hw-pill-btn hw" data-btn="1">HOME</button>
+              <div class="hw-pill-divider"></div>
+              <button class="hw-pill-btn hw" data-btn="2">VOL&minus;</button>
+              <div class="hw-pill-divider"></div>
+              <button class="hw-pill-btn hw" data-btn="4">VOL+</button>
+              <div class="hw-pill-divider"></div>
+              <button class="hw-pill-btn hw" data-btn="8">&lt;</button>
+              <div class="hw-pill-divider"></div>
+              <button class="hw-pill-btn hw" data-btn="16">&gt;</button>
+            </div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:11px">
+          <button class="act primary" id="audioOn">Start audio</button>
+          <button class="act" id="comboTuner" title="VOL- &amp; VOL+ together">Tuner</button>
+          <button class="act" id="comboBank" title="&lt; &amp; &gt; together">Bank</button>
+          <button class="act" id="comboDrums" title="HOME &amp; VOL- together">Groove</button>
+          <button class="act" id="paraClick" title="a quick PARA press (the block editor)">PARA</button>
+          <button class="act" id="paraTurnL" title="turn the PARA encoder left">&#9664;</button>
+          <button class="act" id="paraTurnR" title="turn the PARA encoder right">&#9654;</button>
+          <button class="act" id="paraHold1">PARA 1s</button>
+          <button class="act" id="paraHold2">PARA 2s</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Input source</h2>
+        <div class="row">
+          <button class="act" data-src="tone">Test tone</button>
+          <button class="act" data-src="mic">Microphone</button>
+          <button class="act" data-src="file">Audio file</button>
+          <button class="act on" data-src="silence">Silence</button>
+        </div>
+        <div id="micControls" style="display:none; margin-top:10px; padding:10px; background:#0d0d10; border:1px solid #2a2a35; border-radius:6px;">
+          <div style="font-size:11px; font-weight:700; color:#5eead4; margin-bottom:6px;">Live Input & Anti-Feedback Settings</div>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <label style="font-size:11px; color:#aaa; width:65px;">Device:</label>
+              <select id="micDeviceSel" style="flex:1; padding:4px 6px; font-size:11px; background:#18181f; color:#ddd; border:1px solid #3a3a48; border-radius:4px;">
+                <option value="">Default input / microphone</option>
+              </select>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <label style="font-size:11px; color:#aaa; width:65px;">Input Gain:</label>
+              <input type="range" id="micGain" min="0" max="1.5" step="0.05" value="0.8" style="flex:1;">
+              <span id="micGainVal" style="font-size:11px; color:#5eead4; width:35px; text-align:right;">80%</span>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:2px;">
+              <label style="display:inline-flex; align-items:center; gap:5px; font-size:11px; color:#ddd; cursor:pointer;" title="Cancels speaker audio to stop feedback loops when playing through speakers">
+                <input type="checkbox" id="micEchoCancel" checked>
+                <span>Echo cancellation (anti-feedback)</span>
+              </label>
+              <label style="display:inline-flex; align-items:center; gap:5px; font-size:11px; color:#aaa; cursor:pointer;" title="Reduces ambient room hiss">
+                <input type="checkbox" id="micNoiseSuppress">
+                <span>Noise suppression</span>
+              </label>
+            </div>
+            <div id="micFeedbackWarning" style="display:none; font-size:10px; color:#f59e0b; margin-top:2px; line-height:1.3;">
+              &#9888; Echo cancellation is OFF. Please wear headphones to avoid speaker feedback screech!
+            </div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:8px; gap:6px;">
+          <button class="act" id="uploadWavBtn" style="background:#1e1e28; border:1px solid #5eead4; color:#5eead4; font-weight:700;">📁 Upload .WAV / Audio</button>
+          <select id="sampleSel" style="flex:1; padding:5px; background:#111; color:#ddd; border:1px solid #333; border-radius:4px;">
+            <option value="">or pick a test sample…</option>
+          </select>
+          <button class="act" id="sampleLoad">Load</button>
+        </div>
+        <div id="fileInfoRow" style="display:none; margin-top:6px; font-size:11px; color:#5eead4; background:#0d0d10; padding:6px 10px; border-radius:4px; border:1px solid #2a2a35;">
+          <span id="fileInfoText">No custom audio loaded</span>
+        </div>
+        <input type="file" id="fileIn" accept="audio/*,.wav,.mp3,.ogg,.flac" hidden>
+        <div class="row" style="margin-top:8px">
+          <button class="act" id="namLoad" title="Load a NAM capture into the firmware">Load a NAM…</button>
+          <input type="file" id="namIn" accept=".nam,.json,.bin" hidden>
+        </div>
+        <p class="note" style="margin:9px 0 0">
+          The source is fed into the firmware's own <code>jack</code> — the same
+          24-bit audio I/O path the device's ALNK0 driver uses — so what you
+          hear is the firmware's DSP.
+        </p>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>Telemetry &mdash; read out of the firmware</h2>
+        <table>
+          <tr><td>View</td><td id="t_view">&mdash;</td></tr>
+          <tr><td>Preset</td><td id="t_preset">&mdash;</td></tr>
+          <tr><td>Preset / master volume</td><td id="t_vol">&mdash;</td></tr>
+          <tr><td>Selected slot</td><td id="t_slot">&mdash;</td></tr>
+          <tr><td>Active slots</td><td id="t_mask">&mdash;</td></tr>
+          <tr><td>DSP SRAM (the device's own pool)</td><td id="t_sram">&mdash;</td></tr>
+          <tr><td>DSP CPU load</td><td id="t_cpu">&mdash;</td></tr>
+          <tr><td>Tuner</td><td id="t_tuner">&mdash;</td></tr>
+          <tr><td>Groove</td><td id="t_drums">&mdash;</td></tr>
+          <tr><td>Level (the firmware's meters)</td><td id="t_inout">&mdash;</td></tr>
+          <tr><td>User NAM captures</td><td id="t_nam">&mdash;</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h2>What this is</h2>
+        <p class="note">
+          The screen is the firmware's own <code>pa_ui_render()</code> and the sound is
+          the firmware's own DSP &mdash; the Q21 NAM GRU with its 512-entry activation
+          LUTs, the Q18 partitioned cabinet FIR, the 8-slot chain and the output
+          limiter. Only the board layer is replaced: the panel becomes a canvas, the
+          buttons become DOM elements, the SPI NOR becomes a 1 MB in-memory image, and
+          the <b>device's own allocator</b> provides the real DSP SRAM budget
+          (147,456 B - the same <code>PA_DSP_POOL_BYTES</code> the firmware uses).
+        </p>
+        <p class="note">
+          A browser has no ASIO API, so this page uses the OS audio API. For a real
+          <b>ASIO</b> device (Focusrite, Steinberg, ...) use the
+          <a href="#" id="goAsio" style="color:var(--accent)">ASIO tab</a>, which drives
+          the Python emulator &mdash; the same firmware, the same DSP, real ASIO in and out.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ ASIO ============================ -->
+<section class="tab" id="tab-asio">
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>ASIO I/O for the processed audio</h2>
+        <p class="note">
+          Web Audio has <b>no ASIO API</b> &mdash; the browser can only use the OS
+          device (WASAPI/CoreAudio/ALSA). A real ASIO interface is reached through the
+          Python emulator, which already enables ASIO in PortAudio and streams a live
+          input through the firmware's DSP and back out to the interface.
+        </p>
+        <div class="row" style="margin-top:10px">
+          <button class="act primary" id="startEmu">Start the ASIO emulator</button>
+          <button class="act" id="checkEmu">Check</button>
+          <a class="act" href="http://127.0.0.1:8080/" target="_blank" style="text-decoration:none">Open the emulator UI</a>
+        </div>
+        <p class="note" id="emuMsg" style="margin-top:9px"></p>
+      </div>
+      <div class="card">
+        <h2>Running it</h2>
+        <pre>cd custom-fw\emu
+powershell -ExecutionPolicy Bypass -File build_dll.ps1
+python server.py
+
+# then open http://127.0.0.1:8080/
+# the device list shows the ASIO devices PortAudio found</pre>
+        <p class="note">
+          The emulator runs the <b>same</b> firmware core as this page
+          (<code>src/sys/pa_audio_core.c</code>), so what it plays is what the device
+          plays &mdash; just with a real ASIO interface instead of the browser's
+          audio API.
+        </p>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h2>Audio devices the emulator can see</h2>
+        <table id="devTable"><tr><td colspan="2" class="note">not checked yet</td></tr></table>
+      </div>
+      <div class="card">
+        <h2>Using ASIO from the browser instead</h2>
+        <p class="note">
+          If you would rather stay in the browser, install an
+          <b>ASIO4ALL</b> bridge (or use the driver your interface ships) so Windows
+          exposes the ASIO device as a WASAPI endpoint. The browser then sees it as an
+          ordinary output device and this page's <b>Output</b> selector can pick it.
+        </p>
+        <p class="note">
+          Note that browsers apply their own output latency and resampling, so for
+          low-latency monitoring the Python emulator (direct ASIO) is the better path.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ LIBRARY ============================ -->
+<section class="tab" id="tab-lib">
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>Flash image (1 MB NOR)</h2>
+        <p class="note">Holds the 80 presets (A/B banks), the system settings and the
+          user NAM registry and capture of the real 1 MB chip &mdash; the layout in
+          <code>include/pa_flash_map.h</code>.</p>
+        <div class="row" style="margin-top:9px">
+          <button class="act" id="flashExport">Export .bin</button>
+          <button class="act" id="flashImport">Import .bin</button>
+          <button class="act" id="flashErase">Erase &amp; re-init</button>
+          <input type="file" id="flashFile" accept=".bin" hidden>
+        </div>
+      </div>
+      <div class="card">
+        <h2>NAM / IR import</h2>
+        <p class="note">A <code>.nam</code> or <code>.wav</code> is written into the
+          flash image the way the device's SysEx cmd-25 upload path does it.</p>
+        <div class="row" style="margin-top:9px"><input type="file" id="namFile" accept=".nam,.wav"></div>
+        <p class="note" id="namMsg" style="margin-top:7px"></p>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h2>Preset store</h2>
+        <p class="note">The 80 slots of the device's own store (40 factory, 40 user). Change a
+          user slot's name to write the record back, or store the sound that is playing
+          right now into it. The record is the same 164 bytes the device keeps, so a slot
+          written here can be pushed to a unit unchanged.</p>
+        <table id="presets"><tr><td class="note">not read yet</td></tr></table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ MANUAL ============================ -->
+<section class="tab" id="tab-manual">
+  <div class="card">
+    <h2>Controls</h2>
+    <table>
+      <tr><td><b>HOME</b></td><td>Back to Home; from Home it opens Settings</td></tr>
+      <tr><td><b>VOL&minus;</b> / <b>VOL+</b></td><td>Preset volume &plusmn;5; in Bank mode, slot 1 / 2</td></tr>
+      <tr><td><b>&lt;</b> / <b>&gt;</b></td><td>Move the block cursor; in Bank mode, slot 3 / 4</td></tr>
+      <tr><td><b>PARA</b> turn</td><td>Change the value under the cursor</td></tr>
+      <tr><td><b>PARA</b> click</td><td>Enter / confirm; on the ON/OFF pill it bypasses the block</td></tr>
+      <tr><td><b>PARA</b> hold 1 / 2 s</td><td>Save-to &middot; pick the block up (the factory reset: Settings &gt; System &gt; FACTORY RESET, then click RESET)</td></tr>
+      <tr><td><b>HOME</b> hold 1.5 s</td><td>Live Stomp Lock</td></tr>
+      <tr><td><b>MASTER</b> knob</td><td>Master output level, 0&ndash;100 % (the device's SARADC pot)</td></tr>
+      <tr><td><b>VOL&minus; + VOL+</b></td><td>Chromatic tuner</td></tr>
+      <tr><td><b>&lt; + &gt;</b></td><td>Bank mode</td></tr>
+      <tr><td><b>HOME + VOL&minus;</b></td><td>Groove Station</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h2>Bypassing the cabinet</h2>
+    <ol class="note" style="padding-left:18px">
+      <li>On the Home grid move the cursor onto the <b>CAB</b> tile with
+          <code>&lt;</code> / <code>&gt;</code>.</li>
+      <li><b>PARA click</b> opens the Block Editor.</li>
+      <li>Move the cursor to the far-left <b>ON/OFF</b> pill and press
+          <b>PARA click</b> again &mdash; the cabinet leaves the signal path, click-free
+          over one audio block, and the tile dims.</li>
+      <li><b>PARA click</b> again brings it back, with the cabinet you selected.</li>
+    </ol>
+    <p class="note">
+      The state is saved with the preset. If the tile still shows the cabinet as on but
+      you hear none, check <b>Settings &rarr; Input/Output &rarr; CAB ON LINE OUT</b>:
+      in LINE output mode with that switch off the chain skips the cabinet, and the tile
+      is marked <code>NOCAB</code> so it cannot be a mystery.
+    </p>
+  </div>
+  <div class="card">
+    <h2>Limits this build reproduces</h2>
+    <ul class="note" style="padding-left:18px">
+      <li>The <b>147,456 B DSP SRAM pool</b> is the device's real allocator, and the
+          real high-water mark (136,336 B with every effect on) is reachable from the UI.</li>
+      <li>The <b>CPU load</b> is a calibrated per-slot cycle model measured on the
+          device, so it matches what the hardware reports.</li>
+      <li>The model is <b>A2-Lite (3-channel)</b> everywhere, so the browser cannot
+          load a capture the device would refuse.</li>
+      <li>USB audio and BLE are inert in a browser; the rest of the chain is not.</li>
+    </ul>
+  </div>
+</section>
+</main>
+
+<!-- ====================== the worklet source ====================== -->
+<script id="workletSrc" type="text/worklet">
+/* The worklet owns the ONE wasm instance: it runs the audio, ticks the UI and
+   renders the LCD. The page sends input events and receives frames. Keeping a
+   single instance halves the memory (the module is ~2 MB with its 1 MB NOR
+   image) and makes the button timing exact, because the press is consumed on
+   the same 60 Hz tick the firmware uses. */
+class PaWorklet extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.X = null; this.mem = null; this.ready = false;
+    this.src = 'silence';
+    this.enc = 0; this.btns = []; this.pot = 4095;
+    this.lastTick = 0; this.nextFrame = 0;
+    this.fileBuf = null; this.filePos = 0;
+    this.micGain = 0.8;
+    /* a scratch area in the WASM's memory for the NAM blob (the module's data
+     * lives in the first ~6 MB, so 22 MB is free) */
+    this.NAM_SCRATCH = 22 * 1024 * 1024;
+    this.mic = false;
+
+    this.port.onmessage = async (e) => {
+      const d = e.data;
+      if (d.type === 'wasm') {
+        try {
+          const mod = await WebAssembly.compile(d.wasm);
+          const memory = new WebAssembly.Memory({ initial: 512, maximum: 4096 });
+          const imports = {
+            env: {
+              memory,
+              __indirect_function_table: new WebAssembly.Table({ initial: 1024, element: 'anyfunc' }),
+              /* the wasm's data (1 MB NOR + 633 KB assets) is in the first ~3 MB (the stack below is still placed above ~6 MB: more than enough),
+                 so the stack must start ABOVE it or it corrupts the DSP tables */
+              __stack_pointer: new WebAssembly.Global({ value: 'i32', mutable: true }, 16 * 1024 * 1024),
+              __memory_base: new WebAssembly.Global({ value: 'i32', mutable: false }, 0),
+              __table_base:  new WebAssembly.Global({ value: 'i32', mutable: false }, 0),
+              __main_argc_argv: () => 0,
+            },
+            wasi_snapshot_preview1: {
+              args_get: () => 0, args_sizes_get: () => 0, proc_exit: () => 0,
+              fd_write: () => 0, environ_get: () => 0, environ_sizes_get: () => 0,
+              clock_time_get: () => 0, random_get: () => 0,
+            },
+          };
+          const inst = await WebAssembly.instantiate(mod, imports);
+          this.X = inst.exports; this.mem = memory;
+          this.X.pa_wasm_init();
+          /* The JACK: the firmware's 24-bit audio I/O, exactly as the device's
+             ALNK0 driver feeds it. The browser's audio (on Windows that is
+             Windows Audio / WASAPI) is converted to 24-bit at the edge and
+             handed to the firmware, so the browser hears what the device
+             would play - the same input gain, the same master volume slew and
+             the same 1-LSB TPDF dither. */
+          this.jackInPtr  = this.X.pa_wasm_jack_in_ptr();
+          this.jackOutPtr = this.X.pa_wasm_jack_out_ptr();
+          this.jackFrames = this.X.pa_wasm_jack_frames();
+          this.jackIn  = new Int32Array(this.mem.buffer, this.jackInPtr,  this.jackFrames * 2);
+          this.jackOut = new Int32Array(this.mem.buffer, this.jackOutPtr, this.jackFrames * 2);
+          this.ready = true;
+          this.lastTick = currentTime;
+          this.port.postMessage({ type: 'ready' });
+        } catch (err) {
+          this.port.postMessage({ type: 'error', msg: String(err) });
+        }
+      } else if (d.type === 'press')   this.btns.push([d.mask, 1]);
+      else if (d.type === 'release')  this.btns.push([d.mask, 0]);
+      else if (d.type === 'enc')      this.enc += d.delta;
+      else if (d.type === 'pot')      this.pot = d.value;
+      else if (d.type === 'src')      this.src = d.src;
+      else if (d.type === 'micGain')  this.micGain = typeof d.gain === 'number' ? Math.max(0, Math.min(2.0, d.gain)) : 0.8;
+      else if (d.type === 'file')     { this.fileBuf = d.buf; this.filePos = 0; this.src = 'file'; }
+      else if (d.type === 'flashExport') {
+        const p = this.X.pa_wasm_flash_ptr(), n = this.X.pa_wasm_flash_size();
+        const copy = new Uint8Array(this.mem.buffer, p, n).slice();
+        this.port.postMessage({ type: 'flashData', buf: copy }, [copy.buffer]);
+      }
+      else if (d.type === 'flashImport' || d.type === 'flashErase') {
+        const p = this.X.pa_wasm_flash_ptr(), n = this.X.pa_wasm_flash_size();
+        if (d.type === 'flashImport') new Uint8Array(this.mem.buffer, p, n).set(d.buf.subarray(0, n));
+        else new Uint8Array(this.mem.buffer, p, n).fill(0xff);
+        this.port.postMessage({ type: 'flashDone' });
+      }
+      else if (d.type === 'nam') {
+        /* A NAM capture: the page has already turned the .nam into the
+         * "WAVE" container the firmware understands, and the firmware
+         * registers it, stores it in the flash and puts it in the DSP. */
+        try {
+          const blob = d.blob;
+          const nameBytes = d.nameBytes;
+          const mem = new Uint8Array(this.mem.buffer);
+          const blobPtr = this.NAM_SCRATCH;
+          const namePtr = this.NAM_SCRATCH + blob.length;
+          mem.set(blob, blobPtr);
+          mem.set(nameBytes, namePtr);
+          mem[namePtr + nameBytes.length] = 0;
+          const idx = this.X.pa_wasm_add_nam(blobPtr, blob.length, namePtr);
+          this.port.postMessage({ type: 'namDone', idx });
+        } catch (e) {
+          this.port.postMessage({ type: 'namDone', idx: -1, err: String(e) });
+        }
+      }
+      else if (d.type === 'readPresets') {
+        const namePtr = 20 * 1024 * 1024;         /* scratch in the wasm's memory */
+        const nameBuf = new Uint8Array(this.mem.buffer, namePtr, 64);
+        const recPtr = namePtr + 4096;            /* the 164-byte preset record */
+        const recSize = this.X.pa_wasm_preset_size();
+        const recBuf = new Uint8Array(this.mem.buffer, recPtr, recSize);
+        const list = [];
+        for (let i = 0; i < 80; i++) {
+          const vol = this.X.pa_wasm_preset_name(i, namePtr, 64);
+          let s = '';
+          for (let k = 0; k < 64 && nameBuf[k]; k++) s += String.fromCharCode(nameBuf[k]);
+          /* the whole record: the amp and the cabinet the slot uses, the
+           * chain order, the knob values */
+          const rc = this.X.pa_wasm_preset_get(i, recPtr);
+          list.push({ i, name: s, vol,
+                      amp: rc === 0 ? recBuf[48] : -1,
+                      cab: rc === 0 ? recBuf[49] : -1,
+                      order: rc === 0 ? Array.from(recBuf.slice(40, 48)) : [],
+                      empty: rc === 0 ? !!(recBuf[51] & 1) : true });
+        }
+        this.port.postMessage({ type: 'presetList', list });
+      }
+      else if (d.type === 'presetStore' || d.type === 'presetRename') {
+        /* Store the sound that is playing into a slot, or rename one.
+         *
+         * Both go through the firmware's own preset store, so the record in
+         * the flash is the one the device would read - the same 164 bytes a
+         * cmd-25 session with the preset target carries. */
+        const namePtr = 20 * 1024 * 1024;
+        const recPtr = namePtr + 4096;
+        const recSize = this.X.pa_wasm_preset_size();
+        const mem = new Uint8Array(this.mem.buffer);
+        let rc = -1;
+        if (d.type === 'presetStore') {
+          const nameBytes = d.nameBytes || new Uint8Array(0);
+          mem.set(nameBytes, namePtr);
+          mem[namePtr + nameBytes.length] = 0;
+          rc = this.X.pa_wasm_preset_capture(d.idx, namePtr);
+        } else {
+          /* a rename keeps everything else: read the record, change the name,
+           * write it back */
+          if (this.X.pa_wasm_preset_get(d.idx, recPtr) === 0) {
+            const nameBytes = d.nameBytes || new Uint8Array(0);
+            mem.fill(0, recPtr + 8, recPtr + 8 + 24);
+            mem.set(nameBytes.subarray(0, 23), recPtr + 8);
+            rc = this.X.pa_wasm_preset_put(d.idx, recPtr);
+          }
+        }
+        this.port.postMessage({ type: 'presetDone', idx: d.idx, rc });
+      }
+    };
+  }
+
+  process(inputs, outputs) {
+    const out = outputs[0];
+    if (!this.ready) { for (const ch of out) ch.fill(0); return true; }
+
+    /* ---- input -> the firmware, consumed on the 60 Hz tick ----
+     *
+     * The events are applied in the order they arrived and the queue is
+     * CLEARED afterwards. They used to sit in two arrays that were never
+     * emptied, so every audio callback re-applied every press and every
+     * release ever made: the contact cycled pressed -> released -> pressed
+     * forever, the firmware's debounce saw a bouncing contact, and the
+     * cursor ran away and the screen kept alternating between views.
+     *
+     * A press and its release can arrive in the same callback (a fast
+     * click), so the order matters - one ordered queue, not two lists. */
+    for (const e of this.btns) {
+      if (e[1]) this.X.pa_wasm_press(e[0]);
+      else       this.X.pa_wasm_release(e[0]);
+    }
+    this.btns.length = 0;
+    if (this.enc) { this.X.pa_wasm_add_enc(this.enc); this.enc = 0; }
+    this.X.pa_wasm_set_pot(0, this.pot);
+
+    /* ---- the 60 Hz firmware tick, driven by the audio clock ---- */
+    const now = currentTime;
+    if (now - this.lastTick >= 1 / 60) {
+      const dt = Math.min(200, (now - this.lastTick) * 1000);
+      this.lastTick = now;
+      this.X.pa_wasm_tick(dt);
+    }
+
+    /* ---- feed the source into the firmware's JACK, run the DSP ---- */
+    const n = out[0].length;
+    const jackIn = this.jackIn, jackOut = this.jackOut, J = this.jackFrames;
+    const micIn = (this.src === 'mic' && inputs[0] && inputs[0].length > 0) ? inputs[0][0] : null;
+
+    for (let off = 0; off < n; off += J) {
+      const chunk = Math.min(J, n - off);
+
+      /* float -> the 24-bit jack input (the guitar is on the Left slot) */
+      for (let i = 0; i < J; i++) {
+        let s = 0;
+        if (i < chunk) {
+          if (this.src === 'tone') {
+            s = 0.28 * Math.sin(2 * Math.PI * 220 * (now + (off + i) / sampleRate));
+          } else if (this.src === 'file' && this.fileBuf) {
+            s = this.fileBuf[this.filePos % this.fileBuf.length] || 0;
+            this.filePos++;
+          } else if (this.src === 'mic') {
+            const raw = (micIn && micIn[off + i] !== undefined) ? micIn[off + i] : 0;
+            s = raw * (this.micGain !== undefined ? this.micGain : 0.8);
+          }
+        }
+        if (s >  1.5) s =  1.5;
+        if (s < -1.5) s = -1.5;
+        let s24 = Math.round(s * 8388607);
+        if (s24 >  8388607) s24 =  8388607;
+        if (s24 < -8388608) s24 = -8388608;
+        jackIn[2 * i]     = s24 & 0x00FFFFFF;
+        jackIn[2 * i + 1] = 0;
+      }
+
+      /* the DEVICE's audio I/O path, verbatim */
+      this.X.pa_wasm_audio_process();
+
+      /* the 24-bit jack output -> float */
+      for (let i = 0; i < chunk; i++) {
+        const l = (jackOut[2 * i] << 8) >> 8;
+        const r = (jackOut[2 * i + 1] << 8) >> 8;
+        out[0][off + i] = l / 8388608;
+        if (out[1]) out[1][off + i] = r / 8388608;
+      }
+    }
+
+    /* ---- ship the LCD + telemetry to the page ---- */
+    if (now >= this.nextFrame) {
+      this.nextFrame = now + 1 / 30;
+      const lcd = new Uint16Array(this.mem.buffer, this.X.pa_wasm_lcd_ptr(), 240 * 240);
+      const copy = lcd.slice();
+      this.X.pa_wasm_update_telemetry();
+      const tel = new Uint32Array(this.mem.buffer, this.X.pa_wasm_telemetry_ptr(), 21).slice();
+      const namCount = this.X.pa_wasm_nam_count();
+      this.port.postMessage({ type: 'frame', lcd: copy, tel, pool: this.X.pa_wasm_pool_size(),
+                             nam: namCount },
+                            [copy.buffer]);
+    }
+    return true;
+  }
+}
+registerProcessor('pa-worklet', PaWorklet);
+</script>
+
+<script>window.PA_WASM_B64="";</script>
+<script>
+/* =====================================================================
+   The page: it owns the UI, sends input to the worklet and paints the LCD.
+   ===================================================================== */
+const WASM_URL = 'pocket_amp.wasm';
+const EMBEDDED_WASM_B64 = window.PA_WASM_B64 || null;
+
+let ctx = null, node = null, wasmBytes = null, ready = false;
+let lastTel = null, lastPool = 147456;   // PA_DSP_POOL_BYTES; the worker sends the real value
+
+const $ = id => document.getElementById(id);
+const set = (id, v) => { const e = $(id); if (e) e.textContent = v; };
+
+function b64ToBytes(b64) {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out.buffer;
+}
+
+async function loadWasm() {
+  if (EMBEDDED_WASM_B64) return b64ToBytes(EMBEDDED_WASM_B64);
+  const r = await fetch(WASM_URL);
+  if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + WASM_URL);
+  return await r.arrayBuffer();
+}
+
+/* ---- canvas ---- */
+const cv = $('lcd'), cx = cv.getContext('2d');
+const img = cx.createImageData(240, 240);
+
+function paint(lcd16) {
+  const d = img.data;
+  for (let i = 0, j = 0; i < lcd16.length; i++, j += 4) {
+    const v = lcd16[i];
+    /* the panel stores each pixel byte-swapped, so swap it back before unpacking */
+    const c = ((v & 0xff) << 8) | ((v >> 8) & 0xff);
+    const r = (c >> 11) & 0x1f, g = (c >> 5) & 0x3f, b = c & 0x1f;
+    d[j]     = (r * 255 + 15) / 31;
+    d[j + 1] = (g * 255 + 31) / 63;
+    d[j + 2] = (b * 255 + 15) / 31;
+    d[j + 3] = 255;
+  }
+  cx.putImageData(img, 0, 0);
+}
+
+/* ---- telemetry ---- */
+/* The view names, in the firmware's PA_UI_VIEW_* order (include/pa_ui.h).
+ * They used to be shifted by one - the firmware has no "HOME LIST" view, so
+ * every name from index 1 onwards was wrong: MOVING was called HOME LIST,
+ * the tuner was called BANK, the groove station was called SETTINGS. */
+const VIEWS = ['HOME GRID','MOVING','BLOCK EDITOR','BANK','TUNER','SAVE','SAVED',
+               'GROOVE','SETTINGS','GLOBAL EQ','IN/OUT','DISPLAY','PERFORMANCE','SYSTEM','RESET'];
+const SLOTS = ['DYN','DRIVE','AMP','CAB','EQ','MOD','DLY','REV'];
+
+function telemetry(t) {
+  lastTel = t;
+  set('t_view', VIEWS[t[0]] || t[0]);
+  set('t_preset', 'P' + String(t[1] + 1).padStart(2, '0'));
+  set('t_vol', t[2] + ' / ' + t[3]);
+  set('t_slot', SLOTS[t[4]] || t[4]);
+  let m = t[5], a = [];
+  for (let i = 0; i < 8; i++) if (m & (1 << i)) a.push(SLOTS[i]);
+  set('t_mask', a.join(' ') || 'none');
+  set('t_sram', t[6] + ' / ' + lastPool + ' B  (' + (100 * t[6] / lastPool).toFixed(0) + '%)');
+  set('t_cpu', (t[8] / 10).toFixed(1) + ' %');
+  set('t_tuner', t[9] ? 'active' : 'off');
+  set('t_drums', t[12] ? 'playing @ ' + t[13] + ' BPM' : 'stopped');
+  set('t_inout', 'IN ' + (t[16] || 0) + ' %  /  OUT ' + (t[17] || 0) + ' %');
+  $('budget').textContent = 'SRAM ' + t[6] + '/' + lastPool;
+  $('cpu').textContent = 'CPU ' + (t[8] / 10).toFixed(0) + '%';
+}
+
+/* ---- worklet loader (supports data: URI for file:// local standalone & Blob URL) ---- */
+async function loadWorklet(audioCtx, srcCode) {
+  try {
+    const b64 = btoa(unescape(encodeURIComponent(srcCode)));
+    await audioCtx.audioWorklet.addModule('data:application/javascript;base64,' + b64);
+    return true;
+  } catch (e1) {
+    console.warn("Worklet data: URI failed, trying Blob URL...", e1);
+  }
+  try {
+    const blob = new Blob([srcCode], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    await audioCtx.audioWorklet.addModule(url);
+    return true;
+  } catch (e2) {
+    console.warn("Worklet Blob URL failed...", e2);
+  }
+  return false;
+}
+
+/* ---- audio ---- */
+async function startAudio() {
+  try {
+    if (!wasmBytes) {
+      set('state', 'loading wasm...');
+      wasmBytes = await loadWasm();
+    }
+    if (!wasmBytes) {
+      set('state', 'no wasm');
+      $('state').className = 'badge err';
+      return;
+    }
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+      const src = document.getElementById('workletSrc').textContent;
+      const ok = await loadWorklet(ctx, src);
+      if (!ok) {
+        throw new Error("Browser blocked AudioWorklet. When running locally, use Start-WASM-Workbench.bat to serve via localhost.");
+      }
+      /* The worklet needs an INPUT. Without numberOfInputs the node has no
+       * input channels at all, so inputs[0] in the worklet is always empty and
+       * the microphone never reaches the firmware. */
+      node = new AudioWorkletNode(ctx, 'pa-worklet', {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [2],
+        processorOptions: {
+          numberOfInputs: 1,
+          numberOfOutputChannels: 2,
+          inputChannelCount: [1],
+          outputChannelCount: [2],
+        },
+      });
+    node.port.onmessage = (e) => {
+      const d = e.data;
+      if (d.type === 'frame') {
+        paint(d.lcd); telemetry(d.tel); lastPool = d.pool;
+        if (d.nam !== undefined) set('t_nam', d.nam + (d.nam === 1 ? ' capture' : ' captures'));
+      }
+      else if (d.type === 'ready') { ready = true; set('state', 'firmware running'); $('state').className = 'badge live'; }
+      else if (d.type === 'error') { set('state', 'error: ' + d.msg); $('state').className = 'badge err'; }
+      else if (d.type === 'flashData') {
+        const blob = new Blob([d.buf], { type: 'application/octet-stream' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = 'pocket_amp_flash.bin'; a.click();
+      }
+      else if (d.type === 'flashDone') { readPresets(); }
+      else if (d.type === 'presetList') { renderPresets(d.list); }
+      else if (d.type === 'presetDone') {
+        if (d.rc === 0) {
+          set('state', 'P' + String(d.idx + 1).padStart(2, '0') + ' is in the flash image');
+          $('state').className = 'badge live';
+        } else {
+          set('state', 'the firmware refused that preset (code ' + d.rc + ')');
+          $('state').className = 'badge err';
+        }
+        readPresets();
+      }
+      else if (d.type === 'namDone') {
+        if (d.idx >= 0) {
+          set('state', 'NAM loaded (slot ' + d.idx + ') - it is in the flash image');
+          $('state').className = 'badge live';
+          readPresets();
+        } else {
+          set('state', 'the firmware refused that NAM' + (d.err ? ': ' + d.err : ''));
+          $('state').className = 'badge err';
+        }
+      }
+    };
+    node.connect(ctx.destination);
+    }
+    await ctx.resume();
+    node.port.postMessage({ type: 'wasm', wasm: wasmBytes });
+    $('audio').textContent = 'audio running';
+    $('audio').className = 'badge live';
+    set('state', 'firmware running (silenced - pick input)');
+    $('state').className = 'badge live';
+    setTimeout(readPresets, 300);
+  } catch (err) {
+    console.error("startAudio error:", err);
+    set('state', 'audio error: ' + err.message);
+    $('state').className = 'badge err';
+    alert("Audio Start Error: " + err.message + "\n\nIf opening directly via file://, Chrome may block AudioWorklet. Run Start-WASM-Workbench.bat to serve locally.");
+  }
+}
+$('audioOn').onclick = startAudio;
+
+/* ---- input ---- */
+function post(m) { if (node) node.port.postMessage(m); }
+
+document.querySelectorAll('.hw').forEach(el => {
+  const mask = parseInt(el.dataset.btn, 10);
+  el.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    el.classList.add('down');
+    el.setPointerCapture(e.pointerId);
+    post({ type: 'press', mask });
+  });
+  const up = e => { el.classList.remove('down'); post({ type: 'release', mask }); };
+  el.addEventListener('pointerup', up);
+  el.addEventListener('pointercancel', up);
+});
+
+/* PARA knob & push button handlers */
+let paraAngle = 0;
+function turnPara(delta) {
+  paraAngle = (paraAngle + delta * 18) % 360;
+  const p = $('para');
+  if (p) p.style.transform = `rotate(${paraAngle}deg)`;
+  post({ type: 'enc', delta });
+}
+
+const paraCenter = $('paraCenterClick');
+if (paraCenter) {
+  paraCenter.addEventListener('pointerdown', e => {
+    e.stopPropagation();
+    paraCenter.classList.add('down');
+    post({ type: 'press', mask: 32 });
+  });
+  const upPara = e => {
+    e.stopPropagation();
+    paraCenter.classList.remove('down');
+    post({ type: 'release', mask: 32 });
+  };
+  paraCenter.addEventListener('pointerup', upPara);
+  paraCenter.addEventListener('pointercancel', upPara);
+}
+
+const para = $('para');
+let dragging = false, lastY = 0, acc = 0;
+para.addEventListener('pointerdown', e => {
+  if (e.target === paraCenter) return;
+  dragging = true;
+  lastY = e.clientY;
+  para.setPointerCapture(e.pointerId);
+});
+para.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  acc += (lastY - e.clientY);
+  lastY = e.clientY;
+  while (acc >= 12) { acc -= 12; turnPara(1); }
+  while (acc <= -12) { acc += 12; turnPara(-1); }
+  if ($('paraVal')) $('paraVal').textContent = (acc > 0 ? '+' : '') + acc;
+});
+para.addEventListener('pointerup', () => { dragging = false; if ($('paraVal')) $('paraVal').textContent = '0'; });
+para.addEventListener('wheel', e => { e.preventDefault(); turnPara(e.deltaY < 0 ? 1 : -1); }, { passive: false });
+
+/* MASTER knob: the device's SARADC master volume, 0..100 % */
+const master = $('master');
+let mdrag = false, mlast = 0, mval = 100;
+function setMaster(v) {
+  mval = Math.max(0, Math.min(100, v));
+  post({ type: 'pot', value: Math.round(mval / 100 * 4095) });
+  const masterAngle = (mval / 100) * 270 - 135;
+  master.style.transform = `rotate(${masterAngle}deg)`;
+  if ($('masterVal')) $('masterVal').textContent = mval + ' %';
+  if ($('masterBar')) $('masterBar').style.width = mval + '%';
+}
+master.addEventListener('pointerdown', e => { mdrag = true; mlast = e.clientY; master.setPointerCapture(e.pointerId); });
+master.addEventListener('pointermove', e => {
+  if (!mdrag) return;
+  setMaster(mval + (mlast - e.clientY) * 0.5);
+  mlast = e.clientY;
+});
+master.addEventListener('pointerup', () => { mdrag = false; });
+master.addEventListener('wheel', e => { e.preventDefault(); setMaster(mval + (e.deltaY < 0 ? 2 : -2)); }, { passive: false });
+setMaster(100);
+
+/* discrete helpers */
+const pulse = (bit, ms) => { post({ type: 'press', mask: bit }); setTimeout(() => post({ type: 'release', mask: bit }), ms); };
+/* The chord combos press BOTH buttons AT ONCE - one event, both bits set.
+ * They used to press them one after the other (VOL- for 90 ms, then VOL+
+ * 30 ms later), so the two contacts were never down together, the firmware's
+ * combo detector never saw a chord, and the tuner and the groove station
+ * were unreachable. Worse, each half of the chord fired as its own action,
+ * so the screen kept jumping between views. */
+const COMBOS = {
+  comboTuner: 2 | 4,    /* VOL- & VOL+  -> the tuner          */
+  comboBank:  8 | 16,   /* <     & >     -> bank mode         */
+  comboDrums: 1 | 2,    /* HOME  & VOL-  -> the groove station */
+};
+for (const id of Object.keys(COMBOS)) {
+  const mask = COMBOS[id];
+  $(id).onclick = () => {
+    post({type:'press', mask});
+    setTimeout(() => post({type:'release', mask}), 150);
+  };
+}
+/* A quick PARA press is a click; a long one is a hold. The firmware's input
+ * layer now decides which: the click arrives when the button is RELEASED, and
+ * only if it was released before the hold threshold. So a click is a short
+ * press and a hold is a long one - they can no longer both happen. */
+$('paraClick').onclick = () => { post({type:'press',mask:32}); setTimeout(()=>post({type:'release',mask:32}),90); };
+/* Turning the encoder. The knob can be dragged, but a drag that leaves the
+ * window can get stuck, so there are explicit buttons as well. */
+$('paraTurnL').onclick = () => post({type:'enc', delta:-1});
+$('paraTurnR').onclick = () => post({type:'enc', delta: 1});
+$('paraHold1').onclick = () => { post({type:'press',mask:32}); setTimeout(()=>post({type:'release',mask:32}),1200); };
+$('paraHold2').onclick = () => { post({type:'press',mask:32}); setTimeout(()=>post({type:'release',mask:32}),2200); };
+
+let micStream = null;
+let micSourceNode = null;
+
+function stopMic() {
+  if (micSourceNode) {
+    try { micSourceNode.disconnect(); } catch (e) {}
+    micSourceNode = null;
+  }
+  if (micStream) {
+    try { micStream.getTracks().forEach(t => t.stop()); } catch (e) {}
+    micStream = null;
+  }
+}
+
+async function updateMicDeviceList() {
+  if (!navigator.mediaDevices?.enumerateDevices) return;
+  try {
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    const sel = $('micDeviceSel');
+    if (!sel) return;
+    const curVal = sel.value;
+    const inputs = devs.filter(d => d.kind === 'audioinput');
+    sel.innerHTML = '<option value="">Default input / microphone</option>';
+    inputs.forEach((d, i) => {
+      const opt = document.createElement('option');
+      opt.value = d.deviceId;
+      opt.textContent = d.label || `Audio input ${i + 1}`;
+      sel.appendChild(opt);
+    });
+    if (curVal && [...sel.options].some(o => o.value === curVal)) {
+      sel.value = curVal;
+    }
+  } catch (e) {}
+}
+
+async function startMic() {
+  stopMic();
+  if (!ctx) await startAudio();
+  const devId = $('micDeviceSel')?.value || undefined;
+  const echoCancel = $('micEchoCancel')?.checked !== false;
+  const noiseSuppress = $('micNoiseSuppress')?.checked || false;
+  const autoGain = false;
+
+  const constraints = {
+    audio: {
+      echoCancellation: echoCancel,
+      noiseSuppression: noiseSuppress,
+      autoGainControl: autoGain,
+    }
+  };
+  if (devId) constraints.audio.deviceId = { exact: devId };
+
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia(constraints);
+    micSourceNode = ctx.createMediaStreamSource(micStream);
+    micSourceNode.connect(node);
+    post({ type: 'src', src: 'mic' });
+    const gainVal = parseFloat($('micGain')?.value || '0.8');
+    post({ type: 'micGain', gain: gainVal });
+    set('state', 'mic active' + (echoCancel ? ' (anti-feedback on)' : ''));
+    $('state').className = 'badge live';
+    updateMicDeviceList();
+  } catch (e) {
+    set('state', 'mic error: ' + e.message);
+    $('state').className = 'badge err';
+  }
+}
+
+/* input source */
+document.querySelectorAll('[data-src]').forEach(b => b.onclick = async () => {
+  document.querySelectorAll('[data-src]').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  const s = b.dataset.src;
+  const mc = $('micControls');
+  if (s === 'mic') {
+    if (mc) mc.style.display = 'block';
+    await startMic();
+    return;
+  }
+  if (mc) mc.style.display = 'none';
+  stopMic();
+  post({ type: 'src', src: s });
+});
+
+$('micDeviceSel')?.addEventListener('change', () => { if (document.querySelector('[data-src="mic"]')?.classList.contains('on')) startMic(); });
+$('micEchoCancel')?.addEventListener('change', (e) => {
+  const warn = $('micFeedbackWarning');
+  if (warn) warn.style.display = e.target.checked ? 'none' : 'block';
+  if (document.querySelector('[data-src="mic"]')?.classList.contains('on')) startMic();
+});
+$('micNoiseSuppress')?.addEventListener('change', () => { if (document.querySelector('[data-src="mic"]')?.classList.contains('on')) startMic(); });
+$('micGain')?.addEventListener('input', (e) => {
+  const v = parseFloat(e.target.value);
+  $('micGainVal').textContent = Math.round(v * 100) + '%';
+  post({ type: 'micGain', gain: v });
+});
+/* ---- the test samples ------------------------------------------------------
+ * custom-fw/emu/samples holds the WAVs the emulator ships with. They are
+ * fetched, decoded by the browser (so they arrive at the AudioContext's
+ * 44.1 kHz - the firmware's rate), downmixed to mono and fed into the
+ * firmware's jack, so what you hear is the firmware's DSP processing a real
+ * guitar recording, out through Windows Audio. */
+async function loadSampleUrl(url) {
+  try {
+    set('state', 'loading the sample…');
+    const raw = await (await fetch(url)).arrayBuffer();
+    const ab = await ctx.decodeAudioData(raw);
+    const n = ab.length;
+    const mono = new Float32Array(n);
+    for (let c = 0; c < ab.numberOfChannels; c++) {
+      const d = ab.getChannelData(c);
+      for (let i = 0; i < n; i++) mono[i] += d[i];
+    }
+    if (ab.numberOfChannels > 1) for (let i = 0; i < n; i++) mono[i] /= ab.numberOfChannels;
+    post({ type: 'file', buf: mono });
+    document.querySelectorAll('[data-src]').forEach(x => x.classList.remove('on'));
+    document.querySelector('[data-src="file"]').classList.add('on');
+    set('state', 'sample playing'); $('state').className = 'badge live';
+  } catch (e) {
+    set('state', 'the sample failed: ' + e.message); $('state').className = 'badge err';
+  }
+}
+async function refreshSamples() {
+  try {
+    const r = await fetch('/api/samples');
+    const j = await r.json();
+    const sel = $('sampleSel');
+    sel.innerHTML = '<option value="">a test sample…</option>';
+    (j.samples || []).forEach(n => {
+      const o = document.createElement('option');
+      o.value = '/samples/' + encodeURIComponent(n);
+      o.textContent = n.replace(/\.wav$/i, '');
+      sel.appendChild(o);
+    });
+  } catch (e) { /* the samples are optional */ }
+}
+$('sampleLoad').onclick = () => {
+  const url = $('sampleSel').value;
+  if (!url) { set('state', 'pick a sample first'); return; }
+  loadSampleUrl(url);
+};
+$('sampleSel').onchange = () => { if ($('sampleSel').value) loadSampleUrl($('sampleSel').value); };
+refreshSamples();
+
+/* ---- loading a NAM capture -------------------------------------------------
+ * A .nam file is a JSON header (or a binary model) followed by the weights.
+ * The browser turns it into the "WAVE" container the firmware already
+ * understands - the same container the emulator's nam_loader.py builds - and
+ * hands it to the firmware, which registers the capture, stores it in the
+ * flash and puts it in the DSP.
+ *
+ * So a capture loaded here is a REAL capture in the flash image: the FLASH
+ * tab can export it to the device, and the device's own SysEx upload (with
+ * the registry fix) does the same thing over MIDI. */
+function namFindWeights(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  if (Array.isArray(obj.weights) && obj.weights.length &&
+      typeof obj.weights[0] === 'number') return obj.weights;
+  for (const k of Object.keys(obj)) {
+    const w = namFindWeights(obj[k]);
+    if (w) return w;
+  }
+  if (Array.isArray(obj)) {
+    for (const it of obj) { const w = namFindWeights(it); if (w) return w; }
+  }
+  return null;
+}
+
+/* The ToneHunt "SlimmableContainer" - the format the A2 models come in.
+ *
+ * Its top level has NO weights and NO head_scale: the model lives in
+ * config.submodels[i].model, and the container holds several of them (a
+ * 3-channel Lite and an 8-channel Full). The emulator's nam_loader.py is
+ * the reference for this; the browser has to do the same thing, or the
+ * capture comes out with the wrong head scale (39 dB out) and the wrong
+ * input staging.
+ *
+ * The Lite submodel is preferred - the Pocket Amp's CPU has no room for the
+ * Full one (the emulator says the same).
+ */
+function namParseSlimmable(json, filename) {
+  if (!json || json.architecture !== 'SlimmableContainer') return null;
+  const subs = (json.config && json.config.submodels) || [];
+  let chosen = null;
+  for (const sm of subs) {
+    const w = (sm.model && sm.model.weights) || [];
+    if (w.length === 1870 || w.length === 1871) { chosen = sm; break; }
+  }
+  if (!chosen) {
+    for (const sm of subs) {
+      const w = (sm.model && sm.model.weights) || [];
+      if (w.length === 12145 || w.length === 12146) { chosen = sm; break; }
+    }
+  }
+  if (!chosen) return null;
+  const m = chosen.model || {};
+  const cfg = m.config || {};
+  const smMeta = (m.metadata && typeof m.metadata === 'object') ? m.metadata : {};
+  const topMeta = (json.metadata && typeof json.metadata === 'object') ? json.metadata : {};
+  /* The reference uses the submodel's metadata, and falls back to the top
+   * level only when the submodel has none. */
+  const meta = Object.keys(smMeta).length ? smMeta : topMeta;
+  const headScale = (cfg.head_scale !== undefined) ? cfg.head_scale : 1.0;
+  const weights = (m.weights || []).slice();
+  /* The head scale is the last weight when the container left it out. */
+  if (weights.length === 1870 || weights.length === 12145) weights.push(headScale);
+  const name = String(meta.name || meta.gear_model || filename || '').slice(0, 31);
+  /* The hardware's ADC is +4.0 dBu; the capture says what level it was made
+   * at, so the difference is the input staging. It can be in the submodel's
+   * metadata, in the top level's, or in the config. */
+  let dbu;
+  for (const obj of [smMeta, topMeta, (json.config || {}), json]) {
+    if (!obj || typeof obj !== 'object') continue;
+    for (const k of ['input_level_dbu', 'input_level', 'input_dBu', 'calibration_dBu']) {
+      if (obj[k] !== undefined && obj[k] !== null) { dbu = obj[k]; break; }
+    }
+    if (dbu !== undefined) break;
+  }
+  let inputTrim = 1.0;
+  if (dbu !== undefined) {
+    inputTrim = Math.round(Math.pow(10, (4.0 - dbu) / 20) * 10000) / 10000;
+  }
+  const isCab = /cab/i.test(String(meta.gear_type || '')) ||
+                /cab/i.test(name) || /cab/i.test(String(filename || ''));
+  return { weights, headScale, inputTrim, isCab, name };
+}
+
+function namBuildWave(weights, headScale, flags, inputTrim) {
+  const n = weights.length;
+  const buf = new ArrayBuffer(20 + n * 4);
+  const dv = new DataView(buf);
+  const u8 = new Uint8Array(buf);
+  u8[0] = 87; u8[1] = 65; u8[2] = 86; u8[3] = 69;      // "WAVE"
+  dv.setUint32(4, n, true);
+  dv.setFloat32(8, headScale || 1.0, true);
+  dv.setUint32(12, flags || 0, true);
+  dv.setFloat32(16, inputTrim || 1.0, true);
+  for (let i = 0; i < n; i++) dv.setFloat32(20 + i * 4, weights[i], true);
+  return u8;
+}
+
+async function loadNamFile(file) {
+  if (!file) return;
+  const raw = new Uint8Array(await file.arrayBuffer());
+  await loadNamBytes(raw, file.name.replace(/\.[^.]+$/, '').slice(0, 31));
+}
+
+/* The same thing, from bytes that are already in memory - a model that came
+ * loaded from disk, for instance. */
+async function loadNamBytes(raw, name) {
+  try {
+    set('state', 'reading the NAM…');
+    let blob = raw;
+    name = (name || 'USER NAM').slice(0, 31);
+
+    if (raw.length >= 4 && raw[0] === 0x7B) {          // '{' -> a JSON .nam
+      /* A .nam is either one JSON object with the weights inside it, or a
+       * JSON header followed by the float32 weights in binary. */
+      let json = null, dataStart = raw.length;
+      const text = new TextDecoder().decode(raw);
+      try {
+        json = JSON.parse(text);
+      } catch (e) {
+        /* the JSON header ends at the first closing brace at the top level */
+        let depth = 0, end = -1;
+        for (let i = 0; i < text.length; i++) {
+          const c = text[i];
+          if (c === '{') depth++;
+          else if (c === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+        }
+        if (end < 0) { set('state', 'that .nam has no readable header'); return; }
+        json = JSON.parse(text.slice(0, end));
+        dataStart = end;
+        while (dataStart < raw.length &&
+               (raw[dataStart] === 0x0A || raw[dataStart] === 0x0D || raw[dataStart] === 0x20)) dataStart++;
+      }
+
+      const cfg = (json.config && typeof json.config === 'object') ? json.config : {};
+      let headScale = (cfg.head_scale !== undefined) ? cfg.head_scale : 1.0;
+      let inputTrim = (cfg.input_trim !== undefined) ? cfg.input_trim : 1.0;
+      let isCab = !!(cfg.is_amp_cab || (json.metadata && json.metadata.is_amp_cab));
+
+      /* The ToneHunt "SlimmableContainer" keeps everything one level down. */
+      const slim = namParseSlimmable(json, name);
+      let weights = null;
+      if (slim) {
+        weights = slim.weights;
+        headScale = slim.headScale;
+        inputTrim = slim.inputTrim;
+        isCab = slim.isCab;
+        if (slim.name) name = slim.name;
+      }
+      if (!weights) weights = namFindWeights(json);
+      if (!weights && dataStart < raw.length) {
+        /* the weights are the binary part after the header */
+        const n = Math.floor((raw.length - dataStart) / 4);
+        const dv = new DataView(raw.buffer, raw.byteOffset + dataStart, n * 4);
+        weights = new Array(n);
+        for (let i = 0; i < n; i++) weights[i] = dv.getFloat32(i * 4, true);
+      }
+      if (!weights || !weights.length) { set('state', 'no weights found in that .nam'); return; }
+      blob = namBuildWave(weights, headScale, isCab ? 1 : 0, inputTrim);
+      if (json.metadata && json.metadata.name && !slim) name = String(json.metadata.name).slice(0, 31);
+    } else if (raw.length >= 4 && raw[0] === 0x57 && raw[1] === 0x41 &&
+               raw[2] === 0x56 && raw[3] === 0x45) {
+      // already a WAVE container
+    } else if (raw.length >= 4 && raw.length % 4 === 0 && raw.length <= 200000) {
+      // a raw float32 weight array
+      const n = raw.length / 4;
+      const dv = new DataView(raw.buffer, raw.byteOffset, raw.length);
+      const w = new Array(n);
+      for (let i = 0; i < n; i++) w[i] = dv.getFloat32(i * 4, true);
+      blob = namBuildWave(w, 1.0, 0, 1.0);
+    }
+
+    /* The name is encoded HERE: an AudioWorklet has no TextEncoder. */
+    const nameBytes = new TextEncoder().encode(name);
+    post({ type: 'nam', blob, nameBytes });
+    set('state', 'sending the NAM to the firmware…');
+  } catch (e) {
+    set('state', 'the NAM failed: ' + e.message);
+    $('state').className = 'badge err';
+  }
+}
+$('namLoad').onclick = () => $('namIn').click();
+$('namIn').onchange = (e) => { if (e.target.files[0]) loadNamFile(e.target.files[0]); };
+
+$('uploadWavBtn').onclick = () => $('fileIn').click();
+
+$('fileIn').onchange = async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try {
+    set('state', 'decoding ' + f.name + '...');
+    if (!ctx) await startAudio();
+    const raw = await f.arrayBuffer();
+    const ab = await ctx.decodeAudioData(raw);
+    const n = ab.length;
+    const mono = new Float32Array(n);
+    for (let c = 0; c < ab.numberOfChannels; c++) {
+      const d = ab.getChannelData(c);
+      for (let i = 0; i < n; i++) mono[i] += d[i];
+    }
+    if (ab.numberOfChannels > 1) {
+      for (let i = 0; i < n; i++) mono[i] /= ab.numberOfChannels;
+    }
+    post({ type: 'file', buf: mono });
+    document.querySelectorAll('[data-src]').forEach(x => x.classList.remove('on'));
+    document.querySelector('[data-src="file"]').classList.add('on');
+    stopMic();
+    if ($('micControls')) $('micControls').style.display = 'none';
+
+    const infoRow = $('fileInfoRow');
+    const infoText = $('fileInfoText');
+    if (infoRow && infoText) {
+      infoRow.style.display = 'block';
+      const dur = ab.duration.toFixed(1);
+      infoText.textContent = `🎵 Custom Audio: ${f.name} (${dur}s, ${ab.sampleRate} Hz) — looping through DSP`;
+    }
+    set('state', 'playing custom audio: ' + f.name);
+    $('state').className = 'badge live';
+  } catch (err) {
+    console.error("Audio decode error:", err);
+    set('state', 'audio decode failed: ' + err.message);
+    $('state').className = 'badge err';
+    alert("Could not decode audio file: " + err.message);
+  }
+};
+
+/* ---- ASIO tab ---- */
+$('goAsio').onclick = e => { e.preventDefault(); showTab('asio'); };
+$('checkEmu').onclick = checkEmu;
+$('startEmu').onclick = async () => {
+  $('emuMsg').innerHTML = 'Start it with:<br><pre>cd custom-fw\\emu\n' +
+    'powershell -ExecutionPolicy Bypass -File build_dll.ps1\npython server.py</pre>' +
+    'then press <b>Check</b>.';
+};
+async function checkEmu() {
+  const m = $('emuMsg');
+  m.innerHTML = 'checking ...';
+  try {
+    const r = await fetch('http://127.0.0.1:8080/api/devices');
+    const j = await r.json();
+    const rows = (j.devices || []).map(d =>
+      '<tr><td>' + (d.label || d.id) + '</td><td>' + (d.is_asio ? '<span class="ok">ASIO</span>' : 'OS') + '</td></tr>');
+    $('devTable').innerHTML = rows.length ? rows.join('') : '<tr><td colspan="2">no devices</td></tr>';
+    m.innerHTML = '<span class="ok">The ASIO emulator is running.</span> ' +
+                  'Open <a href="http://127.0.0.1:8080/" target="_blank" style="color:var(--accent)">its UI</a> ' +
+                  'and pick an ASIO device.';
+  } catch (e) {
+    $('devTable').innerHTML = '<tr><td colspan="2" class="note">not running</td></tr>';
+    m.innerHTML = '<span class="warn">The emulator is not running on port 8080.</span> ' +
+                  'Start it as shown above.';
+  }
+}
+
+/* ---- library ---- */
+function readPresets() { if (node) node.port.postMessage({ type: 'readPresets' }); }
+function renderPresets(list) {
+  const rows = [];
+  for (const p of list) {
+    const nm = p.name || (p.i >= 40 ? '(empty)' : '(factory)');
+    /* The name is editable: changing it writes the record back, so the slot
+     * in the flash carries the new name. The "store" button puts the sound
+     * that is playing right now into the slot. */
+    const nmCell = p.i >= 40
+      ? '<input class="pname" data-i="' + p.i + '" value="' + nm.replace(/"/g, '&quot;') + '">'
+      : '<span class="note">' + nm + '</span>';
+    rows.push('<tr><td>P' + String(p.i + 1).padStart(2, '0') + '</td><td>' + nmCell + '</td><td>' +
+              (p.vol >= 0 ? p.vol + ' %' : '-') + '</td><td>' +
+              (p.amp >= 0 ? 'amp ' + p.amp : '-') + '</td><td>' +
+              (p.cab >= 0 ? 'cab ' + p.cab : '-') + '</td><td>' +
+              (p.i >= 40 ? '<button class="act" data-store="' + p.i + '">store the live sound</button>' : '') +
+              '</td></tr>');
+  }
+  $('presets').innerHTML =
+    '<tr><th>slot</th><th>name</th><th>volume</th><th>amp</th><th>cab</th><th></th></tr>' + rows.join('');
+  /* the name fields write the record back when the field is left */
+  for (const inp of document.querySelectorAll('#presets input.pname')) {
+    inp.onchange = () => {
+      if (!node) return;
+      const i = parseInt(inp.dataset.i, 10);
+      const nameBytes = new TextEncoder().encode(inp.value.slice(0, 23));
+      node.port.postMessage({ type: 'presetRename', idx: i, nameBytes });
+      readPresets();
+    };
+  }
+  /* the store button puts the sound that is playing into the slot */
+  for (const btn of document.querySelectorAll('#presets button[data-store]')) {
+    btn.onclick = () => {
+      if (!node) return;
+      const i = parseInt(btn.dataset.store, 10);
+      const nameBytes = new TextEncoder().encode('USER ' + String(i + 1).padStart(2, '0'));
+      node.port.postMessage({ type: 'presetStore', idx: i, nameBytes });
+      readPresets();
+    };
+  }
+}
+$('flashExport').onclick = () => {
+  if (!node) { alert('Start the audio first - the worklet owns the firmware.'); return; }
+  node.port.postMessage({ type: 'flashExport' });
+};
+$('flashImport').onclick = () => $('flashFile').click();
+$('flashFile').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  f.arrayBuffer().then(ab => { if (node) node.port.postMessage({ type: 'flashImport', buf: new Uint8Array(ab) }); });
+};
+$('flashErase').onclick = () => { if (node) node.port.postMessage({ type: 'flashErase' }); };
+$('namFile').onchange = e => {
+  const f = e.target.files[0];
+  $('namMsg').innerHTML = f ? '<span class="warn">' + f.name + ' &mdash; ' + (f.size / 1024).toFixed(1) +
+    ' KB. Upload it with the SysEx cmd-25 uploader, or use the desktop editor against the device.</span>' : '';
+};
+
+/* ---- tabs ---- */
+function showTab(id) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === id));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.id === 'tab-' + id));
+  
+}
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+/* ---- go ---- */
+(async () => {
+  try {
+    wasmBytes = await loadWasm();
+    set('state', 'wasm loaded - press "Start audio"');
+    $('state').className = 'badge warn';
+  } catch (e) {
+    set('state', 'load failed: ' + e.message);
+    $('state').className = 'badge err';
+  }
+})();
+</script>
+</body>
+</html>

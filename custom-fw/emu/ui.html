@@ -1,0 +1,2210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M-VAVE Pocket Amp — Live Firmware Emulator & ASIO Workbench</title>
+<style>
+  :root {
+    --bg: #0d1017;
+    --panel: #161b26;
+    --panel2: #1e2534;
+    --border: #2c364c;
+    --accent: #00e5ff;
+    --amber: #ffab00;
+    --green: #00e676;
+    --red: #ff5252;
+    --text: #e6edf3;
+    --muted: #8b949e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+    padding: 16px;
+    line-height: 1.4;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 20px;
+    margin-bottom: 16px;
+  }
+  header h1 { font-size: 18px; letter-spacing: 0.5px; color: var(--accent); }
+  header .sub { font-size: 12px; color: var(--muted); }
+  .badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #003c46;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  .badge.green { background: #00381d; color: var(--green); border-color: var(--green); }
+  .badge.amber { background: #3e2a00; color: var(--amber); border-color: var(--amber); }
+
+  .main-layout {
+    display: grid;
+    grid-template-columns: 590px 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 1050px) {
+    .main-layout { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  /* ========================================================================
+     Pocket Amp Authentic Hardware Enclosure (Strict Circular Geometry)
+     ======================================================================== */
+  .device-shell {
+    position: relative;
+    background: linear-gradient(155deg, #262c38 0%, #171a22 45%, #0e1015 100%);
+    border: 3.5px solid #3c4658;
+    border-radius: 42px;
+    padding: 24px 22px 22px;
+    box-shadow: 
+      0 22px 50px rgba(0,0,0,0.85),
+      0 6px 16px rgba(0,0,0,0.6),
+      inset 0 1.5px 2px rgba(255,255,255,0.2),
+      inset 0 -2px 5px rgba(0,0,0,0.85);
+    width: 580px;
+    box-sizing: border-box;
+    margin: 0 auto;
+    user-select: none;
+  }
+
+  .bumper-accent {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    border-color: #55627a;
+    border-style: solid;
+    pointer-events: none;
+  }
+  .bumper-tl { top: 7px; left: 7px; border-width: 3.5px 0 0 3.5px; border-top-left-radius: 30px; }
+  .bumper-tr { top: 7px; right: 7px; border-width: 3.5px 3.5px 0 0; border-top-right-radius: 30px; }
+  .bumper-bl { bottom: 7px; left: 7px; border-width: 0 0 3.5px 3.5px; border-bottom-left-radius: 30px; }
+  .bumper-br { bottom: 7px; right: 7px; border-width: 0 3.5px 3.5px 0; border-bottom-right-radius: 30px; }
+
+  .hw-top-edge {
+    position: absolute;
+    top: -9px;
+    left: 28px;
+    right: 28px;
+    height: 9px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: flex-end;
+    padding-right: 68px;
+    pointer-events: none;
+  }
+  .hw-power-switch {
+    width: 42px;
+    height: 8px;
+    background: #2a313e;
+    border: 1px solid #4a566d;
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    box-shadow: inset 0 1px 2px rgba(255,255,255,0.25);
+  }
+
+  .device-faceplate {
+    position: relative;
+    background: #14171f;
+    border: 2px solid #272e3d;
+    border-radius: 28px;
+    padding: 18px 20px 20px;
+    box-shadow: inset 0 3px 14px rgba(0,0,0,0.75), 0 1px 2px rgba(255,255,255,0.06);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .device-upper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 486px;
+    height: 246px;
+  }
+
+  .lcd-bezel {
+    background: #06080b;
+    border: 3.5px solid #28303f;
+    border-radius: 26px;
+    width: 236px;
+    height: 236px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 
+      inset 0 4px 14px rgba(0,0,0,0.9),
+      0 2px 6px rgba(0,0,0,0.5),
+      0 0 1px rgba(255,255,255,0.1);
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .lcd-bezel::after {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 35%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 100%);
+    border-top-left-radius: 22px;
+    border-top-right-radius: 22px;
+    pointer-events: none;
+  }
+  #lcdCanvas, canvas#lcd {
+    width: 196px !important;
+    height: 196px !important;
+    image-rendering: pixelated;
+    display: block;
+    background: #000;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.8);
+  }
+
+  .knobs-pod-container {
+    width: 210px;
+    height: 236px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  /* Tilted Pod Housing: 24.7° tilt from vertical */
+  .tilted-pod {
+    width: 98px;
+    height: 236px;
+    background: linear-gradient(145deg, #0d1016 0%, #171b23 100%);
+    border: 2.5px solid #2b3444;
+    border-radius: 49px;
+    box-shadow: 
+      inset 0 4px 14px rgba(0,0,0,0.95),
+      inset 0 -2px 6px rgba(255,255,255,0.04),
+      0 3px 10px rgba(0,0,0,0.65);
+    transform: rotate(24.7deg);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    box-sizing: border-box;
+  }
+
+  /* Knobs are strictly round (aspect-ratio: 1/1, border-radius: 50%, flex-shrink: 0) */
+  .hw-knob-housing {
+    position: relative;
+    width: 68px;
+    height: 68px;
+    flex: 0 0 68px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+
+  .hw-rotary-knob {
+    width: 68px !important;
+    height: 68px !important;
+    min-width: 68px !important;
+    min-height: 68px !important;
+    max-width: 68px !important;
+    max-height: 68px !important;
+    aspect-ratio: 1 / 1 !important;
+    border-radius: 50% !important;
+    background: radial-gradient(circle at 40% 35%, #465166 0%, #202633 55%, #13171f 100%);
+    border: 3px solid #56647c;
+    box-shadow: 
+      0 6px 14px rgba(0,0,0,0.85),
+      inset 0 2px 3px rgba(255,255,255,0.3),
+      inset 0 -3px 5px rgba(0,0,0,0.8);
+    position: relative;
+    user-select: none;
+    touch-action: none;
+    box-sizing: border-box !important;
+    flex-shrink: 0 !important;
+    transition: border-color 0.15s ease;
+  }
+  .hw-rotary-knob::before {
+    content: "";
+    position: absolute;
+    top: 5px; left: 5px; right: 5px; bottom: 5px;
+    border-radius: 50%;
+    border: 1px dashed rgba(255,255,255,0.18);
+    pointer-events: none;
+  }
+  .hw-knob-dot {
+    position: absolute;
+    width: 8px !important;
+    height: 8px !important;
+    aspect-ratio: 1 / 1 !important;
+    border-radius: 50% !important;
+    background: #ffffff;
+    box-shadow: 0 0 4px rgba(0,0,0,0.8), 0 0 2px #fff;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: none;
+    box-sizing: border-box;
+  }
+  .hw-rotary-knob.master-pot .hw-knob-dot {
+    background: #ffd54f;
+    box-shadow: 0 0 4px rgba(0,0,0,0.8), 0 0 3px #ffb300;
+  }
+
+  /* PARA Center Push-Button: Strict Round Circle Button */
+  .hw-knob-center-click {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    min-height: 38px !important;
+    max-width: 38px !important;
+    max-height: 38px !important;
+    aspect-ratio: 1 / 1 !important;
+    border-radius: 50% !important;
+    background: radial-gradient(circle at 45% 40%, #353f52 0%, #181d26 80%);
+    border: 2px solid #4a5770;
+    box-shadow: 
+      0 3px 6px rgba(0,0,0,0.6),
+      inset 0 1px 2px rgba(255,255,255,0.25);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    outline: none;
+    box-sizing: border-box !important;
+    flex-shrink: 0 !important;
+    z-index: 5;
+    transition: transform 0.08s ease, border-color 0.1s ease, box-shadow 0.1s ease;
+  }
+  .hw-knob-center-click::after {
+    content: "";
+    width: 10px !important;
+    height: 10px !important;
+    aspect-ratio: 1 / 1 !important;
+    border-radius: 50% !important;
+    background: #00e5ff;
+    box-shadow: 0 0 6px rgba(0,229,255,0.8);
+    opacity: 0.85;
+    transition: opacity 0.1s ease, box-shadow 0.1s ease;
+    pointer-events: none;
+  }
+  .hw-knob-center-click:hover {
+    border-color: #00e5ff;
+  }
+  .hw-knob-center-click:active, .hw-knob-center-click.pressed, .hw-knob-center-click.down {
+    transform: translate(-50%, -50%) scale(0.92);
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.9), 0 0 10px rgba(0,229,255,0.5);
+    border-color: #00e5ff;
+    background: #0e2e38;
+  }
+  .hw-knob-center-click:active::after, .hw-knob-center-click.pressed::after, .hw-knob-center-click.down::after {
+    opacity: 1;
+    box-shadow: 0 0 12px #00e5ff;
+  }
+
+  .hw-rotary-knob.master-pot {
+    border-color: #7a6640;
+    cursor: grab;
+  }
+  .hw-rotary-knob.master-pot:active {
+    border-color: #ffb300;
+    cursor: grabbing;
+  }
+
+  /* Labels are absolutely positioned so they never squeeze or distort the round knobs */
+  .hw-knob-label {
+    position: absolute;
+    bottom: -16px;
+    left: 50%;
+    transform: translateX(-50%) rotate(-24.7deg);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    color: #8f9bb3;
+    pointer-events: none;
+    white-space: nowrap;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  }
+
+  /* Bottom Horizontal Pill-Shaped Bar containing 5 STRICTLY ROUND tactile buttons */
+  .hw-pill-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    background: #0b0e14;
+    border: 2.5px solid #2a3344;
+    border-radius: 9999px;
+    padding: 6px 14px;
+    box-shadow: 
+      inset 0 3px 10px rgba(0,0,0,0.95),
+      0 2px 5px rgba(0,0,0,0.5),
+      0 1px 1px rgba(255,255,255,0.06);
+    width: 486px;
+    height: 66px;
+    margin-top: 18px;
+    box-sizing: border-box;
+  }
+
+  /* Every bottom button is a tactile, strictly round circular push-button */
+  .hw-pill-btn {
+    width: 50px !important;
+    height: 50px !important;
+    min-width: 50px !important;
+    min-height: 50px !important;
+    max-width: 50px !important;
+    max-height: 50px !important;
+    aspect-ratio: 1 / 1 !important;
+    border-radius: 50% !important;
+    background: radial-gradient(circle at 45% 35%, #2c3545 0%, #171d28 60%, #0f131a 100%);
+    border: 2px solid #3d4a60;
+    color: #f1f5f9;
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+    touch-action: none;
+    transition: all 0.08s ease;
+    position: relative;
+    outline: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 
+      0 3px 6px rgba(0,0,0,0.6),
+      inset 0 1px 1.5px rgba(255,255,255,0.22);
+    flex-shrink: 0 !important;
+    box-sizing: border-box !important;
+  }
+  .hw-pill-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 8px rgba(0,229,255,0.3);
+  }
+  .hw-pill-btn:active, .hw-pill-btn.down {
+    transform: translateY(2px) scale(0.94);
+    background: radial-gradient(circle at 45% 45%, #0e303a 0%, #06171d 100%);
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.9), 0 0 12px rgba(0,229,255,0.4);
+  }
+  .hw-pill-divider {
+    width: 2.5px;
+    height: 30px;
+    background: #1c222e;
+    border-radius: 2px;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.9), 1px 0 0 rgba(255,255,255,0.07);
+    flex-shrink: 0;
+  }
+
+  /* Audio & ASIO Controls */
+  .control-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  select, input[type="number"], button.btn-primary, button.btn-secondary {
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    font-size: 12px;
+  }
+  button.btn-primary {
+    background: #005b66;
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  button.btn-primary:hover { background: #007685; }
+  button.btn-secondary { cursor: pointer; font-weight: 600; }
+  button.btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Meters & Scope */
+  .meter-row {
+    display: grid;
+    grid-template-columns: 70px 1fr 55px;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+  .bar-bg {
+    height: 10px;
+    background: #0b0e14;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--green), var(--amber), var(--red));
+    transition: width 0.06s;
+  }
+  #scopeCanvas {
+    width: 100%;
+    height: 90px;
+    background: #080b10;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-top: 6px;
+  }
+
+  /* 8-Slot Signal Chain Strip */
+  .slot-strip {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .slot-box {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 4px;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+  }
+  .slot-box.on {
+    background: #003844;
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .slot-box.selected {
+    box-shadow: 0 0 0 2px var(--amber);
+  }
+  .slot-box .sname { font-size: 12px; font-weight: 700; }
+  .slot-box .sstate { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .slot-box.on .sstate { color: var(--green); }
+
+  .param-sliders {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .param-box {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+  }
+  .param-box input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+  /* File Drop Zones (.nam & .wav) */
+  .drop-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .drop-zone {
+    border: 2px dashed #3b4b68;
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+    background: rgba(30, 37, 52, 0.5);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(0, 229, 255, 0.08);
+  }
+  .preset-amps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .preset-amps button {
+    flex: 1 1 calc(33% - 6px);
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px;
+    border-radius: 5px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .preset-amps button:hover, .preset-amps button.active {
+    border-color: var(--amber);
+    color: var(--amber);
+  }
+
+  /* Performance HUD Pinned on Bottom-Right */
+  .perf-hud {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    background: rgba(13, 16, 23, 0.92);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 10px 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.7), 0 0 12px rgba(0,229,255,0.25);
+    z-index: 9999;
+    font-family: monospace;
+    font-size: 11px;
+    min-width: 200px;
+    backdrop-filter: blur(6px);
+  }
+  .perf-hud-title {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .perf-hud-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 3px;
+  }
+  .perf-hud-row span { color: var(--muted); }
+  .perf-hud-val { font-weight: 700; color: #fff; }
+  .perf-hud-val.accent { color: var(--accent); }
+  .perf-hud-val.green { color: var(--green); }
+  .perf-hud-val.amber { color: var(--amber); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>M-VAVE Pocket Amp — Hardware-in-the-Loop Firmware Emulator</h1>
+    <div class="sub">JieLi AC791N (240 MHz) + 0x01EE0400 Vector/FIR Coprocessor + Low-Latency ASIO Audio</div>
+  </div>
+  <div style="display:flex; gap:10px; align-items:center;">
+    <span id="audioStatusBadge" class="badge">SAFE SIMULATION</span>
+    <span id="cpuBadge" class="badge">CPU: 48.2%</span>
+    <span id="sramBadge" class="badge amber">SRAM: 14.2 KB / 144 KB</span>
+  </div>
+</header>
+
+<div class="main-layout">
+  <!-- LEFT COLUMN: Physical Pocket Amp Front Panel -->
+  <div>
+            <div class="device-shell">
+      <div class="hw-top-edge">
+        <div class="hw-power-switch" title="Power Switch"></div>
+      </div>
+      <div class="bumper-accent bumper-tl"></div>
+      <div class="bumper-accent bumper-tr"></div>
+      <div class="bumper-accent bumper-bl"></div>
+      <div class="bumper-accent bumper-br"></div>
+
+      <div class="device-faceplate">
+        <div class="device-upper">
+          <div class="lcd-bezel">
+            <canvas id="lcdCanvas" width="240" height="240"></canvas>
+          </div>
+
+          <div class="knobs-pod-container">
+            <div class="tilted-pod">
+              <!-- PARA Rotary Encoder & Push Button -->
+              <div class="hw-knob-housing">
+                <div class="hw-rotary-knob" id="paraKnob" title="PARA: Wheel/Drag outer ring to Rotate; Click center to Enter/Edit, Hold 1s for Save">
+                  <div class="hw-knob-dot" id="knobMarker"></div>
+                  <button class="hw-knob-center-click" id="paraBtn"
+                          onmousedown="onParaDown(event)"
+                          onmouseup="onParaUp(event)"
+                          onmouseleave="onParaUp(event)"
+                          onclick="onParaClick(event)"
+                          title="Press PARA (Click to enter/toggle, Hold 1.2s to Save)"></button>
+                </div>
+                <div class="hw-knob-label">PARA</div>
+              </div>
+
+              <!-- MASTER Volume Potentiometer -->
+              <div class="hw-knob-housing">
+                <div class="hw-rotary-knob master-pot" id="masterKnob" title="MASTER: Wheel or Drag to adjust output level">
+                  <div class="hw-knob-dot" id="masterMarker"></div>
+                </div>
+                <div class="hw-knob-label">MASTER</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Tactile Pill Button Strip -->
+        <div class="hw-pill-bar">
+          <button class="hw-pill-btn" onmousedown="beginBtn(1<<0)" onmouseup="endBtn(1<<0)" onmouseleave="endBtn(1<<0)" onclick="clickBtn(1<<0)">HOME</button>
+          <div class="hw-pill-divider"></div>
+          <button class="hw-pill-btn" onmousedown="beginBtn(1<<1)" onmouseup="endBtn(1<<1)" onmouseleave="endBtn(1<<1)" onclick="clickBtn(1<<1)">VOL-</button>
+          <div class="hw-pill-divider"></div>
+          <button class="hw-pill-btn" onmousedown="beginBtn(1<<2)" onmouseup="endBtn(1<<2)" onmouseleave="endBtn(1<<2)" onclick="clickBtn(1<<2)">VOL+</button>
+          <div class="hw-pill-divider"></div>
+          <button class="hw-pill-btn" onmousedown="beginBtn(1<<3)" onmouseup="endBtn(1<<3)" onmouseleave="endBtn(1<<3)" onclick="clickBtn(1<<3)">&lt;</button>
+          <div class="hw-pill-divider"></div>
+          <button class="hw-pill-btn" onmousedown="beginBtn(1<<4)" onmouseup="endBtn(1<<4)" onmouseleave="endBtn(1<<4)" onclick="clickBtn(1<<4)">&gt;</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Front Panel Quick Controls Drawer -->
+    <div style="display:flex; justify-content:space-between; align-items:center; width:580px; margin:12px auto 4px;">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span style="font-size:10px; font-weight:700; color:var(--muted);">SCREEN:</span>
+        <select id="onyxScreenSelect" style="width:180px; padding:3px 6px; font-size:10px;" onchange="onDisplayModeChange(this.value)">
+          <option value="live">● Live C Firmware LCD (240x240)</option>
+        </select>
+      </div>
+      <div style="display:flex; align-items:center; gap:6px; font-size:11px;">
+        <span style="color:var(--amber); font-weight:700;">VOL:</span>
+        <span id="masterVolReadout" style="font-weight:700; color:#fff; width:36px;">100%</span>
+        <input type="range" id="masterVolSlider" min="0" max="100" value="100" style="width:110px; accent-color:var(--amber);" oninput="onMasterVolChange(this.value)">
+      </div>
+    </div>
+
+    <!-- Simultaneous 2-Button Chords -->
+    <div class="combo-row" style="width:580px; margin:0 auto 10px;">
+      <button class="combo-btn" onclick="tapBtn((1<<1)|(1<<2))">⚡ [VOL- + VOL+]<br>TUNER [T]</button>
+      <button class="combo-btn" onclick="tapBtn((1<<3)|(1<<4))">⚡ [&lt; + &gt;]<br>BANK MODE [B]</button>
+      <button class="combo-btn" style="border-color:#ff7043; color:#ffab91;" onclick="tapBtn((1<<0)|(1<<1))">🥁 [HOME + VOL-]<br>DRUMS [D]</button>
+      <button class="combo-btn" style="border-color:#00e5ff; color:#80f2ff;" onclick="tapBtn(1<<0)">⚙ [HOME on Home]<br>SETTINGS [S]</button>
+      <button class="combo-btn" style="border-color:#ffd54f; color:#ffe082;" onclick="holdBtn(1<<0, 1700)" title="Hold HOME for 1.5 s">🔒 [HOLD HOME 1.5s]<br>STOMP LOCK [L]</button>
+      <button id="btToggleBtn" class="combo-btn" style="border-color:#2fc2b0; color:#2fc2b0;" onclick="toggleBluetooth()" title="Cycle Bluetooth State">📶 BT: CONNECTED<br>[CYCLE STATE]</button>
+    </div>
+
+    <!-- Quick Steppers for PARA -->
+    <div style="display:flex; gap:6px; width:580px; margin:0 auto 16px;">
+      <button class="combo-btn" style="flex:1" onclick="sendEnc(-1)">↺ PARA -1</button>
+      <button class="combo-btn" style="flex:1.5; border-color:var(--accent); color:var(--accent); font-weight:700;" onclick="tapBtn(1<<5)">● PARA CLICK</button>
+      <button class="combo-btn" style="flex:1" onclick="sendEnc(1)">↻ PARA +1</button>
+      <button class="combo-btn" style="flex:1" onclick="holdBtn(1<<5, 1200)" title="Hold PARA for 1 s">Save (1s)</button>
+      <button class="combo-btn" style="flex:1" onclick="holdBtn(1<<5, 2200)" title="Hold PARA for 2 s to Move">Move (2s)</button>
+    </div>
+
+    <!-- Chromatic Tuner & Drum Machine Card -->
+    <div class="card" style="margin-top:16px;">
+      <h2>
+        <span>Chromatic Tuner & 808/909 Drum Machine</span>
+        <span id="tunerNoteBadge" class="badge">--</span>
+      </h2>
+      <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; align-items:end;">
+        <div>
+          <label>808/909 Drums</label>
+          <button id="drumToggleBtn" class="btn-secondary" onclick="toggleDrums()">▶ Start Drums</button>
+        </div>
+        <div>
+          <label>Tempo (BPM)</label>
+          <input type="number" id="drumBpm" value="120" min="50" max="240" onchange="updateDrums()">
+        </div>
+        <div>
+          <label>Groove Pattern</label>
+          <select id="drumPattern" onchange="updateDrums()">
+            <option value="0">0: Rock 4/4</option>
+            <option value="1">1: Double Kick Metal</option>
+            <option value="2">2: Funk / Backbeat</option>
+            <option value="3">3: Studio Metronome</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT COLUMN: Low-Latency ASIO Routing, .nam Loader & 8-Slot Signal Chain -->
+  <div>
+    <!-- Real-Time Audio I/O & Clean Guitar DI Sample Player -->
+    <div class="card">
+      <h2>
+        <span>Audio I/O & Guitar DI Sample Player</span>
+        <span id="streamInfo" style="color:var(--green); font-size:11px;">Connected</span>
+      </h2>
+
+      <!-- Master Input Source Switch: Live ASIO Jack vs Audio Samples -->
+      <div style="background:#0a0e17; border:2px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <div>
+          <div style="font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:3px;">
+            Input Source Selector
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span id="activeInputLed" style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#00e5ff; box-shadow:0 0 10px #00e5ff;"></span>
+            <span id="activeInputTitle" style="font-size:14px; font-weight:800; color:var(--accent);">DI Samples Mode</span>
+            <span id="activeInputBadge" class="badge amber" style="font-size:10px;">SAMPLES LOOPING</span>
+          </div>
+        </div>
+
+        <!-- Master ON/OFF Switch Button -->
+        <button id="masterInputToggleBtn" onclick="toggleInputSource()" style="padding:10px 20px; font-size:13px; font-weight:800; border-radius:8px; cursor:pointer; display:inline-flex; align-items:center; gap:8px; border:2px solid #00e676; background:#00381d; color:#fff; transition:all 0.15s ease; box-shadow:0 3px 12px rgba(0,0,0,0.4);">
+          <span id="masterToggleIcon" style="font-size:15px;">🔌</span>
+          <span id="masterToggleText">SWITCH TO LIVE ASIO GUITAR</span>
+        </button>
+      </div>
+
+      <!-- Dedicated Guitar DI Sample Player Control Bar -->
+      <div id="sampleControlBar" style="background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:12px; transition:opacity 0.2s ease;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button id="samplePlayBtn" class="btn-primary" style="width:auto; padding:8px 16px; font-size:13px; font-weight:700; display:inline-flex; align-items:center; gap:6px; cursor:pointer;" onclick="toggleSamplePlay()">
+              <span id="samplePlayIcon">▶</span> <span id="samplePlayText">Play Guitar Sample</span>
+            </button>
+            <button class="btn-secondary" style="width:auto; padding:8px 12px; font-size:11px; cursor:pointer;" onclick="restartSample()" title="Restart sample from beginning">
+              ⏮ Restart
+            </button>
+          </div>
+          <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; margin:0; font-size:12px; color:var(--text);">
+            <input type="checkbox" id="sampleLoopCb" checked onchange="toggleSampleLoop()">
+            <span>Loop Continuously</span>
+          </label>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 2fr 1fr; gap:10px;">
+          <div>
+            <label>Input Source / Sample Selection</label>
+            <select id="testSignalSelect" onchange="setTestSignal()">
+              <optgroup label="Physical Instrument Input">
+                <option value="live" selected>🔌 Live Guitar Input Jack (Audio Interface In)</option>
+              </optgroup>
+              <optgroup label="🎸 GuitarSet Studio Session DIs (CC-BY 4.0)">
+                <option value="gs_funk_comp">🎸 Funk 16th Rhythm Chops (112 BPM, C#)</option>
+                <option value="gs_funk_solo">🎸 Funk Melodic Lead & Fills (114 BPM, Ab)</option>
+                <option value="gs_jazz_comp">🎸 Jazz Swing 7th/9th Comping (130 BPM, D)</option>
+                <option value="gs_jazz_solo">🎸 Jazz Bebop Melodic Runs (137 BPM, Eb)</option>
+                <option value="gs_rock_comp">🎸 Rock Arpeggiated Rhythm (85 BPM, F)</option>
+                <option value="gs_rock_solo">🎸 Rock Expressive Lead Solo (148 BPM, C)</option>
+                <option value="gs_bossa_comp">🎸 Bossa Nova Fingerstyle (154 BPM, E)</option>
+                <option value="gs_bossa_solo">🎸 Bossa Nova Melodic Lead (166 BPM, Ab)</option>
+                <option value="gs_acoustic_strum">🎸 Acoustic Open Strumming (107 BPM, Ab)</option>
+                <option value="gs_acoustic_solo">🎸 Acoustic Melodic Solo (100 BPM, C#)</option>
+              </optgroup>
+              <optgroup label="🎸 Synthesised DI phrases (tools/gen_test_audio.py)">
+                <option value="di_clean">🎸 Clean strummed chords</option>
+                <option value="di_arp">🎸 Clean arpeggios</option>
+                <option value="di_rock">🎸 Rock riff</option>
+                <option value="di_metal">🎸 Metal chugs</option>
+                <option value="di_blues">🎸 Blues lead line</option>
+                <option value="di_bass">🎸 Bass line</option>
+              </optgroup>
+              <optgroup label="🎸 Neural Amp Modeler Studio Clean DI Loops">
+                <option value="sample_rock">🎸 Rock Riff DI (JCM800 Crunch, 9.5s)</option>
+                <option value="sample_clean">🎸 Clean Chords & Arpeggios DI (13s)</option>
+                <option value="sample_metal">🎸 Metal Palm-Mute Chugs DI (10s)</option>
+              </optgroup>
+              <optgroup label="Synthetic Test Generators">
+                <option value="riff">🎵 Synthetic Plucked Riff</option>
+                <option value="a440">🔔 440.0 Hz A4 Sine Reference</option>
+                <option value="e2">🎸 82.41 Hz Low E2 Sine Tone</option>
+              </optgroup>
+            </select>
+          </div>
+          <div>
+            <label>Input Gain / DI Trim (dB)</label>
+            <input type="number" id="inputTrimDb" value="6" min="-24" max="48" step="1" onchange="setTestSignal()">
+          </div>
+        </div>
+
+        <!-- Real-Time Playback Progress Bar -->
+        <div style="margin-top:10px;">
+          <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--muted); margin-bottom:3px;">
+            <span>Sample Playback Position</span>
+            <span id="sampleProgressTxt">0%</span>
+          </div>
+          <div style="height:6px; background:#0b0e14; border:1px solid var(--border); border-radius:3px; overflow:hidden;">
+            <div id="sampleProgressBar" style="height:100%; width:0%; background:var(--accent); transition:width 0.08s linear;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Audio Output Device Routing & Real-Time Scopes -->
+      <div style="display:grid; grid-template-columns: 2fr 1fr; gap:10px; margin-bottom:12px;">
+        <div>
+          <label>Audio Device Routing (DirectSound / ASIO / WASAPI / WDM-KS)</label>
+          <select id="deviceSelect" onchange="switchAudioDevice()"></select>
+        </div>
+        <div>
+          <label>Live Guitar Channel</label>
+          <select id="inputChannelSelect" onchange="switchInputChannel(this.value)">
+            <option value="auto" selected>Auto (Input 1 Primary)</option>
+            <option value="ch1">Input 1 (L / Guitar)</option>
+            <option value="ch2">Input 2 (R / Aux)</option>
+            <option value="mix">Mix (Mono Sum 1+2)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="meter-row">
+        <span>IN JACK</span>
+        <div class="bar-bg"><div id="inMeterBar" class="bar-fill"></div></div>
+        <span id="inMeterTxt">-inf dB</span>
+      </div>
+      <div class="meter-row">
+        <span>AMP OUT</span>
+        <div class="bar-bg"><div id="outMeterBar" class="bar-fill"></div></div>
+        <span id="outMeterTxt">-inf dB</span>
+      </div>
+      <canvas id="scopeCanvas" width="600" height="90"></canvas>
+    </div>
+
+    <!-- .NAM Model Loader & .WAV Cabinet IR Loader -->
+    <div class="card">
+      <h2>
+        <span>Neural Amp Modeler (.nam) & Cabinet IR (.wav) Hot-Loader</span>
+        <span id="namModelBadge" class="badge">Marshall JCM800 Crunch (Q21 GRU-16)</span>
+      </h2>
+      <div class="drop-grid">
+        <div class="drop-zone" id="namDropZone" onclick="document.getElementById('namFileInput').click()">
+          <input type="file" id="namFileInput" accept=".nam,.json,.am3data,.bin" style="display:none" onchange="uploadNamFile(this.files[0])">
+          <div style="font-weight:700; color:var(--accent); margin-bottom:4px;">📂 Load .NAM or .am3data Model</div>
+          <div style="font-size:11px; color:var(--muted);">Drop any Neural Amp Modeler <code>.nam</code> file or click to browse.<br>Auto-quantizes to AC791N Q21 GRU-16 in real time!</div>
+          <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;" onclick="event.stopPropagation()">
+            <button type="button" class="btn btn-sm" onclick="loadSampleNam('test_capture.nam')" style="font-size:11px; padding:3px 8px; background:var(--panel-hi); border:1px solid var(--accent); color:var(--text); border-radius:4px; cursor:pointer;" title="A generated A2 capture (tools/gen_test_audio.py) - exercises the loader and the engine; it is not a model of an amplifier">⚡ Synthetic A2 test capture</button>
+          </div>
+        </div>
+        <div class="drop-zone" id="irDropZone" onclick="document.getElementById('irFileInput').click()">
+          <input type="file" id="irFileInput" accept=".wav" style="display:none" onchange="uploadIrFile(this.files[0])">
+          <div style="font-weight:700; color:var(--amber); margin-bottom:4px;">🔊 Load Cabinet IR (.wav)</div>
+          <div style="font-size:11px; color:var(--muted);">Drop any <code>.wav</code> speaker cab impulse response.<br>Loads 1024 Q18 FIR taps into 0x01EE0400 HW!</div>
+        </div>
+      </div>
+
+      <!-- The IR bank: synthesised cabinets and reverbs (tools/gen_test_audio.py) -->
+      <div style="margin-top:10px; margin-bottom:12px;">
+        <div style="font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px;">
+          IR bank - modelled cabs & reverbs (1-click load into the FIR convolver):
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          <button class="btn-secondary" style="width:auto; padding:5px 10px; font-size:11px; cursor:pointer;" onclick="loadIrBank('cab_4x12_closed')">🔊 4x12 closed</button>
+          <button class="btn-secondary" style="width:auto; padding:5px 10px; font-size:11px; cursor:pointer;" onclick="loadIrBank('cab_2x12_open')">🔊 2x12 open</button>
+          <button class="btn-secondary" style="width:auto; padding:5px 10px; font-size:11px; cursor:pointer;" onclick="loadIrBank('cab_1x12_combo')">🔊 1x12 combo</button>
+          <button class="btn-secondary" style="width:auto; padding:5px 10px; font-size:11px; cursor:pointer;" onclick="loadIrBank('cab_bass_4x10')">🔊 Bass 4x10</button>
+          <button class="btn-secondary" style="width:auto; padding:5px 10px; font-size:11px; cursor:pointer;" onclick="loadIrBank('rev_plate')">🏛 Plate reverb</button>
+          <button class="btn-secondary" style="width:auto; padding:5px 10px; font-size:11px; cursor:pointer;" onclick="loadIrBank('rev_spring')">🌊 Spring reverb</button>
+        </div>
+      </div>
+
+      <!-- 5-Category Adaptive Voicing Engine -->
+      <div style="background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div style="font-size:11px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:0.5px;">
+            Adaptive Tone Voicing & Biquad Profile:
+          </div>
+          <span id="activeVoicingBadge" class="badge" style="font-size:10px;">AUTO: CRUNCH</span>
+        </div>
+        <div class="voicing-btns" style="display:grid; grid-template-columns: repeat(5, 1fr); gap:6px;">
+          <button id="voiceBtn0" class="btn-secondary" style="padding:6px 4px; font-size:11px;" onclick="setVoicing(0)">1. Clean<br><small style="color:var(--muted);font-size:9px;">20Hz / 18.5k</small></button>
+          <button id="voiceBtn1" class="btn-secondary" style="padding:6px 4px; font-size:11px;" onclick="setVoicing(1)">2. Crunch<br><small style="color:var(--muted);font-size:9px;">30Hz / Tube Sag</small></button>
+          <button id="voiceBtn2" class="btn-secondary" style="padding:6px 4px; font-size:11px;" onclick="setVoicing(2)">3. High Gain<br><small style="color:var(--muted);font-size:9px;">45Hz / Anti-Fizz</small></button>
+          <button id="voiceBtn3" class="btn-secondary" style="padding:6px 4px; font-size:11px;" onclick="setVoicing(3)">4. Fuzz<br><small style="color:var(--muted);font-size:9px;">35Hz / 9.5k LPF</small></button>
+          <button id="voiceBtn4" class="btn-secondary" style="padding:6px 4px; font-size:11px;" onclick="setVoicing(4)">5. Bass<br><small style="color:var(--muted);font-size:9px;">20Hz Sub / 14k</small></button>
+        </div>
+      </div>
+
+      <div id="presetAmpsTitle" style="font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px;">
+        Stock & User NAM Amps (Flash Persisted):
+      </div>
+      <div class="preset-amps" id="presetAmpsContainer"></div>
+    </div>
+
+    <!-- 8-Slot Signal Chain & C7 Dynamic SRAM Reclaim -->
+    <div class="card">
+      <h2>
+        <span>8-Slot Effect Chain (Click Slot to Toggle Bypass & Reclaim SRAM)</span>
+        <span id="selectedSlotLabel" style="color:var(--amber); font-size:11px;">Editing: AMP</span>
+      </h2>
+      <div class="slot-strip" id="slotStrip"></div>
+
+      <!-- Sub-Algorithm / Type Selector -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; background:var(--panel2); padding:8px 12px; border-radius:6px; border:1px solid var(--border);">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <label style="margin:0; font-weight:700; color:var(--accent);">Model / Type:</label>
+          <select id="slotTypeSelect" style="width:230px;" onchange="onSlotTypeChange(this.value)"></select>
+        </div>
+        <div id="slotTypeDesc" style="font-size:11px; color:var(--muted);">Select sub-algorithm</div>
+      </div>
+
+      <div class="param-sliders" id="paramSlidersContainer">
+        <!-- Rendered dynamically by renderParamSliders() -->
+      </div>
+    </div>
+
+    <!-- Per-Stage CPU Telemetry -->
+    <div class="card" style="margin-bottom:0;">
+      <h2><span>AC791N Per-Stage Hardware Cycle Budget (240 MHz / 44.1 kHz)</span></h2>
+      <div id="cpuStagesGrid" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; font-size:11px;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SLOT_NAMES = ["DYN", "DRV", "AMP", "CAB", "EQ", "MOD", "DLY", "REV"];
+const STAGE_NAMES = ["DYN", "DRIVE", "NAM-GRU", "CAB-IR", "EQ", "MOD", "DELAY", "REVERB"];
+const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+const GROOVE_NAMES = [
+  "8 Beat 1 (Pop)", "8 Beat 2 (Rock)", "8 Beat 3", "8 Beat 4", "8 Beat 5",
+  "16 Beat 1", "16 Beat 2", "16 Beat 3", "16 Beat 4", "16 Beat 5",
+  "Rock 'n' Roll", "Classic Rock", "Pop Rock", "Slow Rock", "Rock Shuffle", "Rock Ballad",
+  "Punk", "New Wave", "Hard Rock", "Metal (Double-Kick)",
+  "Classic Funk", "Funk Rock", "Electric Funk", "Soul", "R&B Backbeat",
+  "Jazz Swing", "Big Band", "Fusion", "Swing 4/4", "Dixieland",
+  "Texas Blues", "Country", "Country Folk", "Rockabilly", "Bluegrass",
+  "Bossa Nova", "Rumba", "Samba", "Cha Cha", "Tango",
+  "Metronome 1/4", "Metronome 2/4", "Metronome 3/4", "Metronome 4/4",
+  "Metronome 5/4", "Metronome 6/4", "Metronome 7/4", "Metronome 3/8", "Metronome 6/8"
+];
+
+const SLOT_TYPES = [
+  // 0: DYN
+  ["Noise Gate++", "Boost + Gate", "Compress + Gate", "AI Gate MS (Studio)", "Compressor"],
+  // 1: DRV
+  ["TS-808", "Klon", "OCD", "RAT", "Big Muff", "Fuzz Face"],
+  // 2: AMP - 20 stock models (src/sys/stock_assets.c)
+  [
+    "1 UK Clean",        "2 US Clean",        "3 JP Chorus Clean", "4 Blues Overdrive",
+    "5 Hard Overdrive",  "6 Tube Overdrive",  "7 Boutique Drive",  "8 Dark Distortion",
+    "9 UK Stack Gain",   "10 US Crunch Gain", "11 US High Gain",   "12 Hot-Rod British",
+    "13 Smooth Lead",    "14 UK Combo 40",    "15 UK Modern Stack","16 US Tube Bass",
+    "17 Arena Bass",     "18 Studio Bass",    "19 Modern Bass OD", "20 Euro Clean Bass"
+  ],
+  // 3: CAB - 20 stock IRs (1,024 taps)
+  [
+    "1 Vintage 4x12",    "2 UK Slant 4x12",   "3 British 4x12",    "4 Hot-Rod 4x12",
+    "5 Full-Range Flat", "6 Boutique 2x12",   "7 UK Chime 2x12",   "8 Hot-Rod 1x12",
+    "9 US Combo 1x12",   "10 US Custom 4x12", "11 US Twin 2x12",   "12 US Oversize 4x12",
+    "13 UK Hi-Power 4x12","14 US Modern 1x12","15 JP Clean 2x12",  "16 Studio Bass 4x10",
+    "17 Arena Bass 4x10","18 Neo Bass 2x12",  "19 Euro Bass 2x10", "20 UK Bass 4x12"
+  ],
+  // 4: EQ
+  ["5-Band", "Low/High Cut", "Parametric-3"],
+  // 5: MOD
+  ["Chorus", "Phaser", "Flanger", "Tremolo", "Vibrato", "Univibe", "Auto Filter"],
+  // 6: DLY
+  ["Analog", "Ducking", "Tape", "Dual", "Lo-Fi", "Digital", "Ping Pong", "Reverse", "Slapback"],
+  // 7: REV
+  ["Room", "Hall", "Swell", "Spring", "Shimmer", "Cloud", "Plate", "Ambience"]
+];
+
+const SLOT_PARAM_LABELS = [
+  // 0: DYN
+  ["THRESH", "RATIO", "ATTACK", "LEVEL"],
+  // 1: DRV
+  ["DRIVE", "TONE", "LEVEL"],
+  // 2: AMP
+  ["GAIN", "BASS", "MID", "TREBLE", "PRES", "MASTER"],
+  // 3: CAB
+  ["LEVEL", "LOWCUT", "HICUT"],
+  // 4: EQ
+  ["100 Hz", "400 Hz", "1.0 kHz", "3.0 kHz", "8.0 kHz"],
+  // 5: MOD (per type: see MOD_PARAM_LABELS)
+  ["RATE", "DEPTH", "MIX", "FDBK"],
+  // 6: DLY
+  ["TIME", "FDBK", "MIX", "TONE"],
+  // 7: REV
+  ["DECAY", "PRE", "TONE", "MIX"]
+];
+
+let slotParamsCurrent = [
+  [30, 50, 50, 50, 0, 0],
+  [50, 50, 50, 0, 0, 0],
+  [50, 50, 50, 50, 50, 80],
+  [100, 20, 85, 0, 0, 0],
+  [50, 50, 50, 50, 50, 0],
+  [30, 40, 25, 0, 0, 0],
+  [40, 28, 18, 50, 0, 0],
+  [38, 20, 45, 20, 0, 0]
+];
+
+
+let slotTypesCurrent = [0, 0, 2, 2, 0, 0, 0, 0];
+
+// DYN knobs mean different things per type (same table as ui_app.c get_slot_param_label).
+const DYN_PARAM_LABELS = [
+  ["THRESH", "RELEASE", "ATTACK", "LEVEL"],  // Gate
+  ["THRESH", "RELEASE", "---", "BOOST"],     // Boost + Gate
+  ["THRESH", "RATIO", "ATTACK", "LEVEL"],    // Compress + Gate (knobs 2-4: compressor)
+  ["THRESH", "RELEASE", "ATTACK", "LEVEL"],  // AI Gate MS
+  ["THRESH", "RATIO", "ATTACK", "LEVEL"],    // Compressor (THRESH = the compressor's)
+];
+// TIME / DECAY in ms: the same laws as pa_dly_time_ms / pa_rev_decay_ms (fx_delay.c,
+// fx_reverb.c). Other knobs show %.
+const REV_COMB_MEAN = { 0: 760.5, 3: 917.5, 5: 1943 };   // Room, Spring, Cloud; else Hall 1521.75
+const REV_K = { 0: 0.76, 3: 0.82, 5: 0.75 };
+// the same laws as fx_delay.c (dly_len_from_knob), fx_eq.c, fx_reverb.c and fx_dynamics.c
+function dynValueText(t, p, k) {
+  const comp = (t === 2 || t === 4);
+  const ms = (v) => (v < 10 ? v.toFixed(1) : Math.round(v)) + " ms";
+  if (p === 0) {
+    if (t === 4) return Math.round(-50 + 40 * k) + " dB";
+    if (k <= 0) return "OFF";
+    const v = Math.floor(k * 2097152);
+    const th = 800 + Math.floor(v * v / 33554432) + Math.floor(v * 65536 / 2097152);
+    return Math.round(20 * Math.log10(th / 2097152)) + " dB";
+  }
+  if (p === 1) {
+    if (comp) { const r = Math.pow(20, k); return (r < 10 ? r.toFixed(1) : Math.round(r)) + ":1"; }
+    return ms(20 * Math.pow(50, k));
+  }
+  if (p === 2) {
+    if (comp) return ms(0.5 * Math.pow(60, k));
+    if (t !== 1) return ms(0.1 * Math.pow(50, k));
+  }
+  return null;
+}
+function paramValueText(slot, p, pct) {
+  if (slot === 0) {
+    const s = dynValueText(slotTypesCurrent[0] || 0, p, pct / 100);
+    if (s !== null) return s;
+  }
+  if (slot === 6 && p === 0) {
+    const t = slotTypesCurrent[6] || 0;
+    let lo = 1024, hi = 32768 - 16;
+    if (t === 6 || t === 7) hi = 16384 - 8;          // Ping Pong / Reverse
+    if (t === 8) { lo = 1764; hi = 8820; }           // Slapback
+    const len = Math.min(lo + Math.floor(pct / 100 * (hi - lo)), 32767);
+    return Math.round(len * 1000 / 44100) + " ms";
+  }
+  if (slot === 4 && (slotTypesCurrent[4] || 0) !== 0) {
+    const t = slotTypesCurrent[4], k = pct / 100;
+    const hz = (t === 1 && p === 0) ? 20 * Math.pow(25, k) : (t === 1 && p === 1) ? 2000 * Math.pow(10, k)
+             : (t === 2 && p === 2) ? 200 * Math.pow(25, k) : 0;
+    if (hz) return hz < 1000 ? Math.round(hz) + " Hz" : (hz / 1000).toFixed(1) + " kHz";
+    const db = (k - 0.5) * 24;
+    return (db >= 0 ? "+" : "") + db.toFixed(1) + " dB";
+  }
+  if (slot === 7 && p === 0) {
+    const t = slotTypesCurrent[7] || 0;
+    if (t === 6) return Math.round(0.5 * Math.pow(12, pct / 100) * 0.79 * 1000) + " ms";   // Plate
+    if (t === 7) return Math.round(8 * Math.pow(10, pct / 100)) + " ms";                 // Ambience SIZE
+    const g = Math.min(0.55 + 0.41 * pct / 100, 0.96);
+    const d = REV_COMB_MEAN[t] || 1521.75, k = REV_K[t] || 0.745;
+    return Math.round(k * 3 / Math.abs(Math.log10(g)) * d / 44100 * 1000) + " ms";
+  }
+  if (slot === 5 && p === 0) {
+    // pa_mod_rate_mhz: phase increment 9739 + knob * 779134 per sample, 2^32 = one cycle
+    const inc = 9739 + Math.floor(pct / 100 * 779134);
+    return (inc * 44100 / 4294967296).toFixed(2) + " Hz";
+  }
+  return pct + "%";
+}
+// MOD knobs per type (same table as ui_app.c get_slot_param_label)
+const MOD_PARAM_LABELS = [
+  ["RATE", "DEPTH", "MIX", "---"],    // Chorus
+  ["RATE", "DEPTH", "MIX", "FDBK"],   // Phaser
+  ["RATE", "DEPTH", "MIX", "FDBK"],   // Flanger
+  ["RATE", "DEPTH", "---", "---"],    // Tremolo
+  ["RATE", "DEPTH", "---", "---"],    // Vibrato
+  ["RATE", "DEPTH", "MIX", "FDBK"],   // Univibe
+  ["RATE", "RANGE", "MIX", "RESO"],   // Auto Filter
+];
+function paramLabels(slot) {
+  if (slot === 0) return DYN_PARAM_LABELS[(slotTypesCurrent[0] || 0) % 5];
+  if (slot === 5) return MOD_PARAM_LABELS[(slotTypesCurrent[5] || 0) % 7];
+  if (slot === 6) return ["TIME", "FDBK", "MIX",
+      ["MOD", "RELEASE", "GRIT", "RATIO", "GRIT", "TONE", "TONE", "TONE", "TONE"][(slotTypesCurrent[6] || 0) % 9]];
+  if (slot === 4) {
+    const t = (slotTypesCurrent[4] || 0) % 3;
+    if (t === 1) return ["LOWCUT", "HICUT", "LEVEL"];
+    if (t === 2) return ["LOW", "MID", "FREQ", "HIGH"];
+  }
+  if (slot === 7 && (slotTypesCurrent[7] || 0) === 7) return ["SIZE", "LOWCUT", "TONE", "MIX"];
+  return SLOT_PARAM_LABELS[slot] || [];
+}
+let currentSlotMask = 0xFF;
+let selectedSlot = 2; // AMP
+let drumPlaying = 0;
+let knobAngle = 0;
+
+const lcdCanvas = document.getElementById("lcdCanvas");
+const lcdCtx = lcdCanvas.getContext("2d");
+const scopeCanvas = document.getElementById("scopeCanvas");
+const scopeCtx = scopeCanvas.getContext("2d");
+
+async function apiPost(path, bodyObj) {
+  try {
+    const res = await fetch(path, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(bodyObj)
+    });
+    return await res.json();
+  } catch (e) {
+    // A failed call must not throw an unhandled rejection into every caller.
+    console.warn("the API call failed:", path, e);
+    return {};
+  }
+}
+
+let currentBtState = 2;
+function toggleBluetooth() {
+  currentBtState = (currentBtState === 2) ? 0 : (currentBtState === 0 ? 1 : 2);
+  apiPost("/api/bluetooth", { state: currentBtState });
+  updateBtBtn(currentBtState);
+}
+
+function updateBtBtn(state) {
+  currentBtState = state;
+  const btn = document.getElementById("btToggleBtn");
+  if (!btn) return;
+  if (state === 2) {
+    btn.innerHTML = "📶 BT: CONNECTED<br>[SOLID CYAN]";
+    btn.style.borderColor = "#2fc2b0";
+    btn.style.color = "#2fc2b0";
+  } else if (state === 1) {
+    btn.innerHTML = "📶 BT: SEARCHING<br>[BLINK 500MS]";
+    btn.style.borderColor = "#2fc2b0";
+    btn.style.color = "#ffffff";
+  } else {
+    btn.innerHTML = "📶 BT: OFF<br>[DIM GRAY]";
+    btn.style.borderColor = "#525252";
+    btn.style.color = "#8a8a8a";
+  }
+}
+
+/* ---- the front-panel buttons ---------------------------------------------
+ * The firmware's input layer (src/sys/pa_input.c) turns the RAW LEVEL of the
+ * buttons into one-tick action pulses, and it decides a PARA or a HOME CLICK
+ * from the RELEASE edge. The old code sent the mask once and never released
+ * it, so:
+ *   - HOME and PARA clicks never fired at all,
+ *   - the HOLD actions (Stomp Lock, Save to, Moving mode, Factory Reset) were
+ *     unreachable - they were sent as bits 6..9, and the raw input mask is
+ *     only bits 0..5, so the firmware discarded them before it saw them,
+ *   - a second tap of the same button did nothing (no new edge) and the
+ *     button stayed latched down, so VOL-/VOL+ auto-repeated forever.
+ * These helpers do what a real switch does: press, then release. The
+ * emulator's bridge holds a contact shorter than the firmware's 20 ms
+ * debounce for 60 ms, so a fast click is not lost. */
+/* The input requests must reach the emulator IN ORDER, and only ONE of them
+ * may be in flight at a time.
+ *
+ * The firmware decides a click from the RELEASE edge, so a release that
+ * overtakes its press leaves the button latched down and the click never
+ * fires - the button looks dead. The emulator's HTTP server is threaded, so
+ * two requests that are in flight at the same time can be handled in either
+ * order. The queue below sends the next request only after the previous one
+ * has been answered, so the front panel sees the gestures in the order they
+ * were made. It is the same ordered queue the WASM workbench uses
+ * (wasm/workbench.html: "A press and its release can arrive in the same
+ * callback, so the order matters - one ordered queue, not two lists").
+ *
+ * Only the front-panel input is queued; the other API calls must not wait
+ * behind it. */
+let inputQueue = Promise.resolve();
+function queueInput(bodyObj) {
+  inputQueue = inputQueue
+    .then(() => apiPost("/api/input", bodyObj))
+    .catch(() => { /* a failed input request must not break the queue */ });
+  return inputQueue;
+}
+
+function pressBtn(mask) {
+  queueInput({ press: mask });
+}
+
+function releaseBtn(mask) {
+  queueInput({ release: mask });
+}
+
+/* The physical buttons use press/release, so that HOLDING them repeats (the
+ * firmware's auto-repeat, exactly like a real switch). A plain click - the
+ * keyboard's Enter/Space, or a programmatic click - has no mouse-down at all,
+ * so it is turned into a complete gesture here. The click that a real mouse
+ * generates after its own mouse-up is ignored, or the button would fire
+ * twice. */
+let __lastGesture = 0;
+function beginBtn(mask) {
+  __lastGesture = Date.now();
+  pressBtn(mask);
+}
+function endBtn(mask) {
+  __lastGesture = Date.now();
+  releaseBtn(mask);
+}
+function clickBtn(mask) {
+  if (Date.now() - __lastGesture > 400) tapBtn(mask);
+}
+
+/* A complete gesture in ONE request: the emulator presses the button, holds
+ * it for the minimum contact time and lets go. The firmware decides a click
+ * from the RELEASE edge, so a press and its release must not be reordered -
+ * and they cannot be, because they travel in the same request. */
+function tapBtn(mask) {
+  queueInput({ tap: mask });
+}
+
+/* A HOLD action: the button is held for `ms` and then released. The firmware
+ * decides the hold from the duration at the release: PARA 1 s -> "Save to",
+ * 2 s -> "Move block", HOME 1.5 s -> "Live Stomp
+ * Lock". The duration is enforced by the EMULATOR, on the firmware's clock -
+ * a browser timer would be throttled in a background tab and a 1 s hold could
+ * turn into a 2 s hold and select the wrong action. */
+function holdBtn(mask, ms) {
+  queueInput({ hold: mask, ms: ms });
+}
+
+function sendEnc(delta) {
+  knobAngle = (knobAngle + delta * 18) % 360;
+  const k = document.getElementById("paraKnob");
+  if (k) k.style.transform = `rotate(${knobAngle}deg)`;
+  queueInput({ enc_delta: delta });
+}
+
+function onParaDown(e) {
+  e.stopPropagation();
+  __lastGesture = Date.now();
+  pressBtn(1 << 5);
+  const b = document.getElementById("paraBtn");
+  if (b) b.classList.add("pressed");
+}
+
+function onParaUp(e) {
+  e.stopPropagation();
+  __lastGesture = Date.now();
+  releaseBtn(1 << 5);
+  const b = document.getElementById("paraBtn");
+  if (b) b.classList.remove("pressed");
+}
+
+function onParaClick(e) {
+  e.stopPropagation();
+  if (Date.now() - __lastGesture > 400) tapBtn(1 << 5);
+}
+
+// PARA Knob Mouse Wheel & Drag
+const paraKnob = document.getElementById("paraKnob");
+paraKnob.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  sendEnc(e.deltaY < 0 ? 1 : -1);
+});
+let dragY = null;
+paraKnob.addEventListener("mousedown", (e) => { dragY = e.clientY; });
+window.addEventListener("mousemove", (e) => {
+  if (dragY === null) return;
+  const dy = dragY - e.clientY;
+  if (Math.abs(dy) >= 12) {
+    sendEnc(dy > 0 ? 1 : -1);
+    dragY = e.clientY;
+  }
+});
+window.addEventListener("mouseup", () => { dragY = null; });
+
+// Master Volume Knob Interaction
+let currentMasterVol = 100;
+let masterDragging = false;
+let dragMasterY = null;
+
+function updateMasterDial(vol) {
+  currentMasterVol = Math.max(0, Math.min(100, Math.round(vol)));
+  const readout = document.getElementById("masterVolReadout");
+  const slider = document.getElementById("masterVolSlider");
+  const marker = document.getElementById("masterMarker");
+  if (readout) readout.textContent = currentMasterVol + "%";
+  if (slider) slider.value = currentMasterVol;
+  const angle = (currentMasterVol / 100) * 270 - 135;
+  const k = document.getElementById("masterKnob");
+  if (k) k.style.transform = `rotate(${angle}deg)`;
+}
+
+function onMasterVolChange(val) {
+  updateMasterDial(parseInt(val, 10));
+  /* The front-panel MASTER pot is a 12-bit SARADC on the device, and the
+   * firmware turns it into the DAC master level. Sending it as master_pot
+   * makes the emulator behave like the hardware; the old call only moved the
+   * PRESET volume, so the knob did not change the output level at all. */
+  const pot = Math.round(Math.max(0, Math.min(100, currentMasterVol)) / 100 * 4095);
+  apiPost("/api/input", { master_pot: pot });
+}
+
+const masterKnob = document.getElementById("masterKnob");
+masterKnob.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  onMasterVolChange(currentMasterVol + (e.deltaY < 0 ? 2 : -2));
+});
+masterKnob.addEventListener("mousedown", (e) => {
+  masterDragging = true;
+  dragMasterY = e.clientY;
+});
+window.addEventListener("mousemove", (e) => {
+  if (!masterDragging) return;
+  const dy = dragMasterY - e.clientY;
+  if (Math.abs(dy) >= 4) {
+    onMasterVolChange(currentMasterVol + (dy > 0 ? 1 : -1));
+    dragMasterY = e.clientY;
+  }
+});
+window.addEventListener("mouseup", () => {
+  masterDragging = false;
+});
+
+// Keyboard shortcuts with multi-key chord support
+const activeKeys = new Set();
+// Which physical button each key stands for. The bit numbers are the RAW
+// front-panel bits (src/sys/pa_input.c): HOME, VOL-, VOL+, <, > and PARA.
+const KEY_MASK = {
+  "h": 1 << 0,
+  "-": 1 << 1, "_": 1 << 1,
+  "=": 1 << 2, "+": 1 << 2,
+  "arrowleft": 1 << 3,
+  "arrowright": 1 << 4,
+  "enter": 1 << 5,
+};
+// The mask that was actually pressed for each key, so the key-up releases
+// exactly what the key-down pressed (a chord replaces the single keys).
+const pressedByKey = new Map();
+window.addEventListener("keydown", (e) => {
+  if (e.repeat) return;
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  const k = e.key.toLowerCase();
+
+  // --- direct commands ---------------------------------------------------
+  // These are not a single physical button, so they are fired as a whole.
+  if (k === "t") { tapBtn((1<<1)|(1<<2)); return; }  // VOL- + VOL+ -> TUNER
+  if (k === "b") { tapBtn((1<<3)|(1<<4)); return; }  // < + >      -> BANK MODE
+  if (k === "c") { tapBtn((1<<0)|(1<<2)); return; }  // HOME + VOL+ -> signal chain
+  if (k === "d") { tapBtn((1<<0)|(1<<1)); return; }  // HOME + VOL- -> groove station
+  if (k === "s") { tapBtn(1<<0); return; }            // HOME click -> Settings
+  // The HOLD actions are a DURATION, not a bit: the firmware reads the hold
+  // from the release edge, so the physical button has to be held down. They
+  // used to be sent as bits 6..9, which the raw input mask (bits 0..5)
+  // discards - so they did nothing at all.
+  if (k === "l") { holdBtn(1<<0, 1700); return; }     // HOME held 1.5 s -> Live Stomp Lock
+  if (k === "m") { holdBtn(1<<5, 2200); return; }     // PARA held 2 s   -> Move block
+  // (the PARA 3 s hold no longer opens the Factory Reset: Settings > System > FACTORY RESET, then a click on RESET)
+  if (e.key === "ArrowUp")   { e.preventDefault(); sendEnc(1);  return; }
+  if (e.key === "ArrowDown") { e.preventDefault(); sendEnc(-1); return; }
+
+  activeKeys.add(k);
+
+  // --- 2-key chord detection ---------------------------------------------
+  // A chord wins over the single keys it is made of, and it CONSUMES them:
+  // the firmware does the same (a button that was part of a chord does not
+  // also click on its own).
+  let chord = 0;
+  if (activeKeys.has("h") && (activeKeys.has("+") || activeKeys.has("="))) {
+    chord = (1<<0)|(1<<2);
+  } else if (activeKeys.has("h") && (activeKeys.has("-") || activeKeys.has("_"))) {
+    chord = (1<<0)|(1<<1);
+  } else if ((activeKeys.has("-") || activeKeys.has("_")) && (activeKeys.has("+") || activeKeys.has("="))) {
+    chord = (1<<1)|(1<<2);
+  } else if (activeKeys.has("arrowleft") && activeKeys.has("arrowright")) {
+    chord = (1<<3)|(1<<4);
+  }
+
+  if (chord) {
+    for (const [key, m] of [...pressedByKey]) {
+      if (m & chord) { releaseBtn(m); pressedByKey.delete(key); }
+    }
+    pressBtn(chord);
+    pressedByKey.set(k, chord);
+    return;
+  }
+
+  // --- single keys --------------------------------------------------------
+  const m = KEY_MASK[k];
+  if (m) {
+    pressBtn(m);
+    pressedByKey.set(k, m);
+  }
+});
+window.addEventListener("keyup", (e) => {
+  const k = e.key.toLowerCase();
+  activeKeys.delete(k);
+  const m = pressedByKey.get(k);
+  if (m) {
+    releaseBtn(m);
+    pressedByKey.delete(k);
+  }
+});
+window.addEventListener("blur", () => {
+  activeKeys.clear();
+  // Nothing may stay latched down when the window loses the focus.
+  for (const [, m] of pressedByKey) releaseBtn(m);
+  pressedByKey.clear();
+});
+
+function updateSlotTypeSelector(slot) {
+  const sel = document.getElementById("slotTypeSelect");
+  if (!sel) return;
+  const types = SLOT_TYPES[slot] || [];
+  sel.innerHTML = types.map((t, idx) => `<option value="${idx}">${idx}: ${t}</option>`).join("");
+  sel.value = slotTypesCurrent[slot] || 0;
+  const descEl = document.getElementById("slotTypeDesc");
+  if (descEl) descEl.textContent = `${SLOT_NAMES[slot]} Model: ${types[slotTypesCurrent[slot]] || ""}`;
+}
+
+function onSlotTypeChange(val) {
+  const typeId = parseInt(val, 10);
+  slotTypesCurrent[selectedSlot] = typeId;
+  const types = SLOT_TYPES[selectedSlot] || [];
+  const descEl = document.getElementById("slotTypeDesc");
+  if (descEl) descEl.textContent = `${SLOT_NAMES[selectedSlot]} Model: ${types[typeId] || ""}`;
+  
+  if (selectedSlot === 2) {
+    document.querySelectorAll(".preset-amps button").forEach((b, idx) => {
+      b.classList.toggle("active", idx === typeId);
+    });
+    apiPost("/api/stock_amp", { id: typeId }).then(r => {
+      if (r.name) document.getElementById("namModelBadge").textContent = "Factory Amp: " + r.name;
+    });
+  } else if (selectedSlot === 3) {
+    apiPost("/api/stock_cab", { id: typeId }).then(r => {
+      if (r.name) document.getElementById("namModelBadge").textContent = "Factory Cab: " + r.name;
+    });
+  } else {
+    apiPost("/api/slot_type", { slot: selectedSlot, type: typeId });
+    if ([0, 4, 5, 6, 7].includes(selectedSlot)) renderParamSliders(selectedSlot);
+  }
+}
+
+function renderSlots() {
+  const container = document.getElementById("slotStrip");
+  container.innerHTML = "";
+  for (let s = 0; s < 8; s++) {
+    const on = (currentSlotMask & (1 << s)) !== 0;
+    const div = document.createElement("div");
+    div.className = "slot-box" + (on ? " on" : "") + (selectedSlot === s ? " selected" : "");
+    div.innerHTML = `<div class="sname">${SLOT_NAMES[s]}</div><div class="sstate">${on ? "ACTIVE" : "BYPASS"}</div>`;
+    div.onclick = (ev) => {
+      if (ev.shiftKey || selectedSlot === s) {
+        apiPost("/api/slot", { slot: s, enabled: on ? 0 : 1 });
+      }
+      selectedSlot = s;
+      document.getElementById("selectedSlotLabel").textContent = "Editing: " + SLOT_NAMES[s];
+      renderSlots();
+    };
+    container.appendChild(div);
+  }
+  updateSlotTypeSelector(selectedSlot);
+  renderParamSliders(selectedSlot);
+}
+
+function renderParamSliders(slot) {
+  const container = document.getElementById("paramSlidersContainer");
+  if (!container) return;
+  const labels = paramLabels(slot);
+  const vals = slotParamsCurrent[slot] || [];
+  container.innerHTML = labels.map((lbl, idx) => {
+    const v = vals[idx] !== undefined ? vals[idx] : 50;
+    return `<div class="param-box">
+      <label id="pLabel${idx}">${idx + 1}. ${lbl}: <strong style="color:var(--accent)">${paramValueText(slot, idx, v)}</strong></label>
+      <input type="range" min="0" max="100" value="${v}" id="pSlider${idx}" oninput="onParamSliderInput(${slot}, ${idx}, this.value)">
+    </div>`;
+  }).join("");
+}
+
+function onParamSliderInput(slot, paramId, val) {
+  const v = parseInt(val, 10);
+  if (!slotParamsCurrent[slot]) slotParamsCurrent[slot] = [];
+  slotParamsCurrent[slot][paramId] = v;
+  const lbl = paramLabels(slot)[paramId] || `Param ${paramId + 1}`;
+  const labelEl = document.getElementById(`pLabel${paramId}`);
+  if (labelEl) {
+    labelEl.innerHTML = `${paramId + 1}. ${lbl}: <strong style="color:var(--accent)">${paramValueText(slot, paramId, v)}</strong>`;
+  }
+  apiPost("/api/param", { slot: slot, param_id: paramId, val: v });
+}
+
+function setSlotParam(paramId, val) {
+  onParamSliderInput(selectedSlot, paramId, val);
+}
+
+function toggleDrums() {
+  drumPlaying = drumPlaying ? 0 : 1;
+  updateDrums();
+}
+
+function updateDrums() {
+  const bpm = parseInt(document.getElementById("drumBpm").value, 10) || 120;
+  const pattern = parseInt(document.getElementById("drumPattern").value, 10) || 0;
+  document.getElementById("drumToggleBtn").textContent = drumPlaying ? "⏹ Stop Drums" : "▶ Start Drums";
+  apiPost("/api/drums", { playing: drumPlaying, bpm, pattern });
+}
+
+let g_loadedAmps = [];
+
+async function refreshAmpList() {
+  try {
+    const res = await fetch("/api/stock_assets");
+    const data = await res.json();
+    if (data.amps && data.amps.length > 0) {
+      g_loadedAmps = data.amps;
+      SLOT_TYPES[2] = data.amps;
+      const container = document.getElementById("presetAmpsContainer");
+      if (container) {
+        container.innerHTML = data.amps.map((amp, idx) => {
+          const isUser = idx >= 20;
+          const label = isUser ? `${idx + 1}: [NAM] ${amp}` : `${idx + 1}: ${amp}`;
+          const activeClass = idx === slotTypesCurrent[2] ? "active" : "";
+          return `<button onclick="selectAmpProfile(${idx}, this)" class="${activeClass}">${label}</button>`;
+        }).join("");
+      }
+      if (selectedSlot === 2) {
+        updateSlotTypeSelector(2);
+      }
+    }
+  } catch (e) {
+    console.error("Failed to refresh amp list:", e);
+  }
+}
+
+function selectAmpProfile(id, btnEl) {
+  document.querySelectorAll(".preset-amps button").forEach((b, idx) => {
+    b.classList.toggle("active", idx === id);
+  });
+  slotTypesCurrent[2] = id;
+  if (selectedSlot === 2) updateSlotTypeSelector(2);
+  apiPost("/api/stock_amp", { id: id }).then(r => {
+    if (r.name) {
+      const prefix = id >= 20 ? "NAM Capture: " : "Factory Amp: ";
+      document.getElementById("namModelBadge").textContent = prefix + r.name;
+    }
+  });
+}
+
+const VOICING_NAMES = ["Clean", "Crunch", "High Gain", "Fuzz", "Bass"];
+function setVoicing(id) {
+  apiPost("/api/voicing", { profile: id }).then(r => {
+    updateVoicingUi(id);
+  });
+}
+
+function updateVoicingUi(id) {
+  for (let i = 0; i < 5; i++) {
+    const btn = document.getElementById("voiceBtn" + i);
+    if (btn) {
+      if (i === id) {
+        btn.classList.add("active");
+        btn.style.borderColor = "var(--accent)";
+        btn.style.color = "var(--accent)";
+        btn.style.background = "#003c46";
+      } else {
+        btn.classList.remove("active");
+        btn.style.borderColor = "var(--border)";
+        btn.style.color = "var(--text)";
+        btn.style.background = "var(--panel2)";
+      }
+    }
+  }
+  const badge = document.getElementById("activeVoicingBadge");
+  if (badge && VOICING_NAMES[id]) {
+    badge.textContent = VOICING_NAMES[id].toUpperCase();
+  }
+}
+
+async function uploadNamFile(file) {
+  if (!file) return;
+  const buf = await file.arrayBuffer();
+  const res = await fetch("/api/load_nam", {
+    method: "POST",
+    headers: { "X-Filename": file.name, "Content-Type": "application/octet-stream" },
+    body: buf
+  });
+  const data = await res.json();
+  if (data.ok) {
+    document.getElementById("namModelBadge").textContent = `${data.meta.name} (${data.meta.architecture})`;
+    if (data.meta.voicing_id !== undefined) {
+      updateVoicingUi(data.meta.voicing_id);
+    }
+    await refreshAmpList();
+    /* The amp id of the capture the server registered - see loadSampleNam:
+     * a capture that is loaded a second time overwrites the entry with the
+     * same name IN PLACE, so the last one in the list is not necessarily the
+     * one that was just loaded. */
+    const newAmpIdx = (data.amp_id !== undefined && data.amp_id >= 0)
+      ? data.amp_id
+      : (data.total_amps ? data.total_amps - 1 : 20);
+    selectAmpProfile(newAmpIdx);
+  } else {
+    alert("NAM Load Error: " + data.error);
+  }
+}
+
+async function loadSampleNam(filename) {
+  try {
+    const res = await fetch("/api/load_sample_nam", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById("namModelBadge").textContent = `${data.meta.name} (${data.meta.architecture})`;
+      if (data.meta.voicing_id !== undefined) updateVoicingUi(data.meta.voicing_id);
+      await refreshAmpList();
+      /* The amp id of the capture the server registered. It is NOT
+       * necessarily the last one in the list: loading a capture a second
+       * time overwrites the entry with the same name IN PLACE, so the old
+       * "the last one is the new one" guess selected the wrong capture and
+       * the badge showed a different model than the one that was loaded. */
+      const newAmpIdx = (data.amp_id !== undefined && data.amp_id >= 0)
+        ? data.amp_id
+        : (data.total_amps ? data.total_amps - 1 : 20);
+      selectAmpProfile(newAmpIdx);
+    } else {
+      alert("Sample NAM Load Error: " + data.error);
+    }
+  } catch (err) {
+    alert("Sample NAM Network Error: " + err);
+  }
+}
+
+async function uploadIrFile(file) {
+  if (!file) return;
+  const buf = await file.arrayBuffer();
+  const res = await fetch("/api/load_ir", {
+    method: "POST",
+    headers: { "X-Filename": file.name, "Content-Type": "application/octet-stream" },
+    body: buf
+  });
+  const data = await res.json();
+  if (data.ok) {
+    document.getElementById("namModelBadge").textContent = `Loaded IR: ${file.name} (${data.meta.taps_loaded} Q18 taps)`;
+  } else {
+    alert("IR Load Error: " + data.error);
+  }
+}
+
+// Drag & Drop handlers
+["namDropZone", "irDropZone"].forEach(id => {
+  const z = document.getElementById(id);
+  z.addEventListener("dragover", (e) => { e.preventDefault(); z.classList.add("dragover"); });
+  z.addEventListener("dragleave", () => z.classList.remove("dragover"));
+  z.addEventListener("drop", (e) => {
+    e.preventDefault();
+    z.classList.remove("dragover");
+    const f = e.dataTransfer.files[0];
+    if (id === "namDropZone") uploadNamFile(f);
+    else uploadIrFile(f);
+  });
+});
+
+async function loadDevices() {
+  const res = await fetch("/api/devices");
+  const data = await res.json();
+  const sel = document.getElementById("deviceSelect");
+  sel.innerHTML = "";
+  data.devices.forEach(d => {
+    const opt = document.createElement("option");
+    opt.value = d.id;
+    opt.textContent = d.label;
+    if (d.id === data.active_id) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  document.getElementById("streamInfo").textContent = data.status;
+}
+
+function switchInputChannel(ch) {
+  apiPost("/api/sample_player", { input_channel: ch });
+}
+
+function switchAudioDevice() {
+  const id = document.getElementById("deviceSelect").value;
+  apiPost("/api/set_device", { id }).then(r => {
+    document.getElementById("streamInfo").textContent = r.status;
+  });
+}
+
+let g_sample_playing = true;
+let g_sample_loop = true;
+let g_is_live_input = false;
+
+function toggleInputSource() {
+  apiPost("/api/sample_player", { action: "toggle_input" }).then(res => {
+    if (res && res.ok) {
+      g_is_live_input = !!res.is_live_input;
+      updateInputModeUi(res);
+      updateSampleUi(res);
+    }
+  });
+}
+
+function updateInputModeUi(st) {
+  if (!st) return;
+  g_is_live_input = !!st.is_live_input;
+
+  const btn = document.getElementById("masterInputToggleBtn");
+  const led = document.getElementById("activeInputLed");
+  const title = document.getElementById("activeInputTitle");
+  const badge = document.getElementById("activeInputBadge");
+  const icon = document.getElementById("masterToggleIcon");
+  const text = document.getElementById("masterToggleText");
+  const sampleBar = document.getElementById("sampleControlBar");
+  const select = document.getElementById("testSignalSelect");
+
+  if (g_is_live_input) {
+    if (btn) {
+      btn.style.background = "#004d26";
+      btn.style.borderColor = "#00e676";
+      btn.style.boxShadow = "0 0 16px rgba(0,230,118,0.5)";
+    }
+    if (icon) icon.textContent = "🎸";
+    if (text) text.textContent = "SWITCH TO AUDIO SAMPLES";
+    if (led) {
+      led.style.background = "#00e676";
+      led.style.boxShadow = "0 0 10px #00e676";
+    }
+    if (title) {
+      title.textContent = "Live Guitar Input Active (ASIO In)";
+      title.style.color = "#00e676";
+    }
+    if (badge) {
+      badge.className = "badge green";
+      badge.textContent = "LIVE ASIO INPUT ON";
+    }
+    if (sampleBar) {
+      sampleBar.style.opacity = "0.55";
+    }
+    if (select && select.value !== "live") {
+      select.value = "live";
+    }
+  } else {
+    if (btn) {
+      btn.style.background = "#00381d";
+      btn.style.borderColor = "#00e676";
+      btn.style.boxShadow = "0 3px 12px rgba(0,0,0,0.4)";
+    }
+    if (icon) icon.textContent = "🔌";
+    if (text) text.textContent = "SWITCH TO LIVE ASIO GUITAR";
+    if (led) {
+      led.style.background = "#00e5ff";
+      led.style.boxShadow = "0 0 10px #00e5ff";
+    }
+    if (title) {
+      title.textContent = "DI Samples Mode";
+      title.style.color = "var(--accent)";
+    }
+    if (badge) {
+      badge.className = "badge amber";
+      badge.textContent = "SAMPLES LOOPING";
+    }
+    if (sampleBar) {
+      sampleBar.style.opacity = "1.0";
+    }
+    if (select && select.value === "live") {
+      select.value = st.last_sample_mode || "di_clean";
+    }
+  }
+}
+
+function updateSampleUi(state) {
+  if (!state) return;
+  if (state.playing !== undefined) g_sample_playing = state.playing;
+  if (state.loop !== undefined) g_sample_loop = state.loop;
+
+  const btn = document.getElementById("samplePlayBtn");
+  const icon = document.getElementById("samplePlayIcon");
+  const txt = document.getElementById("samplePlayText");
+  if (!btn || !icon || !txt) return;
+
+  if (g_sample_playing && !g_is_live_input) {
+    btn.style.background = "#c62828";
+    btn.style.borderColor = "#ff5252";
+    icon.textContent = "⏹";
+    txt.textContent = "Stop Sample";
+  } else {
+    btn.style.background = "#005b66";
+    btn.style.borderColor = "var(--accent)";
+    icon.textContent = "▶";
+    txt.textContent = "Play Guitar Sample";
+  }
+}
+
+function toggleSamplePlay() {
+  g_sample_playing = !g_sample_playing;
+  const mode = document.getElementById("testSignalSelect").value;
+  const trim_db = parseFloat(document.getElementById("inputTrimDb").value) || 0;
+  apiPost("/api/sample_player", {
+    mode: mode,
+    playing: g_sample_playing,
+    loop: g_sample_loop,
+    trim_db: trim_db
+  }).then(res => {
+    updateInputModeUi(res);
+    updateSampleUi(res);
+  });
+}
+
+function restartSample() {
+  const mode = document.getElementById("testSignalSelect").value;
+  const trim_db = parseFloat(document.getElementById("inputTrimDb").value) || 0;
+  g_sample_playing = true;
+  apiPost("/api/sample_player", {
+    mode: mode,
+    playing: true,
+    restart: true,
+    loop: g_sample_loop,
+    trim_db: trim_db
+  }).then(res => {
+    updateInputModeUi(res);
+    updateSampleUi(res);
+  });
+}
+
+function toggleSampleLoop() {
+  g_sample_loop = document.getElementById("sampleLoopCb").checked;
+  apiPost("/api/sample_player", {
+    loop: g_sample_loop
+  });
+}
+
+function setTestSignal() {
+  const mode = document.getElementById("testSignalSelect").value;
+  const trim_db = parseFloat(document.getElementById("inputTrimDb").value) || 0;
+  if (mode === "live") {
+    g_is_live_input = true;
+  } else {
+    g_is_live_input = false;
+    g_sample_playing = true;
+  }
+  apiPost("/api/test_signal", {
+    mode: mode,
+    playing: g_sample_playing,
+    loop: g_sample_loop,
+    trim_db: trim_db
+  }).then(res => {
+    updateInputModeUi(res);
+    updateSampleUi(res);
+  });
+}
+
+function loadIrBank(name) {
+  apiPost("/api/ir_bank", { name }).then(res => {
+    if (res.ok) {
+      const badge = document.getElementById("namModelBadge");
+      if (badge) badge.textContent = `IR: ${res.name.toUpperCase()} (${res.taps} taps)`;
+    } else {
+      alert("Error loading IR: " + (res.error || "Unknown"));
+    }
+  });
+}
+
+function drawScope(inArr, outArr) {
+  const w = scopeCanvas.width;
+  const h = scopeCanvas.height;
+  scopeCtx.fillStyle = "#080b10";
+  scopeCtx.fillRect(0, 0, w, h);
+
+  // Center line
+  scopeCtx.strokeStyle = "#1b2434";
+  scopeCtx.beginPath();
+  scopeCtx.moveTo(0, h / 2);
+  scopeCtx.lineTo(w, h / 2);
+  scopeCtx.stroke();
+
+  // Input trace (cyan)
+  scopeCtx.strokeStyle = "#00e5ff";
+  scopeCtx.lineWidth = 1.2;
+  scopeCtx.beginPath();
+  for (let i = 0; i < inArr.length; i++) {
+    const x = (i / (inArr.length - 1)) * w;
+    const y = (h / 2) - (inArr[i] * (h * 0.42));
+    if (i === 0) scopeCtx.moveTo(x, y);
+    else scopeCtx.lineTo(x, y);
+  }
+  scopeCtx.stroke();
+
+  // Processed Output trace (amber)
+  scopeCtx.strokeStyle = "#ffab00";
+  scopeCtx.lineWidth = 1.6;
+  scopeCtx.beginPath();
+  for (let i = 0; i < outArr.length; i++) {
+    const x = (i / (outArr.length - 1)) * w;
+    const y = (h / 2) - (outArr[i] * (h * 0.42));
+    if (i === 0) scopeCtx.moveTo(x, y);
+    else scopeCtx.lineTo(x, y);
+  }
+  scopeCtx.stroke();
+}
+
+function linToDb(peak) {
+  if (peak < 0.0001) return { pct: 0, txt: "-inf dB" };
+  const db = 20 * Math.log10(peak);
+  const pct = Math.max(0, Math.min(100, ((db + 60) / 60) * 100));
+  return { pct, txt: db.toFixed(1) + " dB" };
+}
+
+let g_display_mode = "live";
+let g_onyx_img = new Image();
+
+function onDisplayModeChange(val) {
+  g_display_mode = val;
+  if (val !== "live") {
+    g_onyx_img.onload = () => {
+      lcdCtx.drawImage(g_onyx_img, 0, 0, 240, 240);
+    };
+    g_onyx_img.src = "/onyx/" + val + "?t=" + Date.now();
+  }
+}
+
+async function loadOnyxScreens() {
+  try {
+    const res = await fetch("/api/onyx_screens");
+    const data = await res.json();
+    const sel = document.getElementById("onyxScreenSelect");
+    if (!sel || !data.screens) return;
+    data.screens.forEach(s => {
+      const opt = document.createElement("option");
+      opt.value = s;
+      const cleanName = s.replace(".png", "").replace(/^\d+[b]?_/, "").replace(/_/g, " ").toUpperCase();
+      opt.textContent = "🎨 " + cleanName;
+      sel.appendChild(opt);
+    });
+  } catch (e) {}
+}
+
+async function pollState() {
+  try {
+    const res = await fetch("/api/state");
+    const st = await res.json();
+
+    // 1. Draw 240x240 RGB565 LCD framebuffer (when in Live mode)
+    if (g_display_mode === "live") {
+      // Raw RGBA from /api/lcd: no base64, no JSON, no per-byte loop. (The server used to
+      // send the screen as 307 KB of base64 inside /api/state, which cost the Python audio
+      // callback its timing.)
+      const lr = await fetch("/api/lcd");
+      const px = new Uint8ClampedArray(await lr.arrayBuffer());
+      if (px.length === 240 * 240 * 4) lcdCtx.putImageData(new ImageData(px, 240, 240), 0, 0);
+    }
+
+    // 2. Telemetry badges & Bottom-Right Performance HUD
+    const t = st.telemetry;
+    const cpuPct = (t.cpu_total_permille / 10).toFixed(1);
+    const sramKb = (t.sram_used_bytes / 1024).toFixed(1);
+    // PA_DSP_POOL_BYTES (147,456 B) - the budget the firmware actually has.
+    const SRAM_BUDGET_KB = 144;
+    const estLatencyMs = ((64 / 44.1) * 1.5).toFixed(2); // Block buffer + FIR delay (~2.18ms)
+
+    document.getElementById("cpuBadge").textContent = `CPU: ${cpuPct}%`;
+    document.getElementById("sramBadge").textContent = `SRAM: ${sramKb} KB / ${SRAM_BUDGET_KB} KB`;
+
+    const audioBadge = document.getElementById("audioStatusBadge");
+    if (audioBadge && st.active_device_id !== undefined) {
+      if (!st.active_device_id || st.active_device_id === "offline") {
+        audioBadge.className = "badge";
+        audioBadge.textContent = "SAFE SIMULATION";
+      } else if (st.active_device_id.startsWith("asio:")) {
+        audioBadge.className = "badge green";
+        audioBadge.textContent = "ASIO STREAMING";
+      } else {
+        audioBadge.className = "badge green";
+        audioBadge.textContent = "STREAMING (SHARED)";
+      }
+    }
+
+    const hudCpu = document.getElementById("hudCpu");
+    const hudSram = document.getElementById("hudSram");
+    const hudLatency = document.getElementById("hudLatency");
+    if (hudCpu) hudCpu.textContent = `${cpuPct}%`;
+    if (hudSram) hudSram.textContent = `${sramKb} / ${SRAM_BUDGET_KB} KB`;
+    if (hudLatency) hudLatency.textContent = `${estLatencyMs} ms`;
+
+    // Sync Master Volume Dial if not currently being dragged by user
+    if (!masterDragging && t.master_volume !== undefined) {
+      updateMasterDial(t.master_volume);
+    }
+
+    // Sync Drum Machine state
+    if (t.drum_playing !== undefined) {
+      drumPlaying = t.drum_playing;
+      const btn = document.getElementById("drumToggleBtn");
+      if (btn) btn.textContent = drumPlaying ? "⏹ Stop Drums" : "▶ Start Drums";
+      const bpmEl = document.getElementById("drumBpm");
+      if (bpmEl && document.activeElement !== bpmEl) bpmEl.value = t.drum_bpm;
+      const patEl = document.getElementById("drumPattern");
+      if (patEl && document.activeElement !== patEl) patEl.value = t.drum_pattern;
+    }
+
+    // Sync Bluetooth state
+    if (t.bt_state !== undefined && t.bt_state !== currentBtState) {
+      updateBtBtn(t.bt_state);
+    }
+
+    if (t.slot_active_mask !== currentSlotMask) {
+      currentSlotMask = t.slot_active_mask;
+      renderSlots();
+    }
+
+    // 3. Tuner badge
+    if (t.tuner_locked) {
+      const n = NOTE_NAMES[t.tuner_note % 12] + t.tuner_octave;
+      const c = (t.tuner_cents >= 0 ? "+" : "") + t.tuner_cents + "c";
+      document.getElementById("tunerNoteBadge").textContent = `${n} (${c}) • ${(t.tuner_freq_tenths/10).toFixed(1)} Hz`;
+    } else {
+      document.getElementById("tunerNoteBadge").textContent = t.tuner_active ? "TUNER LISTENING..." : "TUNER OFF";
+    }
+
+    // 4. Audio Peak Meters & Oscilloscope
+    const inM = linToDb(t.in_peak);
+    const outM = linToDb(t.out_peak);
+    document.getElementById("inMeterBar").style.width = inM.pct + "%";
+    document.getElementById("inMeterTxt").textContent = inM.txt;
+    document.getElementById("outMeterBar").style.width = outM.pct + "%";
+    document.getElementById("outMeterTxt").textContent = outM.txt;
+
+    drawScope(st.scope_in, st.scope_out);
+
+    // 4b. Sync Input Mode (Live ASIO Jack vs Samples) & playback progress bar
+    if (st.is_live_input !== undefined && st.is_live_input !== g_is_live_input) {
+      updateInputModeUi(st);
+    }
+    if (st.sample_playing !== undefined && st.sample_playing !== g_sample_playing) {
+      g_sample_playing = st.sample_playing;
+      updateSampleUi(st);
+    }
+    if (st.sample_pos_pct !== undefined) {
+      const p = Math.min(100, Math.max(0, st.sample_pos_pct));
+      const pBar = document.getElementById("sampleProgressBar");
+      const pTxt = document.getElementById("sampleProgressTxt");
+      if (pBar) pBar.style.width = p + "%";
+      if (pTxt) pTxt.textContent = p.toFixed(0) + "%";
+    }
+    if (st.test_mode && document.activeElement !== document.getElementById("testSignalSelect")) {
+      const sel = document.getElementById("testSignalSelect");
+      if (sel && sel.value !== st.test_mode && Array.from(sel.options).some(o => o.value === st.test_mode)) {
+        sel.value = st.test_mode;
+      }
+    }
+    if (st.input_channel && document.activeElement !== document.getElementById("inputChannelSelect")) {
+      const chSel = document.getElementById("inputChannelSelect");
+      if (chSel && chSel.value !== st.input_channel) {
+        chSel.value = st.input_channel;
+      }
+    }
+
+    // 4c. Sync Adaptive Voicing Profile
+    if (st.wavenet_voicing !== undefined) {
+      updateVoicingUi(st.wavenet_voicing);
+    }
+
+    // 4d. Sync Slot Types (Preset changes or Onyx encoder model changes)
+    if (st.slot_types && Array.isArray(st.slot_types)) {
+      // types whose knob labels / units depend on the type: DYN, MOD, REV
+      for (const s of [0, 4, 5, 6, 7]) {
+        const cur = st.slot_types[s];
+        if (cur !== undefined && cur !== slotTypesCurrent[s]) {
+          slotTypesCurrent[s] = cur;
+          if (selectedSlot === s) { updateSlotTypeSelector(s); renderParamSliders(s); }
+        }
+      }
+      const curAmp = st.slot_types[2];
+      if (curAmp !== undefined && curAmp !== slotTypesCurrent[2]) {
+        slotTypesCurrent[2] = curAmp;
+        document.querySelectorAll(".preset-amps button").forEach((b, idx) => {
+          b.classList.toggle("active", idx === curAmp);
+        });
+        if (selectedSlot === 2) updateSlotTypeSelector(2);
+      }
+    }
+
+    // 4e. Sync Slot Parameters from Telemetry (Hardware knobs / preset loads)
+    if (st.slot_params && Array.isArray(st.slot_params)) {
+      st.slot_params.forEach((pArr, s) => {
+        if (!slotParamsCurrent[s]) slotParamsCurrent[s] = [];
+        pArr.forEach((v, pIdx) => {
+          slotParamsCurrent[s][pIdx] = v;
+          if (s === selectedSlot) {
+            const slider = document.getElementById(`pSlider${pIdx}`);
+            const labelEl = document.getElementById(`pLabel${pIdx}`);
+            if (slider && document.activeElement !== slider) {
+              slider.value = v;
+            }
+            if (labelEl) {
+              const lbl = paramLabels(s)[pIdx] || `Param ${pIdx + 1}`;
+              labelEl.innerHTML = `${pIdx + 1}. ${lbl}: <strong style="color:var(--accent)">${paramValueText(s, pIdx, v)}</strong>`;
+            }
+          }
+        });
+      });
+    }
+
+    // 5. Per-stage CPU breakdown
+    const sg = document.getElementById("cpuStagesGrid");
+    sg.innerHTML = STAGE_NAMES.map((name, idx) => {
+      const pct = ((t.cpu_stage_permille[idx] || 0) / 10).toFixed(1);
+      return `<div style="background:var(--panel2); padding:6px 8px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between;">
+        <span style="color:var(--muted)">${name}</span>
+        <strong style="color:var(--accent)">${pct}%</strong>
+      </div>`;
+    }).join("");
+
+  } catch (e) {
+    // ignore transient poll errors
+  }
+  setTimeout(pollState, 50);
+}
+
+function initDrumPatterns() {
+  const sel = document.getElementById("drumPattern");
+  if (!sel) return;
+  sel.innerHTML = GROOVE_NAMES.map((name, idx) => `<option value="${idx}">${idx}: ${name}</option>`).join("");
+}
+
+initDrumPatterns();
+renderSlots();
+refreshAmpList();
+loadDevices();
+loadOnyxScreens();
+pollState();
+</script>
+
+<!-- Bottom-Right Floating Performance HUD -->
+<div class="perf-hud" id="perfHud">
+  <div class="perf-hud-title">
+    <span>AC791N HIL TELEMETRY</span>
+    <span style="color:var(--green)">● LIVE</span>
+  </div>
+  <div class="perf-hud-row">
+    <span>% Utilization:</span>
+    <span class="perf-hud-val accent" id="hudCpu">0.0%</span>
+  </div>
+  <div class="perf-hud-row">
+    <span>SRAM Usage:</span>
+    <span class="perf-hud-val amber" id="hudSram">0.0 / 144 KB</span>
+  </div>
+  <div class="perf-hud-row">
+    <span>Est. Response:</span>
+    <span class="perf-hud-val green" id="hudLatency">2.18 ms</span>
+  </div>
+</div>
+
+</body>
+</html>

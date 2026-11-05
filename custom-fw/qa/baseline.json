@@ -1,0 +1,12 @@
+{
+  "sections": {
+    ".text": 362776,
+    ".ram_text": 0,
+    ".c1_text": 48,
+    ".data": 2612,
+    ".bss": 95528,
+    ".pool": 343840
+  },
+  "stock_fwsc_sha256": "9584e81da98215e8e70ddffc28311423ceaa1a5a8a12a478dc68f4679e10902b",
+  "updated": "2026-11-05"
+}
