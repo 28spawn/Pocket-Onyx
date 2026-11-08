@@ -104,7 +104,32 @@ progress { width:100%; height:8px; }
   <input type="file" id="replaceFile" hidden>
   <progress id="up" max="100" value="0" hidden></progress>
 </section>
+<section id="t-presets" hidden>
+  <h2>Save and restore presets</h2>
+  <p class="note">All 80 presets as one <b>.json</b> file: save a backup from the unit, edit it in a text editor if you like, and write it back. A restore keeps every preset exactly as it was saved (its save counter and EMPTY slots too) and checks it by reading it back. The restored preset is used the next time you select its slot. Needs firmware 1.08 or newer.</p>
+  <p class="pre"><button id="prRead" disabled>Read all 80 presets from the unit</button><button id="prSave" disabled>Download as .json</button></p>
+  <h2>Import a bank file</h2>
+  <p class="note">A <b>.json</b> backup, or an <b>.abkx</b> bank exported from the stock app (80 records of 92 bytes). An .abkx is converted here in the browser; the file is only read and never uploaded anywhere. Its stock effects are mapped onto the Onyx slots (see MIDI-MAP-CUSTOM.md); that file has no preset names, so they are called P01...P80.</p>
+  <div class="drop"><input type="file" id="prFile" accept=".json,.abkx"><div class="kv" id="prInfo">no file</div></div>
+  <p class="pre"><label class="note"><input type="checkbox" id="prChain"> keep the file's chain order</label>
+    <label class="note"><input type="checkbox" id="prLevel"> copy the AMP Level into MASTER</label>
+    <label class="note">names <input id="prPrefix" value="P" size="4"></label>
+    <label class="note">slots <input id="prSlots" value="1-80" size="8" title="e.g. 41-80 or 1-10,15"></label></p>
+  <table class="tbl" id="prTable"></table>
+  <p class="pre"><button id="prWrite" class="pri" disabled>Write to the unit</button><button id="prDl" disabled>Download the converted .json</button></p>
+  <progress id="prBar" max="100" value="0" hidden></progress>
+</section>
 <section id="t-fw" hidden>
+  <div id="fwWarn" style="border:2px solid #e05a5a;border-radius:8px;padding:12px 14px;margin:0 0 14px">
+    <div style="font-weight:700;font-size:1.05rem;color:#e05a5a">&#9888; Back up your unit's critical flash regions before you install any different firmware</div>
+    <p class="note" style="margin:6px 0">An update or a flash tool can erase what nothing can make again: the stock record log with the <b>radio calibration</b> (without it Bluetooth does not start; one run of a flash tool erased it once), the Bluetooth MAC and RF calibration (BTIF), the factory calibration (USER), <code>key_mac</code>, and the boot head. The backup is about 60 KB, takes under a minute with the amp idle, and is saved to your computer.</p>
+    <div class="pre"><button id="fwBkBtn" class="pri" disabled>Back up the critical regions</button>
+      <label class="note">or use a saved one <input type="file" id="fwBkLoad" accept=".json,.pabackup"></label></div>
+    <progress id="fwBkBar" max="100" value="0" hidden></progress>
+    <div class="kv" id="fwBkInfo">connect over USB to check for a backup of this unit</div>
+    <div class="kv" id="fwCalInfo"></div>
+    <label class="note" id="fwAcceptRow"><input type="checkbox" id="fwBkAccept"> I have read the warning and I accept the risk of flashing <b>without</b> a backup of this unit</label>
+  </div>
   <h2>Firmware update</h2>
   <p class="note">Over USB MIDI, in one click, the way the Pendel installer does it: the running firmware checks the package and stages its update loader, the loader writes the firmware and the unit restarts. Chrome or Edge (Web MIDI with SysEx), the unit connected directly by a USB data cable, no other program using it. Do not unplug while it works; if it is cut off the unit stays in update mode and the same button continues.</p>
   <h2>Install a firmware</h2>
@@ -245,7 +270,7 @@ function stripNam(f, filename) {
 // Same rules as emu/nam_loader.py: a ToneHunt A2 SlimmableContainer is read for its LITE submodel (1870 / 1871 weights, 7,504 bytes: the Full one, 12,146 weights, is 48 KB and does not fit the unit),
 // the head scale is appended when the weights are 1870, the name comes from the metadata, a capture whose name says CAB (and not "cab free" / "no cab") is flagged as having its cabinet, and a
 // recorded input level calibrates the input trim against the unit's ADC reference (4 dBu). ----
-const NAM_ADC_REF_DBU = 13.0;
+const NAM_ADC_REF_DBU = 4.0;
 function namHasBakedCab(gear, name, file) {
   const names = [name.toLowerCase(), file.toLowerCase()];
   if (names.some((n) => /cab[ _\-]*free|no[ _\-]*cab|without[ _\-]*cab|w\/o[ _\-]*cab|cabless|cab[ _\-]*less|amp[ _\-]*only/.test(n))) return false;
@@ -272,7 +297,7 @@ function namJson(f, filename) {
   if (weights.some((x) => !Number.isFinite(x))) return { error: "the weights contain a value that is not a number" };
   const meta = m.metadata || data.metadata || {}, name = String(meta.name || meta.gear_model || filename || "NAM");
   const gear = String(meta.gear_type || "").toLowerCase(), cab = namHasBakedCab(gear, name, filename || "");
-  const lvl = namInputLevel(meta, data), trim = lvl === null ? 1.0 : Number((Math.max(0.60, Math.min(1.80, Math.pow(10, (NAM_ADC_REF_DBU - lvl) / 20)))).toFixed(4));
+  const lvl = namInputLevel(meta, data), trim = lvl === null ? 1.0 : Number((Math.pow(10, (NAM_ADC_REF_DBU - lvl) / 20)).toFixed(4));
   const out = new Uint8Array(20 + weights.length * 4), dv = new DataView(out.buffer);
   out.set([0x57, 0x41, 0x56, 0x45], 0); dv.setUint32(4, weights.length, true); dv.setFloat32(8, head, true); dv.setUint32(12, cab ? 1 : 0, true); dv.setFloat32(16, trim, true);
   weights.forEach((w, i) => dv.setFloat32(20 + i * 4, w, true));
@@ -495,6 +520,192 @@ function dryRun(dump, image) {                       // dump = the RAW flash (ra
 // a check of the unit's flash against the image after the update: every sector at a few places (quick) or entirely
 function verifyOffsets(full) { return full ? [[0, SECTOR]] : [[0, 16], [0x400, 16], [0x800, 16], [0xFF0, 16]]; }
 //CORE-END
+// ---- presets: backup, restore and the import of a vendor .abkx bank. The record is the unit's own pa_preset_t (164 bytes); the same JSON is written by tools/preset_bank_pc.py and
+//      tools/abkx_to_json.py (which this is a port of: test/test_abkx_import.py checks both give the same document). The .abkx is read only; nothing of it is kept. ----
+const PRESET_MAGIC = 0x32504D50, PRESET_SIZE = 164, PRESET_COUNT = 80;
+function crc32(b) { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) { c ^= b[i]; for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xEDB88320 & -(c & 1)); } return (~c) >>> 0; }
+function presetToRecord(o) {
+  const q = [].concat(...o.params).map((v) => v & 0xFFFF);
+  if (q.length !== 48 || o.slot_order.length !== 8 || o.slot_type.length !== 8 || o.stomp_map.length !== 4) throw new Error("slot_order/slot_type need 8 entries, stomp_map 4, params 8 rows of 6");
+  const r = new Uint8Array(PRESET_SIZE), v = new DataView(r.buffer);
+  const flags = ((o.flags || 0) & ~1) | (o.empty ? 1 : 0), nm = String(o.name).slice(0, 23);
+  v.setUint32(0, PRESET_MAGIC, true); v.setUint32(4, o.seq >>> 0, true);
+  for (let i = 0; i < nm.length; i++) r[8 + i] = nm.charCodeAt(i) & 0xFF;
+  v.setUint16(32, o.bpm, true); r[34] = o.genre; r[35] = o.custom_cab_idx; r[36] = o.custom_cab_blend; v.setInt8(37, o.input_trim_db); r[38] = o.gate_threshold_pct; r[39] = o.slot_enable_mask;
+  o.slot_order.forEach((x, i) => { r[40 + i] = x; }); r[48] = o.amp_model; r[49] = o.cab_model; r[50] = o.preset_vol; r[51] = flags;
+  o.slot_type.forEach((x, i) => { r[52 + i] = x; }); o.stomp_map.forEach((x, i) => { r[60 + i] = x; }); q.forEach((x, i) => v.setUint16(64 + 2 * i, x, true));
+  v.setUint32(160, crc32(r.subarray(0, 160)), true);
+  return r;
+}
+function recordOk(r) { const v = new DataView(r.buffer, r.byteOffset, r.length); return r.length === PRESET_SIZE && v.getUint32(0, true) === PRESET_MAGIC && v.getUint32(160, true) === crc32(r.subarray(0, 160)); }
+function recordToPreset(slot, r) {
+  const v = new DataView(r.buffer, r.byteOffset, r.length), q = []; for (let i = 0; i < 48; i++) q.push(v.getUint16(64 + 2 * i, true));
+  let end = 8; while (end < 32 && r[end]) end++;
+  const rows = (a) => [0, 1, 2, 3, 4, 5, 6, 7].map((i) => a.slice(i * 6, i * 6 + 6));
+  return { slot: slot + 1, name: String.fromCharCode(...r.subarray(8, end)), empty: !!(r[51] & 1), seq: v.getUint32(4, true), bpm: v.getUint16(32, true), genre: r[34],
+    custom_cab_idx: r[35], custom_cab_blend: r[36], input_trim_db: v.getInt8(37), gate_threshold_pct: r[38], slot_enable_mask: r[39], slot_order: Array.from(r.subarray(40, 48)),
+    amp_model: r[48], cab_model: r[49], preset_vol: r[50], flags: r[51], slot_type: Array.from(r.subarray(52, 60)), stomp_map: Array.from(r.subarray(60, 64)),
+    params: rows(q), params_pct: rows(q.map((x) => Math.round(x * 100 / 65535))) };
+}
+const AB_REC = 92, AB_TRAILER = 10, AB_SLOT = { FX: 0x14, AMP: 0x20, MOD: 0x2C, DLY: 0x38, REV: 0x44, CAB: 0x50 }, AB_CODES = ["FX", "AMP", "MOD", "DLY", "REV", "CAB"];
+const OS = { DYN: 0, DRIVE: 1, AMP: 2, CAB: 3, EQ: 4, MOD: 5, DLY: 6, REV: 7 };
+const AB_CHAIN = { FX: OS.DYN, AMP: OS.AMP, MOD: OS.MOD, DLY: OS.DLY, REV: OS.REV, CAB: OS.CAB };
+const AB_MOD = { 0: 0, 1: 1, 2: 3, 3: 2, 4: 4, 5: 5, 6: 6 }, AB_DLY_EXT = { 1: 5, 2: 6, 3: 7, 4: 8 }, AB_REV_EXT = { 1: 6, 2: 0 };
+const abPct = (v) => Math.max(0, Math.min(100, Math.trunc(v))), abQ16 = (v) => Math.floor((abPct(v) * 65535 + 50) / 100);
+function abNeutral() { const p = Array.from({ length: 8 }, () => [50, 50, 50, 50, 50, 50]); p[OS.DYN][3] = 100; p[OS.CAB][0] = 100; p[OS.CAB][1] = 0; p[OS.CAB][2] = 0; p[OS.MOD][2] = 12; p[OS.DLY][1] = 15; p[OS.DLY][2] = 10; p[OS.REV][1] = 0; return p; }
+function abParams(r, m) { const b = AB_SLOT[m]; return [0, 1, 2, 3, 4, 5].map((k) => r[b + 2 * k] | (r[b + 2 * k + 1] << 8)); }
+function abExt(r) {
+  if (!(r[1] & 0x80) || ((r[1] >> 5) & 3) !== 1) return null;
+  const c = r[1] & 0x1F;
+  return { dly_ext: c % 5, rev_ext: Math.floor(c / 5) % 3, dyn_ext: Math.floor(c / 15), amp_pres: r[0x2A], input_trim_db: r[0x2B] - 50, drive_on: Math.floor(r[0x36] / 50), drive_type: r[0x36] % 50,
+    eq_on: Math.floor(r[0x4E] / 50), eq_type: r[0x4E] % 50, drive_drive: r[0x56], drive_tone: r[0x58], drive_level: r[0x5A], eq_k: [r[0x37], r[0x4F], r[0x57], r[0x59], r[0x5B]] };
+}
+function abEmpty(slot, genre) {
+  const pct = abNeutral();
+  return { slot, name: "EMPTY", empty: true, seq: 1, bpm: 120, genre, custom_cab_idx: 255, custom_cab_blend: 100, input_trim_db: 0, gate_threshold_pct: 0, slot_enable_mask: 0, slot_order: [0, 1, 2, 3, 4, 5, 6, 7],
+    amp_model: 0, cab_model: 0, preset_vol: 70, flags: 1, slot_type: [3, 0, 0, 0, 0, 0, 0, 0], stomp_map: [1, 5, 6, 7], params: pct.map((row) => row.map(abQ16)), params_pct: pct };
+}
+function abPreset(r, index, o) {
+  const ext = abExt(r), en = [0, 1, 2, 3, 4, 5].map((c) => r[0x08 + c]), driveOn = !!(ext && ext.drive_on), eqOn = !!(ext && ext.eq_on);
+  if (!en.some((x) => x) && !driveOn && !eqOn) return abEmpty(index + 1, o.genre);
+  const p = abNeutral(), t = [0, 0, 0, 0, 0, 0, 0, 0]; let mask = 0, ampT = 0, cabT = 0;
+  { // DYN
+    const v = abParams(r, "FX"); let ty = r[0x0E]; if (ext && ext.dyn_ext === 1) ty = 4;
+    const ok = [0, 1, 2, 3, 4].includes(ty); if (!ok) ty = 0;
+    if (ok) { p[OS.DYN][0] = abPct(v[0]); if (ty === 1) p[OS.DYN][3] = abPct(v[1]); else if (ty === 2 || ty === 4) { p[OS.DYN][1] = abPct(v[1]); p[OS.DYN][2] = abPct(v[2]); p[OS.DYN][3] = abPct(v[3] * 2); } }
+    t[OS.DYN] = ty; if (en[0] && ok) mask |= 1 << OS.DYN;
+  }
+  { // AMP
+    const v = abParams(r, "AMP"), a = r[0x0E + 1]; ampT = a < 20 ? a : 0;
+    p[OS.AMP][0] = abPct(v[0]); p[OS.AMP][1] = abPct(v[2]); p[OS.AMP][2] = abPct(v[3]); p[OS.AMP][3] = abPct(v[4]); p[OS.AMP][4] = ext ? abPct(ext.amp_pres) : 50; p[OS.AMP][5] = o.copyAmpLevel ? abPct(v[1]) : 50;
+    t[OS.AMP] = ampT; if (en[1]) mask |= 1 << OS.AMP;
+  }
+  { // CAB
+    const v = abParams(r, "CAB"), c = r[0x0E + 5]; cabT = c < 20 ? c : 0;
+    p[OS.CAB][0] = abPct(v[0]); p[OS.CAB][1] = abPct(v[1]); p[OS.CAB][2] = abPct(100 - v[2]); t[OS.CAB] = cabT; if (en[5]) mask |= 1 << OS.CAB;
+  }
+  { // MOD
+    const v = abParams(r, "MOD"), ty = AB_MOD[r[0x0E + 2]], ok = ty !== undefined;
+    if (ok) {
+      const m = p[OS.MOD];
+      if (ty === 0) { m[0] = abPct(v[0]); m[1] = abPct(v[1]); m[2] = abPct(v[2]); }
+      else if (ty === 1) { m[0] = abPct(v[0]); m[1] = abPct(v[2]); m[3] = abPct(v[3]); }
+      else if (ty === 2) { m[0] = abPct(v[0]); m[1] = abPct(v[1]); m[3] = abPct(v[2]); m[2] = abPct(v[3]); }
+      else if (ty === 3 || ty === 4) { m[0] = abPct(v[0]); m[1] = abPct(v[1]); }
+      else if (ty === 5) { m[0] = abPct(v[0]); m[1] = abPct(v[1]); m[2] = abPct(v[2]); }   // UNIVIBE -> PHASER (below)
+      else { m[0] = abPct(v[0]); m[1] = abPct(Math.floor((v[1] + v[2]) / 2)); m[2] = abPct(v[3]); m[3] = abPct(v[4]); }
+    }
+    t[OS.MOD] = ok ? (ty === 5 ? 1 : ty) : 0; if (en[2] && ok) mask |= 1 << OS.MOD;
+  }
+  { // DLY
+    const v = abParams(r, "DLY"); let ty = r[0x0E + 3]; if (ext && ext.dly_ext && AB_DLY_EXT[ext.dly_ext] !== undefined) ty = AB_DLY_EXT[ext.dly_ext]; if (!(ty >= 0 && ty <= 8)) ty = 0;
+    p[OS.DLY][0] = abPct(v[0]); p[OS.DLY][1] = abPct(v[1]); p[OS.DLY][2] = abPct(v[2]); p[OS.DLY][3] = ty === 3 ? 0 : abPct(v[3]); t[OS.DLY] = ty; if (en[3]) mask |= 1 << OS.DLY;
+  }
+  { // REV
+    const v = abParams(r, "REV"); let ty = r[0x0E + 4]; if (ext && ext.rev_ext && AB_REV_EXT[ext.rev_ext] !== undefined) ty = AB_REV_EXT[ext.rev_ext]; if (!(ty >= 0 && ty <= 6)) ty = 0;
+    if (ty === 4) { p[OS.REV][0] = abPct(v[0]); p[OS.REV][3] = abPct(v[1]); p[OS.REV][2] = abPct(v[2]); }
+    else { p[OS.REV][0] = abPct(v[0]); p[OS.REV][1] = abPct(v[2]); p[OS.REV][2] = abPct(v[3]); p[OS.REV][3] = abPct(v[1]); }
+    t[OS.REV] = ty; if (en[4]) mask |= 1 << OS.REV;
+  }
+  if (driveOn) { t[OS.DRIVE] = ext.drive_type % 6; p[OS.DRIVE][0] = abPct(ext.drive_drive); p[OS.DRIVE][1] = abPct(ext.drive_tone); p[OS.DRIVE][2] = abPct(ext.drive_level); mask |= 1 << OS.DRIVE; }
+  if (eqOn) { t[OS.EQ] = ext.eq_type % 3; for (let i = 0; i < 5; i++) p[OS.EQ][i] = abPct(ext.eq_k[i]); mask |= 1 << OS.EQ; }
+  let order = [0, 1, 2, 3, 4, 5, 6, 7];
+  if (o.preserveChain) {
+    order = [];
+    for (const code of Array.from(r.subarray(2, 8))) { const sl = AB_CHAIN[AB_CODES[code]]; if (sl === OS.AMP) order.push(OS.DRIVE); order.push(sl); if (sl === OS.CAB) order.push(OS.EQ); }
+    for (let s = 0; s < 8; s++) if (!order.includes(s)) order.push(s);
+  }
+  const trim = ext ? Math.max(-12, Math.min(12, ext.input_trim_db)) : 0;
+  return { slot: index + 1, name: (o.namePrefix + String(index + 1).padStart(2, "0")).slice(0, 23), empty: false, seq: 2, bpm: 120, genre: o.genre, custom_cab_idx: 255, custom_cab_blend: 100,
+    input_trim_db: trim, gate_threshold_pct: 0, slot_enable_mask: mask, slot_order: order, amp_model: ampT, cab_model: cabT, preset_vol: abPct(r[0]), flags: 0, slot_type: t, stomp_map: [1, 5, 6, 7],
+    params: p.map((row) => row.map(abQ16)), params_pct: p };
+}
+// a whole 7,370-byte bank -> the Onyx preset document (throws on anything that is not a bank)
+function abkxConvert(data, opt) {
+  const o = Object.assign({ preserveChain: false, copyAmpLevel: false, namePrefix: "P", genre: 7 }, opt || {}); o.genre = Math.max(0, Math.min(7, o.genre | 0));
+  if (data.length !== PRESET_COUNT * AB_REC + AB_TRAILER) throw new Error("expected " + (PRESET_COUNT * AB_REC + AB_TRAILER) + " bytes, got " + data.length);
+  if (String.fromCharCode(...data.subarray(PRESET_COUNT * AB_REC, PRESET_COUNT * AB_REC + 8)) !== "PATCHEND") throw new Error("missing PATCHEND trailer");
+  const last = data[data.length - 1]; if (last !== 0 && last !== 0x45) throw new Error("unexpected trailer byte 0x" + last.toString(16));
+  const presets = [];
+  for (let i = 0; i < PRESET_COUNT; i++) {
+    const r = data.subarray(i * AB_REC, (i + 1) * AB_REC);
+    if (Array.from(r.subarray(2, 8)).sort().join() !== "0,1,2,3,4,5") throw new Error("slot " + (i + 1) + ": chain order is not a permutation of 0..5");
+    presets.push(abPreset(r, i, o));
+  }
+  return { format: "pocket-amp-presets", version: 1, record_size: PRESET_SIZE, note: "Onyx preset backup converted from an 80-slot 92-byte bank. Edit names and values freely; 'params' are Q16 (0..65535 = 0..100 %), 'params_pct' is for reading only. Slot order: DYN DRV AMP CAB EQ MOD DLY REV.", presets };
+}
+// a JSON document (from the PC tool, this page or abkxConvert) -> 80 records (null where a preset is missing or unreadable); throws on a file that is not one
+function presetsFromDoc(doc) {
+  if (!doc || doc.format !== "pocket-amp-presets" || !Array.isArray(doc.presets)) throw new Error("not a pocket-amp-presets file");
+  const out = new Array(PRESET_COUNT).fill(null);
+  for (const o of doc.presets) { const i = (o.slot | 0) - 1; if (i >= 0 && i < PRESET_COUNT && !o.unreadable) out[i] = presetToRecord(o); }
+  return out;
+}
+// ---- the backup of the critical flash regions (Firmware tab) ----
+// What a flash tool or an update can destroy and nothing can make again: the boot head (the way back into download mode), the stock's record log (it holds the radio calibration: one run of a flash tool
+// once erased it and the Bluetooth radio refused to start), BTIF (the Bluetooth MAC and RF calibration), USER and key_mac (unique to the unit) and the stock's saved presets. About 60 KB.
+const BACKUP_FORMAT = "pocket-amp-backup";
+const BACKUP_RANGES = [
+  { name: "boot head", addr: 0x000000, len: 0x4000 },
+  { name: "V1.05 trailer sector", addr: 0x0B4000, len: 0x1000 },
+  { name: "stock record log (radio calibration)", addr: 0x0B5000, len: 0x3000 },
+  { name: "BTIF (Bluetooth MAC + RF calibration)", addr: 0x0BD000, len: 0x1000 },
+  { name: "USER (factory calibration)", addr: 0x0BE000, len: 0x1000 },
+  { name: "stock saved presets", addr: 0x0FB000, len: 0x4000 },
+  { name: "key_mac", addr: 0x0FF000, len: 0x1000 },
+];
+const bkHex = (u8) => Array.from(u8, (x) => x.toString(16).padStart(2, "0")).join("");
+async function bkSha(u8) { return bkHex(new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", u8))); }
+function bkB64(u8) { let t = ""; for (let i = 0; i < u8.length; i += 0x8000) t += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(t); }
+function bkUnb64(t) { const b = atob(t), o = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) o[i] = b.charCodeAt(i); return o; }
+// the flash-read command (firmware 1.16): [addr u32 LE, length <= 128] -> reply 0x65 [addr u32 LE, length, status, data...]
+function flashReadFrame(addr, n) { return buildFrame(84, [addr & 255, (addr >>> 8) & 255, (addr >>> 16) & 255, (addr >>> 24) & 255, n]); }
+function flashReadParse(d) { // the data of a 0x65 reply -> {addr, ok, bytes}
+  if (!d || d.length < 6) return null;
+  const addr = (d[0] | (d[1] << 8) | (d[2] << 16) | (d[3] << 24)) >>> 0, n = d[4];
+  return { addr, ok: d[5] === 0 && d.length >= 6 + n, bytes: Uint8Array.from(d.slice(6, 6 + n)) };
+}
+// who the unit is: the first 64 bytes of BTIF, USER and key_mac (the sectors that are unique to a unit)
+function backupIdentityOf(btif64, user64, keymac64) { return bkHex(btif64) + "|" + bkHex(user64) + "|" + bkHex(keymac64); }
+function backupDocIdentity(doc) {
+  const g = (addr) => { const r = (doc.ranges || []).find((x) => x.addr === addr); return r ? bkUnb64(r.b64).subarray(0, 64) : new Uint8Array(64); };
+  return backupIdentityOf(g(0x0BD000), g(0x0BE000), g(0x0FF000));
+}
+// parts: [{addr, bytes}] in BACKUP_RANGES order -> the document that is saved
+async function backupDocBuild(parts, meta) {
+  const ranges = [];
+  for (const r of BACKUP_RANGES) {
+    const part = parts.find((x) => x.addr === r.addr);
+    if (!part || part.bytes.length !== r.len) throw new Error("the range " + r.name + " is incomplete");
+    ranges.push({ name: r.name, addr: r.addr, len: r.len, sha256: await bkSha(part.bytes), b64: bkB64(part.bytes) });
+  }
+  return { format: BACKUP_FORMAT, version: 1, created: (meta && meta.created) || new Date().toISOString(), build: (meta && meta.build) || "", note: "the critical regions of one Pocket AMP, read through the running firmware; keep it with the unit", ranges };
+}
+// {ok, problems[]}: every range of BACKUP_RANGES present at the right size and its SHA-256 matches
+async function backupDocVerify(doc) {
+  const problems = [];
+  if (!doc || doc.format !== BACKUP_FORMAT || !Array.isArray(doc.ranges)) return { ok: false, problems: ["not a pocket-amp-backup file"] };
+  for (const r of BACKUP_RANGES) {
+    const x = doc.ranges.find((q) => q.addr === r.addr);
+    if (!x || x.len !== r.len) { problems.push(r.name + " is missing"); continue; }
+    let b; try { b = bkUnb64(x.b64); } catch (_) { problems.push(r.name + " is unreadable"); continue; }
+    if (b.length !== r.len || (await bkSha(b)) !== x.sha256) problems.push(r.name + " does not match its SHA-256");
+  }
+  return { ok: problems.length === 0, problems };
+}
+// the stock's record log starts with 55 AA AA 55; blank (FF FF FF FF) means it was erased
+function calLogStatus(head4) {
+  const h = Array.from(head4 || []);
+  if (h.length >= 4 && h[0] === 0x55 && h[1] === 0xAA && h[2] === 0xAA && h[3] === 0x55) return "present";
+  if (h.length >= 4 && h.every((x) => x === 0xFF)) return "blank";
+  return "unknown";
+}
+// the flash buttons: allowed with a backup of THIS unit, or when the person has read the warning and accepts the risk
+function flashGate(backupStatus, accepted) {
+  if (backupStatus === "ok") return { allowed: true, reason: "a backup of this unit is on record" };
+  if (accepted) return { allowed: true, reason: "the risk was accepted without a backup" };
+  return { allowed: false, reason: backupStatus === "other" ? "the backup on record belongs to another unit" : "no backup of this unit: make one, or accept the risk" };
+}
 if (typeof document !== "undefined") {
 const $ = (id) => document.getElementById(id);
 const logEl = $("log");
@@ -505,7 +716,7 @@ const hex = (a) => Array.from(a, (b) => b.toString(16).padStart(2, "0")).join(" 
 // ---- transports ----
 const MIDI_SVC = "03b80e5a-ede8-4b33-a751-6ce34ec4c700", MIDI_CHR = "7772e5db-3868-4112-a1a9-f2669d106bf3";
 let link = null, rx = [], waiter = null, state = null, names = { amp: [], cab: [], firstAmp: 20, firstCab: 20, rev: 0 }, busy = false;
-function onFrame(fr) { if (diagWait) { const d = diagParse(fr); if (d) { diagWait(d); return; } } const r = parseReply(fr); if (!r) return; if (waiter && waiter.type === r.type && (!waiter.match || waiter.match(r.data))) { const w = waiter; waiter = null; w.res(r.data); } }
+function onFrame(fr) { if (diagWait) { const d = diagParse(fr); if (d) { diagWait(d); return; } } const r = parseReply(fr); if (!r) return; if (waiter && waiter.type === r.type) { const w = waiter; waiter = null; w.res(r.data); } }
 async function openMidi() {
   if (!navigator.requestMIDIAccess) throw new Error("Web MIDI is not available in this browser (use Chrome or Edge)");
   const acc = await navigator.requestMIDIAccess({ sysex: true });
@@ -535,8 +746,8 @@ async function sendShort(bytes) {       // channel messages, three bytes each (a
   if (!link) return;
   for (let i = 0; i < bytes.length; i += 3) { await link.send(bytes.slice(i, i + 3)); if (link.ble) await sleep(4); }
 }
-async function request(cmd, payload, type, ms, match) {
-  const p = new Promise((res, rej) => { waiter = { type, match, res }; setTimeout(() => { if (waiter && waiter.res === res) { waiter = null; rej(new Error("no reply to command " + cmd)); } }, ms || (link && link.ble ? 8000 : 1500)); });      // a long reply over Bluetooth is dozens of notifications, a few per connection event
+async function request(cmd, payload, type, ms) {
+  const p = new Promise((res, rej) => { waiter = { type, res }; setTimeout(() => { if (waiter && waiter.res === res) { waiter = null; rej(new Error("no reply to command " + cmd)); } }, ms || (link && link.ble ? 8000 : 1500)); });      // a long reply over Bluetooth is dozens of notifications, a few per connection event
   await link.sendFrame(buildFrame(cmd, payload));
   return p;
 }
@@ -545,7 +756,7 @@ function toast(t) { const e = $("toast"); e.textContent = t; e.classList.add("on
 function setStatus(on, t) { const s = $("status"); s.className = on ? "on" : ""; s.textContent = t || (on ? "connected" : "not connected"); }
 
 // ---- the page ----
-const TABS = [["chain", "Chain"], ["global", "Global"], ["groove", "Groove / Stomp"], ["files", "NAM / Cab"], ["fw", "Firmware"]];
+const TABS = [["chain", "Chain"], ["global", "Global"], ["groove", "Groove / Stomp"], ["files", "NAM / Cab"], ["presets", "Presets"], ["fw", "Firmware"]];
 const COLORS = ["#8c8c99", "#e0a030", "#ff7a1a", "#b070e0", "#5fb0e0", "#40c0a0", "#e05a8a", "#6a8cff"];
 const nav = $("tabs");
 TABS.forEach(([id, t], i) => { const b = document.createElement("button"); b.textContent = t; b.onclick = () => { TABS.forEach(([x]) => $("t-" + x).hidden = x !== id); [...nav.children].forEach((c, j) => c.className = j === i ? "sel" : ""); }; if (!i) b.className = "sel"; nav.appendChild(b); });
@@ -697,8 +908,8 @@ buildChain();
 async function readNames(kind) {
   const out = []; let first = 20;
   for (let start = 0, total = 1; start < total; ) {
-    const d = await request(81, [kind, start], 0x61, undefined, (data) => data[0] === kind && data[2] === start); total = d[1]; const n = d[3]; first = Math.max(20, d[4]);
-    for (let i = 0; i < n; i++) out[start + i] = String.fromCharCode(...d.slice(5 + i * 16, 21 + i * 16).filter((x) => x));       // "" = a deleted slot: its number stays, presets use it
+    const d = await request(81, [kind, start], 0x61); total = d[1]; const n = d[3]; first = d[4];
+    for (let i = 0; i < n; i++) out.push(String.fromCharCode(...d.slice(5 + i * 16, 21 + i * 16).filter((x) => x)));       // "" = a deleted slot: its number stays, presets use it
     if (!n) break; start += n;
   }
   if (kind === 0) { names.amp = out; names.firstAmp = first; } else { names.cab = out; names.firstCab = first; }
@@ -718,6 +929,7 @@ async function connect(open) {
     await refresh();
     if (state) { const t = "P" + String(state.preset + 1).padStart(2, "0") + "  " + (state.name || "(empty)"); setStatus(true, "connected: " + link.name + (buildCode ? " (build " + buildCode + ")" : "") + "  |  " + t); toast("On the unit now: " + t); log("preset on the unit: " + t); }
   } catch (e) { log("connect: " + e.message); setStatus(false, e.message); link = null; }
+  try { await bkInit(); } catch (_) { /* the page works without it */ }
   fwRefresh();
 }
 $("bUsb").onclick = () => connect(openMidi);
@@ -728,7 +940,7 @@ setInterval(() => { if ($("live").checked && !dragging) refresh(); }, 1500);
 const KINDS = [{ n: "capture", max: 10, table: "namTable", count: "namCount", first: () => names.firstAmp, list: () => names.amp, free: () => state.namFree, have: () => state.namCount, cap: 23 },
                { n: "cabinet", max: 15, table: "cabTable", count: "cabCount", first: () => names.firstCab, list: () => names.cab, free: () => state.cabFree, have: () => state.cabCount, cap: 15 }];
 let buildCode = "", replaceTarget = null, namBytes = null, cabBytes = null, namFileName = "", cabFileName = "";
-function storedRows(kind) { const K = KINDS[kind], l = K.list(), first = Math.max(20, K.first()), rows = []; for (let t = first; t < Math.min(first + K.max, l.length); t++) if (l[t]) rows.push({ type: t, idx: t - first, name: l[t] }); return rows; }
+function storedRows(kind) { const K = KINDS[kind], l = K.list(), first = K.first(), rows = []; for (let t = first; t < l.length; t++) if (l[t]) rows.push({ type: t, idx: t - first, name: l[t] }); return rows; }
 function renderStore() {
   if (!state) return;
   KINDS.forEach((K, kind) => {
@@ -749,7 +961,7 @@ function renderStore() {
 }
 async function userOp(op, kind, idx, name) {
   const nm = name ? Array.from(name, (c) => c.charCodeAt(0) & 0x7F) : [];
-  const d = await request(82, [op, kind, idx, ...nm], 0x62, op === 2 ? 15000 : undefined, (data) => data[0] === op && data[1] === kind); return d[3] === 0 ? 0 : d[3] - 256;
+  const d = await request(82, [op, kind, idx, ...nm], 0x62, op === 2 ? 15000 : undefined); return d[3] === 0 ? 0 : d[3] - 256;
 }
 async function deleteItem(kind, r) {
   const K = KINDS[kind];
@@ -788,14 +1000,44 @@ $("replaceFile").onchange = async (e) => {
   await upload(t.kind, r.bytes, t.idx, null);
 };
 // kind 0 = capture (upload target 1), 1 = cabinet (target 2); slot = the slot to replace, or 0xFF for the first free one, 0xFE (cabinet) for a live one in RAM; name = the name for a NEW item
+// A transfer the unit acknowledges (firmware 1.13 and newer): begin and every chunk are answered with how many bytes the unit holds, so a chunk it dropped (its MIDI receive ring is 512 bytes
+// and is emptied once per UI tick) is sent again from that point instead of the unit storing a truncated capture. The unit stores the transfer itself when the last byte is in. An older
+// firmware does not answer: {legacy: true} and the caller sends the old blind frames.
+async function uploadReliable(bytes, target, slot, chunk, onProgress) {
+  const n = bytes.length, u24 = (a) => a[0] | (a[1] << 8) | (a[2] << 16);
+  let ack;
+  for (let tries = 0; ; tries++) {
+    try { ack = await request(25, [n & 0xFF, (n >> 8) & 0xFF, (n >> 16) & 0xFF, target, slot || 0], 0x64, 2500); } catch (e) { return { legacy: true }; }
+    if (ack[3] !== 2) break;
+    if (tries >= 5) throw new Error("the unit refused the transfer");
+    await sleep(250);                      // refused at the begin: the audio core still holds a swap (a preset or amp change a moment ago); it is done within about 100 ms
+  }
+  let off = u24(ack), bad = 0;
+  while (off < n) {
+    const part = Array.from(bytes.slice(off, off + chunk));
+    try { ack = await request(34, part, 0x64, 2000); }
+    catch (e) { try { ack = await request(34, [], 0x64, 2000); } catch (e2) { if (++bad > 8) throw new Error("the unit stopped answering"); await sleep(300); continue; } }   // no answer: ask what it holds
+    const got = u24(ack);
+    if (ack[3] === 1) { if (onProgress) onProgress(1); return { ok: true }; }
+    if (ack[3] === 2) throw new Error("the unit refused the transfer (it was incomplete or not valid)");
+    if (ack[3] === 3) throw new Error("the unit has no transfer open");
+    if (got !== off + part.length && ++bad > 12) throw new Error("the unit keeps losing data");
+    off = got;                                          // resume from what the unit really holds
+    if (onProgress) onProgress(off / n);
+  }
+  return { ok: true };
+}
 async function upload(kind, bytes, slot, name) {
   if (!link) { log("not connected"); return; }
   const K = KINDS[kind], live = slot === 0xFE, had = storedRows(kind).length;
   busy = true; const bar = $("up"); bar.hidden = false;
   try {
-    const fr = uploadFrames(bytes, kind === 0 ? 1 : 2, slot, link.chunk);
-    for (let i = 0; i < fr.length; i++) { await link.sendFrame(fr[i]); bar.value = Math.round(100 * (i + 1) / fr.length); await sleep(i === 0 || i === fr.length - 1 ? 150 : 25); }
-    log((live ? "live cabinet" : K.n) + " sent (" + bytes.length + " B in " + fr.length + " frames)");
+    const tgt = kind === 0 ? 1 : 2, r = await uploadReliable(bytes, tgt, slot, link.chunk, (f) => { bar.value = Math.round(100 * f); });
+    if (r.legacy) {                                    // an older firmware: the blind frames, as before
+      const fr = uploadFrames(bytes, tgt, slot, link.chunk);
+      for (let i = 0; i < fr.length; i++) { await link.sendFrame(fr[i]); bar.value = Math.round(100 * (i + 1) / fr.length); await sleep(i === 0 || i === fr.length - 1 ? 150 : 25); }
+      log((live ? "live cabinet" : K.n) + " sent (" + bytes.length + " B in " + fr.length + " frames, not acknowledged: update the firmware)");
+    } else log((live ? "live cabinet" : K.n) + " sent and acknowledged (" + bytes.length + " B)");
   } catch (e) { log("upload failed: " + e.message); }
   busy = false; await sleep(500);
   const was = new Set(storedRows(kind).map((r) => r.idx + ":" + r.name));
@@ -815,6 +1057,159 @@ $("namSend").onclick = () => upload(0, namBytes, 0xFF, namFileName);
 $("cabSend").onclick = () => upload(1, cabBytes, 0xFF, cabFileName);
 $("cabLive").onclick = () => upload(1, cabBytes, 0xFE, null);
 
+// ---- the Presets tab ----
+let prDoc = null, prRecs = null, prName = "presets", prRaw = null;
+const prSlotsSel = () => { const out = new Set(); for (const part of ($("prSlots").value.trim() || "1-80").split(",")) { const m = /^(\d+)(?:-(\d+))?$/.exec(part.trim()); if (!m) continue; for (let i = +m[1]; i <= +(m[2] || m[1]); i++) if (i >= 1 && i <= PRESET_COUNT) out.add(i - 1); } return [...out].sort((a, b) => a - b); };
+const prRefresh = () => { $("prRead").disabled = !link || busy; $("prSave").disabled = !prDoc; $("prDl").disabled = !prDoc; $("prWrite").disabled = !(link && !busy && prRecs && prRecs.some((r) => r)); };
+const prShow = () => {
+  const t = $("prTable"); t.innerHTML = "";
+  if (!prDoc) return;
+  const nm = ["DYN", "DRV", "AMP", "CAB", "EQ", "MOD", "DLY", "REV"], hdr = t.insertRow();
+  ["#", "name", "amp", "cab", "on"].forEach((h) => { const c = document.createElement("th"); c.textContent = h; hdr.appendChild(c); });
+  prDoc.presets.forEach((p, i) => {
+    if (p.unreadable) return;
+    const cells = [i + 1, p.empty ? "EMPTY" : p.name, p.empty ? "" : p.amp_model + 1, p.empty ? "" : p.cab_model + 1, p.empty ? "" : nm.filter((_, j) => (p.slot_enable_mask >> j) & 1).join(" ")], r = t.insertRow();
+    cells.forEach((v) => { r.insertCell().textContent = v; });
+  });
+};
+const prLoad = () => {
+  if (!prRaw) return;
+  try {
+    prDoc = prRaw.abkx ? abkxConvert(prRaw.bytes, { preserveChain: $("prChain").checked, copyAmpLevel: $("prLevel").checked, namePrefix: $("prPrefix").value || "P" }) : prRaw.doc;
+    prRecs = presetsFromDoc(prDoc);
+    $("prInfo").innerHTML = "<b>" + prRaw.name + "</b>: " + (prRaw.abkx ? "vendor bank, converted: " : "") + prDoc.presets.filter((p) => !p.empty && !p.unreadable).length + " presets, " + prDoc.presets.filter((p) => p.empty).length + " empty";
+  } catch (e) { prDoc = null; prRecs = null; $("prInfo").innerHTML = "<b>" + prRaw.name + '</b> - <span class="warn">' + e.message + "</span>"; }
+  prShow(); prRefresh();
+};
+$("prFile").onchange = async (e) => {
+  const f = e.target.files[0]; if (!f) return; const bytes = new Uint8Array(await f.arrayBuffer()); prName = f.name.replace(/\.[^.]*$/, "");
+  if (/\.json$/i.test(f.name)) {
+    try { prRaw = { name: f.name, doc: JSON.parse(new TextDecoder().decode(bytes)) }; } catch (err) { prRaw = null; prDoc = null; prRecs = null; $("prInfo").innerHTML = '<span class="warn">not a JSON file</span>'; prShow(); prRefresh(); return; }
+  } else prRaw = { name: f.name, abkx: true, bytes };
+  prLoad();
+};
+["prChain", "prLevel", "prPrefix"].forEach((id) => { $(id).onchange = prLoad; });
+const prDownload = () => { if (!prDoc) return; const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(prDoc, null, 1) + "\n"], { type: "application/json" })); a.download = prName + ".json"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
+$("prSave").onclick = prDownload; $("prDl").onclick = prDownload;
+$("prRead").onclick = async () => {
+  if (!link) return; busy = true; prRefresh(); const bar = $("prBar"); bar.hidden = false; const items = [];
+  try {
+    for (let i = 0; i < PRESET_COUNT; i++) {
+      const d = await request(83, [i], 0x63, 3000), rec = Uint8Array.from(d.slice(2, 2 + PRESET_SIZE));
+      items.push(d[1] === 0 && recordOk(rec) ? recordToPreset(i, rec) : { slot: i + 1, unreadable: true }); bar.value = Math.round(100 * (i + 1) / PRESET_COUNT);
+    }
+    prDoc = { format: "pocket-amp-presets", version: 1, record_size: PRESET_SIZE, note: "Onyx preset backup read from the unit. Edit names and values freely; 'params' are Q16 (0..65535 = 0..100 %), 'params_pct' is for reading only. Slot order: DYN DRV AMP CAB EQ MOD DLY REV.", presets: items };
+    prRecs = presetsFromDoc(prDoc); prRaw = { name: "unit", doc: prDoc }; prName = "pocket_amp_presets";
+    $("prInfo").innerHTML = "<b>read from the unit</b>: " + items.filter((p) => !p.unreadable).length + " presets" + (items.some((p) => p.unreadable) ? ' - <span class="warn">' + items.filter((p) => p.unreadable).length + " unreadable</span>" : "");
+    log("read " + items.length + " presets from the unit"); prShow();
+  } catch (e) { log("preset read failed: " + e.message + " (firmware 1.08 or newer is needed)"); }
+  busy = false; bar.hidden = true; prRefresh();
+};
+$("prWrite").onclick = async () => {
+  if (!link || !prRecs) return; const todo = prSlotsSel().filter((i) => prRecs[i]);
+  if (!todo.length) { log("nothing to write"); return; }
+  if (!confirm("This OVERWRITES " + todo.length + " preset(s) on the unit (P" + (todo[0] + 1) + " ... P" + (todo[todo.length - 1] + 1) + "). Continue?")) return;
+  busy = true; prRefresh(); const bar = $("prBar"); bar.hidden = false; const bad = [];
+  try {
+    for (let n = 0; n < todo.length; n++) {
+      const i = todo[n], rec = prRecs[i], r = await uploadReliable(rec, 4, i, link.chunk);
+      if (r.legacy) {
+        const fr = uploadFrames(rec, 4, i, link.chunk);
+        for (let k = 0; k < fr.length; k++) { await link.sendFrame(fr[k]); await sleep(k === 0 || k === fr.length - 1 ? 150 : 25); }
+      }
+      await sleep(r.legacy ? 350 : 60);                                  // acknowledged: the unit has already rewritten its flash bank (about 0.2 s) before it answered
+      const d = await request(83, [i], 0x63, 3000);
+      if (d[1] !== 0 || Uint8Array.from(d.slice(2, 2 + PRESET_SIZE)).join() !== Array.from(rec).join()) bad.push(i + 1);
+      bar.value = Math.round(100 * (n + 1) / todo.length);
+    }
+    log(bad.length ? "restore finished, but these did not read back as sent: " + bad.join(", ") : "wrote " + todo.length + " presets; every one read back identical");
+  } catch (e) { log("restore failed: " + e.message); }
+  busy = false; bar.hidden = true; prRefresh();
+};
+// ---- the backup of the critical regions: read through the running firmware (cmd 84, firmware 1.16; older ones through the diagnostic channel), saved as a file and remembered in this browser ----
+const bk = { status: "none", doc: null, ident: null, running: false };
+const bkDb = (mode, fn) => new Promise((res) => {      // IndexedDB, never required: any failure is "nothing remembered"
+  try {
+    const q = indexedDB.open("pocket-amp-onyx", 1);
+    q.onupgradeneeded = () => q.result.createObjectStore("backup");
+    q.onerror = () => res(null);
+    q.onsuccess = () => { try { const t = q.result.transaction("backup", mode), r = fn(t.objectStore("backup")); t.oncomplete = () => res(r && r.result !== undefined ? r.result : true); t.onerror = () => res(null); } catch (_) { res(null); } };
+  } catch (_) { res(null); }
+});
+async function flashRead(addr, n) {             // n <= 128
+  if (bk.cmd84 !== false) {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try { const r = flashReadParse(await request(84, [addr & 255, (addr >>> 8) & 255, (addr >>> 16) & 255, (addr >>> 24) & 255, n], 0x65, 1200)); if (r && r.ok && r.addr === addr && r.bytes.length === n) { bk.cmd84 = true; return r.bytes; } } catch (_) { if (bk.cmd84 === undefined && attempt >= 1) break; }
+      await sleep(80 * (attempt + 1));
+    }
+    if (bk.cmd84 !== true) bk.cmd84 = false;    // this firmware does not know the command: the diagnostic channel (16 bytes a time)
+  }
+  const out = new Uint8Array(n);
+  for (let o = 0; o < n; o += 16) out.set(await diagRead(addr + o, Math.min(16, n - o)), o);
+  return out;
+}
+async function flashReadRange(addr, len, onBytes) {
+  const out = new Uint8Array(len);
+  for (let o = 0; o < len; o += 128) { out.set(await flashRead(addr + o, Math.min(128, len - o)), o); if (onBytes) onBytes(Math.min(128, len - o)); }
+  return out;
+}
+async function bkLiveIdentity() {
+  return backupIdentityOf(await flashRead(0x0BD000, 64), await flashRead(0x0BE000, 64), await flashRead(0x0FF000, 64));
+}
+function bkShow() {
+  const el = $("fwBkInfo");
+  if (bk.status === "ok") el.innerHTML = '<b style="color:#40c080">A backup of this unit is on record</b> (made ' + (bk.doc.created || "?").slice(0, 16).replace("T", " ") + ", build " + (bk.doc.build || "?") + ").";
+  else if (bk.status === "other") el.innerHTML = '<span class="warn">The backup on record belongs to another unit.</span> Make a new one for this unit.';
+  else if (bk.status === "none") el.innerHTML = '<span class="warn">No backup of this unit is on record.</span> Make one now, or load a saved one.';
+  else el.textContent = "connect over USB to check for a backup of this unit";
+  const c = $("fwCalInfo"); if (!bk.cal) c.textContent = ""; else c.innerHTML = bk.cal === "present" ? "Radio calibration log (0xB5000): <b>present</b>." : bk.cal === "blank" ? '<span class="warn">Radio calibration log (0xB5000): BLANK.</span> Bluetooth then runs on the firmware\'s own copy of the calibration (firmware 1.16 keeps one). Restore the log with the PC flasher from a backup that has it.' : "Radio calibration log (0xB5000): unreadable here.";
+  fwRefresh();
+}
+async function bkInit() {                        // after a connect: who is this unit, is there a backup of it, is the calibration log still there
+  bk.status = "none"; bk.doc = null; bk.cal = ""; bk.ident = null;
+  if (!link || link.ble) { bk.status = "unknown"; bkShow(); return; }
+  try {
+    bk.ident = await bkLiveIdentity(); bk.cal = calLogStatus(await flashRead(0x0B5000, 16));
+    const doc = await bkDb("readonly", (st) => st.get("last"));
+    if (doc && doc !== true && (await backupDocVerify(doc)).ok) { bk.doc = doc; bk.status = backupDocIdentity(doc) === bk.ident ? "ok" : "other"; }
+  } catch (e) { log("backup check: " + e.message); bk.status = "none"; }
+  bkShow();
+}
+function bkSave(doc) {
+  const a = document.createElement("a"), id = backupDocIdentity(doc).slice(0, 8);
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(doc)], { type: "application/json" }));
+  a.download = "pocket-amp-backup-" + doc.created.slice(0, 10) + "-" + id + ".json"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+async function bkMake() {
+  if (!link || link.ble || bk.running || busy) return;
+  bk.running = true; fwRefresh(); const bar = $("fwBkBar"); bar.hidden = false; bar.value = 0;
+  const total = BACKUP_RANGES.reduce((a, r) => a + r.len, 0) * 2; let done = 0;
+  try {
+    $("fwBkInfo").textContent = "Reading the critical regions (the amp mutes briefly; keep it idle)...";
+    const pass = async () => { const out = []; for (const r of BACKUP_RANGES) out.push({ addr: r.addr, bytes: await flashReadRange(r.addr, r.len, (n) => { done += n; bar.value = Math.round(100 * done / total); }) }); return out; };
+    const a = await pass(), b = await pass();                     // twice: the two reads must agree byte for byte
+    for (let i = 0; i < a.length; i++) if (bkHex(a[i].bytes) !== bkHex(b[i].bytes)) throw new Error("the two reads of " + BACKUP_RANGES[i].name + " differ: nothing saved, try again");
+    const doc = await backupDocBuild(a, { build: buildCode });
+    const v = await backupDocVerify(doc); if (!v.ok) throw new Error(v.problems.join("; "));
+    bk.doc = doc; bk.ident = backupDocIdentity(doc); bk.status = "ok"; bk.cal = calLogStatus(a[2].bytes);
+    await bkDb("readwrite", (st) => st.put(doc, "last")); bkSave(doc);
+    log("backup of the critical regions saved (" + (total / 2 / 1024).toFixed(0) + " KB, read twice, identical)"); toast("Backup saved");
+  } catch (e) { $("fwBkInfo").innerHTML = '<span class="warn">the backup stopped: ' + e.message + "</span>"; log("backup: " + e.message); bk.status = bk.doc ? bk.status : "none"; }
+  bk.running = false; bar.hidden = true; bkShow();
+}
+$("fwBkBtn").onclick = bkMake;
+$("fwBkAccept").onchange = () => fwRefresh();
+$("fwBkLoad").onchange = async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const doc = JSON.parse(await f.text()), v = await backupDocVerify(doc); if (!v.ok) throw new Error(v.problems.join("; "));
+    if (!bk.ident && link && !link.ble) bk.ident = await bkLiveIdentity();
+    bk.doc = doc; bk.status = bk.ident && backupDocIdentity(doc) === bk.ident ? "ok" : "other";
+    if (bk.status === "ok") await bkDb("readwrite", (st) => st.put(doc, "last"));
+    log("backup file " + f.name + ": " + (bk.status === "ok" ? "it belongs to this unit" : "it does not belong to this unit (or no unit is connected)"));
+  } catch (err) { $("fwBkInfo").innerHTML = '<span class="warn">' + f.name + ": " + err.message + "</span>"; log("backup file: " + err.message); }
+  e.target.value = ""; bkShow();
+};
 // ---- the firmware update: dump, dry run, write, restart, confirm (the loader's frames and the guard are in the core above) ----
 let fwImage = null, fwPkg = null, fwOrig = null, fwDump = null;
 const CHIP_SIZE = 0x100000;
@@ -823,7 +1218,10 @@ const sha256 = async (b) => hexOf(new Uint8Array(await crypto.subtle.digest("SHA
 const fwRefresh = () => {
   const idle = !oneRunning && !!navigator.requestMIDIAccess;
   $("fwEnter").disabled = !(link && !link.ble); $("fwVerify").disabled = !(link && !link.ble && fwImage);
-  $("fwInstall").disabled = !(idle && fwPkg); $("fwRestore").disabled = !(idle && fwOrig);
+  const gate = flashGate(bk.status, $("fwBkAccept").checked);
+  $("fwInstall").disabled = !(idle && fwPkg && gate.allowed); $("fwRestore").disabled = !(idle && fwOrig && gate.allowed);
+  $("fwInstall").title = $("fwRestore").title = gate.allowed ? "" : gate.reason;
+  $("fwAcceptRow").hidden = bk.status === "ok"; $("fwBkBtn").disabled = !(link && !link.ble && !oneRunning && !bk.running);
 };
 function fwPlan() {
   const el = $("fwPlan"); if (!fwImage || !fwDump) { el.textContent = "needs the firmware file and a dump file for the dry run"; return; }
@@ -904,6 +1302,7 @@ async function otaServe(l, srv, finishAddr, idleMs, onProg) {
   }
 }
 async function oneClick(pkg, label, kind) {                // kind: "install" | "restore"
+  if (!flashGate(bk.status, $("fwBkAccept").checked).allowed) { toast("Back up the critical regions first, or accept the risk"); return; }   // the same lock as the buttons: nothing flashes around it
   if (oneRunning) return; oneRunning = true; fwRefresh();
   const info = $("fwOneInfo"), bar = $("fwBar2"), say = (t) => { info.innerHTML = t; log(t.replace(/<[^>]+>/g, "")); }, srv = new PkgServer(pkg.image);
   bar.hidden = false; bar.value = 0; busy = true;
@@ -938,7 +1337,8 @@ async function oneClick(pkg, label, kind) {                // kind: "install" | 
 }
 $("fwInstall").onclick = () => {
   if (!fwPkg) return;
-  if (!confirm("Install " + fwPkg.name + " on the unit?\n\nThe unit pulls the package over USB, restarts into the update loader and the loader writes the firmware. Your stored captures and cabinets are erased. Do not unplug while it works (if it is cut off, press the button again: it continues).")) return;
+  if (!flashGate(bk.status, $("fwBkAccept").checked).allowed) { toast("Back up the critical regions first, or accept the risk"); return; }
+  if (!confirm((bk.status === "ok" ? "" : "NO BACKUP OF THIS UNIT IS ON RECORD. You chose to accept the risk.\n\n") + "Install " + fwPkg.name + " on the unit?\n\nThe unit pulls the package over USB, restarts into the update loader and the loader writes the firmware. Your stored captures and cabinets are erased. Do not unplug while it works (if it is cut off, press the button again: it continues).")) return;
   oneClick(fwPkg, fwPkg.name, "install");
 };
 $("fwOrigFile").onchange = async (e) => {
@@ -952,6 +1352,7 @@ $("fwOrigFile").onchange = async (e) => {
 };
 $("fwRestore").onclick = () => {
   if (!fwOrig) return;
+  if (!flashGate(bk.status, $("fwBkAccept").checked).allowed) { toast("Back up the critical regions first, or accept the risk"); return; }
   if (!confirm("Restore stock firmware?\n\nThis editor and custom firmware features will be disabled until re-flashed. Do not unplug during update.")) return;
   oneClick(fwOrig, "the original firmware", "restore");
 };
@@ -974,7 +1375,10 @@ async function fwCompare() {
 }
 $("fwVerify").onclick = fwCompare;
 }
-if (typeof module !== "undefined") module.exports = { PkgServer, unwrapFwsc, OTA_SOFTKEY, OFFICIAL_SHA256, OFFICIAL_SIZE, areaFromFile, namJson, scramble, rawFromDump, diagReadFrame, diagParse, dryRun, verifyOffsets, IMAGE_SIZE, otaRequestFrame, otaParseRequest, otaResponse, OTA_QUERY, OTA_UPGRADE, wavToCab, parseWav, chainMove, chainMoveMsg, isOrder, pack8to7, unpack7to8, buildFrame, parseReply, bleFrames, BleUnframer, nrpn, cc, pc, decodeState, stripNam, checkCab, uploadFrames, checkFirmware, SLOT_MODULE };
+if (typeof module !== "undefined") module.exports = { PkgServer, unwrapFwsc, OTA_SOFTKEY, OFFICIAL_SHA256, OFFICIAL_SIZE, areaFromFile, namJson, scramble, rawFromDump, diagReadFrame, diagParse, dryRun, verifyOffsets, IMAGE_SIZE, otaRequestFrame, otaParseRequest, otaResponse, OTA_QUERY, OTA_UPGRADE, wavToCab, parseWav, chainMove, chainMoveMsg, isOrder, pack8to7, unpack7to8, buildFrame, parseReply, bleFrames, BleUnframer, nrpn, cc, pc, decodeState, stripNam, checkCab, uploadFrames, checkFirmware, SLOT_MODULE, crc32, presetToRecord, recordToPreset, recordOk, abkxConvert, presetsFromDoc, BACKUP_RANGES, backupDocBuild, backupDocVerify, backupDocIdentity, backupIdentityOf, calLogStatus, flashGate, flashReadFrame, flashReadParse };
 </script>
 </body>
 </html>
+
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!-- Copyright (C) 2026 The Onyx Authors (@28spawn) -->
