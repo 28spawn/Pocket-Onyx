@@ -120,7 +120,7 @@ Onyx features a fully reproducible, clean-room build pipeline that compiles the 
 ### Prerequisites
 - **Windows 10/11** with PowerShell 5.1 or PowerShell 7.
 - **Python 3.10+** (with standard library; NumPy and `sounddevice` for the desktop emulator).
-- **LLVM / Clang for host tests** (`clang.exe` on `PATH`).
+- **A C compiler for the host tests and the emulator**: llvm-mingw (`winget install -e --id MartinStorsjo.LLVM-MinGW.UCRT`). The scripts find it by itself, and on a PC with no compiler they offer to install it (with winget, or by downloading the official portable zip, checked by SHA-256). Do **not** use the plain `LLVM.LLVM` package: it needs Visual Studio's headers and stops at `'stdlib.h' file not found`.
 - **JieLi Pi32v2 Toolchain** (`clang.exe`, `pi32v2-ld.exe`, `llvm-objcopy.exe` in `C:\JL\pi32\bin`).
 - **Public SDK boot files**: Automatically downloaded by `get_sdk_files.py` (Apache-2.0, Zhuhai Jieli Technology).
 

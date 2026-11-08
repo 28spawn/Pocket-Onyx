@@ -5,11 +5,9 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $RepoRoot
 
-$clangExe = Get-Command clang.exe -ErrorAction SilentlyContinue
-if (-not $clangExe) {
-    $clangDir = (Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\MartinStorsjo.LLVM-MinGW.UCRT*" -Recurse -Filter "clang.exe" | Select-Object -First 1).DirectoryName
-    $env:PATH = "$clangDir;$env:PATH"
-}
+# a clang that can really include the C library (stdlib.h ...); installs llvm-mingw when the PC has none (custom-fw\tools\Find-Clang.ps1)
+. (Join-Path $PSScriptRoot "..\tools\Find-Clang.ps1")
+$null = Resolve-HostClang
 
 Write-Host "[1/2] Compiling Pocket Amp Firmware into Native Emulator DLL (pocket_amp_emu.dll)..." -ForegroundColor Cyan
 
@@ -25,6 +23,8 @@ clang -O3 -shared -Wall -Wextra -Icustom-fw/include -DPA_HOST_SIM=1 -DPA_EMU_DLL
   custom-fw/emu/emu_bridge.c `
   $sources `
   -o custom-fw/emu/pocket_amp_emu.dll
+
+if ($LASTEXITCODE -ne 0) { throw "Failed to compile pocket_amp_emu.dll (see the compiler messages above)" }
 
 # Pick the first free port in 8080..8099. 8080 is commonly taken by some other
 # dev server; before this the emulator just died with "address already in use".

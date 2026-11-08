@@ -148,3 +148,6 @@ custom-fw/USB-AUDIO-PLAN.md
 custom-fw/USER-STORE.md
 custom-fw/Recovery-Pocket_AMP_Custom/
 custom-fw/ble_matrix.csv
+
+# the portable llvm-mingw custom-fw/tools/Find-Clang.ps1 may download for a PC that has no compiler
+custom-fw/tools/toolchain/
