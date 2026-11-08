@@ -286,7 +286,13 @@ are accepted under **MPL-2.0**.
 
 ## Radio and Regulatory Compliance
 
-In default builds (`PA_BLE=0`), the radio hardware remains completely unpowered and untouched for hardware safety.
+All official release packages and default builds ship with the radio hardware completely disabled, unpowered, and untouched (`PA_BLE=0`) for hardware safety and regulatory compliance.
+
+Users who wish to enable Bluetooth Low Energy (BLE-MIDI) are **required to compile the firmware themselves from source** using the `-Ble` flag:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "custom-fw/build.ps1" -Ble
+```
 
 When compiled with `-Ble` (`PA_BLE=1`), Bluetooth Low Energy is enabled exclusively for BLE-MIDI peripheral communication (allowing connectivity with wireless MIDI footswitches and mobile/desktop editor applications).
 

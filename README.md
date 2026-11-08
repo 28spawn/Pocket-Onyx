@@ -124,6 +124,18 @@ Onyx features a fully reproducible, clean-room build pipeline that compiles the 
 - **JieLi Pi32v2 Toolchain** (`clang.exe`, `pi32v2-ld.exe`, `llvm-objcopy.exe` in `C:\JL\pi32\bin`).
 - **Public SDK boot files**: Automatically downloaded by `get_sdk_files.py` (Apache-2.0, Zhuhai Jieli Technology).
 
+### Enabling Bluetooth LE (User Build Required)
+
+Official release containers (`Onyx_1.18.fwsc` / `Onyx_1.18.bin`) ship with the radio completely disabled and unpowered (`PA_BLE=0`) for regulatory compliance and hardware safety. All official builds are strictly USB-only.
+
+If you want wireless BLE-MIDI connectivity, you are required to build the firmware from source yourself:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "custom-fw/build.ps1" -Ble
+```
+
+This compiles in the Optimist BLE stack and activates the on-chip 2.4 GHz radio.
+
 ### Build Command
 From the repository root:
 
