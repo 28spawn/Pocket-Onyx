@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* The BLE-MIDI 1.0 framing, device side.
  *
  * A real BLE-MIDI peer does not send bare MIDI bytes: every packet is

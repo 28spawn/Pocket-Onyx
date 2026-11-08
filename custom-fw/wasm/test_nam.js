@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 The Onyx Authors (@28spawn)
 /* Does a loaded NAM actually RUN in the firmware (not just sit in the
  * registry)? Load a capture, then compare the output with and without it. */
 const fs = require('fs');

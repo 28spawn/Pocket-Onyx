@@ -1,6 +1,7 @@
-/* src/sys/pa_ota_session.c - the firmware's half of the vendor's MIDI update, step 1 (include/pa_ota_session.h).
- *
- * Ported from chip/ota.c of the Pendel project's pendel-bsp ("step 1 lite"): SPDX-License-Identifier: MPL-2.0, Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hugelton Instruments.
+/* SPDX-License-Identifier: MPL-2.0 */
+/* Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hugelton Instruments
+ * Ported from chip/ota.c of the Pendel project's pendel-bsp ("step 1 lite").
+ * src/sys/pa_ota_session.c - the firmware's half of the vendor's MIDI update, step 1 (include/pa_ota_session.h).
  * This file stays under MPL-2.0 (the licence text is in LICENSES/MPL-2.0.txt next to it); changes: the hooks are this firmware's (pa_ota_hw_*), the handshake is answered by
  * the existing code in usb_ble.c, the boot clean-up recognises the staging area by its own markers (this firmware keeps its settings, a capture and a preset bank in the same flash).
  *

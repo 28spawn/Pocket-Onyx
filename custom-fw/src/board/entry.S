@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 /*
  * src/board/entry.S — JieLi AC791N (pi32v2 / q32DSP) Startup & Section Relocation (QW-3)
  *

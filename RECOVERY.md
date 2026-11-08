@@ -1,9 +1,7 @@
-# Pocket Amp recovery runbook
+# Onyx Hardware Recovery Runbook
 
-How to back up, restore and un-brick a Pocket Amp over USB, with no soldering. Proven on
-unit 1 (serial `4150353835313708`) on 2026-10-30. For what went wrong along the way, see
-[LESSONS-LEARNED.md](LESSONS-LEARNED.md).
-
+How to back up, restore and un-brick the hardware device over USB, with no soldering. Proven on
+unit 1 (serial `unit1 (redacted)`) on 2026-10-30. 
 ## Status
 
 | Capability | Status | Evidence |

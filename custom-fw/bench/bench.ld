@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/bench/bench.ld - the WaveNet benchmark, linked to run from SRAM at 0x01C02000,
  * the address the JieLi ROM download mode loads its own flash loaders to (jl-uboot-tool,
  * data/usb-loaders.yaml, wl82). Nothing is placed in flash.

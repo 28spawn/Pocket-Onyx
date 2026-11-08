@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * custom-fw/bench/bench_dsp.h - the fixed-point vs float measurements of the benchmark:
  * tone-stack biquads, the cab convolution (direct Q18 vs float FFT) and the GRU step.

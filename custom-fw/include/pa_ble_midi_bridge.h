@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/include/pa_ble_midi_bridge.h - the two queues between the Bluetooth radio stack's interrupts and the amp's MIDI router (usb_ble.c).
  *
  * The radio stack decodes BLE-MIDI into USB-MIDI event packets (cin | status << 8 | data1 << 16 | data2 << 24, ble_midi.h) and calls ble_app_midi_in() in its interrupt;

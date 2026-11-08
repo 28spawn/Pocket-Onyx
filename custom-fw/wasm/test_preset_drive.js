@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 The Onyx Authors (@28spawn)
 /* The DRIVE block on every kind of preset, through the real UI.
  *
  * Bug report: "on presets 41-80 the drive leads to no audio, on presets 1-40 it works".

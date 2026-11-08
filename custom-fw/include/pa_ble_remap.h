@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/include/pa_ble_remap.h - channel selection algorithm #1 (Core Vol 6 Part B 4.5.8.2), the part the radio hardware may or may not do for a sparse channel map.
  *
  * Windows centrals send maps with 12..20 of the 37 data channels used (the Wi-Fi band is cut out), so most events land on an unused "unmapped" channel and the used channel

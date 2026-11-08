@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* test/test_reverb_switch_race.c - changing the reverb type while the audio interrupt runs.
  *
  * On the unit the UI thread (the main loop) calls set_param(10, type) and the audio interrupt runs the reverb between any two of its instructions. The reverb used to make

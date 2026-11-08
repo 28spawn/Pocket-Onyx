@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 # custom-fw/tools/Read-Sources.ps1 - the source manifest reader.
 #
 # custom-fw/sources.txt is the single place that says which modules each build

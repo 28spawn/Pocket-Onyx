@@ -1,10 +1,10 @@
 # NOTICE — scope, third-party materials, and legal
 
-> **NOT AFFILIATED WITH M-VAVE OR DONNER.** This is an independent, unofficial interoperability project. It contains no M-VAVE/Donner firmware, amp models, cabinet impulse responses or preset banks, and it does not redistribute any such data. Ownership of a device does not by itself grant redistribution rights over its contents; the vendor's EULA/terms may restrict reverse engineering or use of extracted data. Check them (and consult counsel) before any public release.
+> **NOT AFFILIATED WITH M-VAVE OR DONNER.** This is an independent, unofficial interoperability project. It contains no vendor application firmware, amp models, cab IRs or proprietary preset banks; the only vendor-derived data is the Apache-2.0 RF start-up table described below. Ownership of a device does not by itself grant redistribution rights over its contents; the vendor's EULA/terms may restrict reverse engineering or use of extracted data. Check them (and consult counsel) before any public release.
 
 ## What this repo is
 Original open-source custom firmware and DSP project authored for interoperability and
-personal-modding research on a device the author owns (Donner / M-VAVE Pocket Amp, JieLi AC791N).
+personal-modding research on JieLi AC791N audio hardware.
 
 ## What is deliberately NOT included (and where to obtain it)
 To avoid redistributing third-party copyrighted software, none of the following is in this repo:
@@ -33,8 +33,8 @@ redistributed here.
 
 > **Historical note:** Earlier pre-cleanup releases (`v1.0.0` and `v1.0.1`, removed from distribution) predated the `v1.0.5` clean-room refactor and contained vendor-derived tables and factory preset parameters. Those commits and objects have been removed from all branches, tags, and releases at `v1.0.5`; external clones, forks, or cached copies created prior to `v1.0.5` may retain historical objects and must not be redistributed.
 
-## Synthesized Emulator & Workbench Test Audio
-The emulator and WASM workbench test phrases (`custom-fw/emu/samples/di_*.wav`), test cabinet and reverb impulse responses (`custom-fw/emu/irs/*.wav`), default fallback cabinet table (`custom-fw/src/fx/cab_default_table.inc`), and test capture (`custom-fw/emu/test_capture.nam`) are **synthesized locally on demand** by `custom-fw/tools/gen_test_audio.py` (and the drum voices and rhythm patterns in `src/dsp/` by `gen_drum_kit.py` and `gen_drum_patterns.py`). No GuitarSet or other third-party audio recordings are tracked or distributed in this repository.
+## Dry Captures (Courtesy of Jonas Hemmersbach) & Synthesized Audio Assets
+The emulator includes dry guitar captures courtesy of **Jonas Hemmersbach** (`custom-fw/emu/samples/`), providing high-fidelity chord progressions, riffs, and lick DI phrases recorded at natural instrument levels. The test cabinet and reverb impulse responses (`custom-fw/emu/irs/*.wav`), default fallback cabinet table (`custom-fw/src/fx/cab_default_table.inc`), and synthetic test capture (`custom-fw/emu/test_capture.nam`) are **synthesized locally on demand** by `custom-fw/tools/gen_test_audio.py` (and the drum voices and rhythm patterns in `src/dsp/` by `gen_drum_kit.py` and `gen_drum_patterns.py`). No GuitarSet or other third-party audio recordings are tracked or distributed in this repository.
 
 ## Bluetooth LE stack (from Optimist) — third-party code, imported with our marked changes
 The BLE-MIDI stack for the AC791N / WL82 radio in `custom-fw/third_party/optimist_ble/` is **not ours**. We changed it in a few places, every one marked `PA-MOD` in the source: `src/ble_hw_wl82.c`, `src/ble_ll.c`, `src/ble_smp.c`, `src/pa_prof.h`, `hal/fm1_ble_rf.h` (and the note in its `README.md`); the changes are published under the same terms as the files. It comes from
@@ -73,4 +73,5 @@ GPL-3.0-only, (C) 2026 Leo Kuroshita (@kurogedelic), Hugelton Instruments), whic
   combination (Pendel's `LICENSING.md` records that its files carry no "Incompatible With Secondary Licenses" notice).
 - **JieLi SDK files** (`uboot.boot`, `cfg_tool.bin`, `cfg/eq_cfg_hw.bin`), **Apache-2.0**, Zhuhai Jieli Technology: fetched by `custom-fw/tools/get_sdk_files.py` from the SDK commit named above and checked against the SHA-256 recorded in
   that tool; **not stored in this repository**. The licence text is in `custom-fw/LICENSES/Apache-2.0.txt` and ships with every release.
+- **Hardware recovery transporter patch (MIT).** custom-fw/tools/transporter/pocket-amp-window.patch is an adaptation patch for the **FM-1 Transporter** recovery firmware by Leo Kuroshita (@kurogedelic), Hugelton Instruments, licensed under the MIT License (custom-fw/LICENSES/MIT.txt).
 - User device backups and local packages remain local on the user's machine and are not part of any release.

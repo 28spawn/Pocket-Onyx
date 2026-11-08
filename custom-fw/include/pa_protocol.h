@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* pa_protocol.h — USB-MIDI SysEx / syscmd control contract.
  * Pocket Amp MIDI & SysEx protocol definitions. */
 #ifndef PA_PROTOCOL_H
@@ -27,6 +29,8 @@ enum pa_syscmd {
     PA_CMD_READ_35        = 35, /* the read-shaped response (a download) */
     PA_CMD_PA_STATE       = 80, /* ours: the editor's state record (reply PA_REPLY_PA_STATE) */
     PA_CMD_PA_NAMES       = 81, /* ours: a page of names (user amps, cabinets beyond the stock 20) (reply PA_REPLY_PA_NAMES) */
+    PA_CMD_PA_FLASH       = 84, /* ours (1.16): [addr u32 LE, length 1..128] -> that many bytes of the flash, READ ONLY, for the editor's backup of the critical regions (reply PA_REPLY_PA_FLASH) */
+    PA_CMD_PA_PRESET      = 83, /* ours: [index 0..79] -> ONE preset record, for a backup (reply PA_REPLY_PA_PRESET); the restore is the preset upload (cmd 25, target 0) */
     PA_CMD_PA_USER        = 82, /* ours: [op, kind, index, name...] op 0 delete, 1 rename a stored capture (kind 0) or cabinet (kind 1) (reply PA_REPLY_PA_USER) */
 };
 
@@ -41,6 +45,9 @@ enum pa_syscmd {
 #define PA_REPLY_RECORD_TAG   0x0Bu
 #define PA_REPLY_PA_STATE     0x60u  /* the editor state record: PA_STATE_REC_SIZE bytes (include/pa_sysex.h documents the layout) */
 #define PA_REPLY_PA_NAMES     0x61u  /* [kind, total, start, n, first_user] + n names of 16 bytes (an empty name = a deleted slot) */
+#define PA_REPLY_PA_UPLOAD    0x64u  /* [rx_bytes u24 LE, state]: after every upload begin and chunk (and a zero-length chunk, which only asks): how many bytes of the declared transfer the unit holds; state 0 = receiving, 1 = complete and stored, 2 = complete but refused, 3 = no transfer is open */
+#define PA_REPLY_PA_FLASH     0x65u  /* [addr u32 LE, length, status, data...]: status 0 = read, 1 = refused (bad range or length) or the read failed; the data is then absent */
+#define PA_REPLY_PA_PRESET    0x63u  /* [index, status, pa_preset_t bytes]: status 0 = the record is valid (even a slot that is EMPTY), 1 = unreadable (the record bytes are then zero) */
 #define PA_REPLY_PA_USER      0x62u  /* [op, kind, index, result] result 0 = done, else a negative error as an unsigned byte */
 
 /* The upload session, the way the standard SysEx protocol sends it:

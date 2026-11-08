@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """Provenance: the firmware and the emulator use only the project's own generated material.
 
   [1] the generated data in the firmware is exactly what its generator makes:
@@ -183,7 +185,8 @@ BANNED_HIST_PATHS = (
     "test_factory_levels.py", "analyze_ampcab_bundles.py", "factory_bundles.py",
     "amx_gru_convert.py", "download_candidates.py",
 )
-if os.path.isdir(os.path.join(REPO, ".git")):
+git_dir_check = subprocess.run(["git", "-C", REPO, "rev-parse", "--git-dir"], capture_output=True, text=True)
+if git_dir_check.returncode == 0 and git_dir_check.stdout.strip():
     tags_r = subprocess.run(["git", "-C", REPO, "tag", "-l"], capture_output=True, text=True)
     tags = {t.strip() for t in tags_r.stdout.splitlines() if t.strip()}
     bad_tags = sorted(tags & BANNED_TAGS)

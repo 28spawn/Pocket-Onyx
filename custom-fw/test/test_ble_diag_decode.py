@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """custom-fw/test/test_ble_diag_decode.py - the host decoder (tools/ble_diag_decode.py) against the C layout (include/pa_ble_diag.h) and a synthetic block."""
 import os
 import re

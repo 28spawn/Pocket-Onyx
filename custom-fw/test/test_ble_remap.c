@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/test/test_ble_remap.c - the channel remap helper (include/pa_ble_remap.h) on the host, against a straight copy of the Core spec text. */
 #include <stdio.h>
 #include <string.h>

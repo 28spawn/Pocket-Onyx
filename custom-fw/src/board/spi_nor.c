@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * src/board/spi_nor.c — Pocket Amp SPI NOR Flash Hardware & Emulator Backing Store
  *

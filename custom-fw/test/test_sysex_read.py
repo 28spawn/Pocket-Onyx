@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """The read commands, and the replies they send.
 
 The host editor identifies the device before performing communication:
@@ -79,9 +81,9 @@ if r:
     print(f"    the record: {text}")
     for field in ("name=", "model=", "id=", "type=", "version="):
         check(field in text, f"the record has {field!r}")
-    check("DONNER Pocket AMP" in text,
-          "the name is one the editor matches (\"DONNER Pocket AMP\")")
-    check("version=105" in text, "the version is 105 (PA_FW_VERSION: shown as 1.05, below the stock's 1.05)")
+    check("Onyx" in text,
+          "the name is one the editor matches (\"Onyx\")")
+    check("version=118" in text, "the version is 118 (PA_FW_VERSION: shown as 1.18, below the stock's 1.05)")
 
 print()
 print("=== the descriptor (cmd 18) ===")

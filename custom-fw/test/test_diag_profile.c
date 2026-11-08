@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/test/test_diag_profile.c - the diagnostic channel's profile command (7D 03, src/sys/pa_diag.c): write and read the experiment switches, the reply, and that other commands still work. */
 #include <stdio.h>
 #include <string.h>

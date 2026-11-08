@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/dsp/tuner.c — Pocket Amp Chromatic Tuner DSP with Ref 430-450Hz & Bypass Volume
  *
  * PITCH DETECTION (rewritten 2026-11-04; the first version copied the stock's zero-crossing timing on a 938 Hz one-pole low-pass, which jittered and took an overtone's crossings for the

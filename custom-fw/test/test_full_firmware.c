@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/test/test_full_firmware.c — End-to-End Host Verification Suite for All Big Rocks
  *
  * Compiles and tests all Pocket Amp Custom Firmware subsystems natively on PC:

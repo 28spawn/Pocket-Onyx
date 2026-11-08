@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """
 custom-fw/tools/qa_gate.py - the release gate. Run it after every patch.
 
@@ -189,6 +191,14 @@ FUNCTIONAL = [
     # the drive on every kind of preset, through the real UI (a pool block reused without
     # zeroing made it silent after preset changes)
     ("F-27", True,  ["{node}", "custom-fw/wasm/test_preset_drive.js", "{wasm}"], "wasm"),
+    ("F-37", True,  ["{py}", "custom-fw/emu/test_preset_bank.py", "{dll}"], "dll"),
+    ("F-38", True,  ["{py}", "custom-fw/test/test_abkx_import.py"], ""),
+    ("F-39", True,  ["{py}", "custom-fw/emu/test_swap_coalesce.py", "{dll}"], "dll"),
+    ("F-40", True,  ["{py}", "custom-fw/emu/test_upload_ack.py", "{dll}"], "dll"),
+    ("F-41", True,  ["{py}", "custom-fw/emu/test_usb_mode_swap.py", "{dll}"], "dll"),
+    ("F-42", True,  ["{py}", "custom-fw/emu/test_trims_mirror.py", "{dll}"], "dll"),
+    ("F-44", True,  ["{py}", "custom-fw/emu/test_settings_save.py", "{dll}"], "dll"),
+    ("F-43", True,  ["{py}", "custom-fw/test/test_backup_doc.py"], ""),
 ]
 
 # The host C suites build.ps1 does not run.
@@ -229,6 +239,7 @@ EXTRA_C_SUITES = [
     # the OVERLOAD popup's xrun-burst rule: a swap's own overrun (one each, measured) never raises it, a real burst does (pack 183)
     ("U-23", "custom-fw/test/test_overload_rule.c", []),
     # the firmware's own partitioned cabinet convolver (the register-accumulating multiply-accumulate, pack 185) against a direct time-domain convolution, 16 and 8 partitions, and through the governor's fade
+    ("U-25", "custom-fw/test/test_wild.c", ["-lm"]),   # the wild-value checks that guard the drive output and the final limiter
     ("U-24", "custom-fw/test/test_fft_conv_mac.c", ["custom-fw/src/fx/fft_conv.c", "-lm"]),
     # the drum kit's stored forms: mu-law, IMA-ADPCM, the kick/tom synthesisers, block independence
     ("U-15", "custom-fw/test/test_drum_codecs.c", ["-lm"]),
@@ -441,6 +452,7 @@ def stage_static(g: Gate):
         "settings": (fm.get("PA_FLASH_SYS_SETTINGS_ADDR", 0), fm.get("PA_FLASH_SYS_SETTINGS_SIZE", 0)),
         "NAM registry": (fm.get("PA_FLASH_USER_NAM_META_A_ADDR", 0), fm.get("PA_FLASH_USER_NAM_META_SIZE", 0)),
         "Bluetooth bond log": (fm.get("PA_FLASH_BOND_ADDR", 0), fm.get("PA_FLASH_BOND_SIZE", 0)),
+        "radio calibration mirror": (fm.get("PA_FLASH_TRIMS_MIRROR_ADDR", 0), fm.get("PA_FLASH_TRIMS_MIRROR_SIZE", 0)),
         "user NAM blob slots": (fm.get("PA_FLASH_USER_NAM_STORE_ADDR", 0), fm.get("PA_FLASH_USER_NAM_SLOT_SIZE", 0) * fm.get("PA_FLASH_USER_NAM_BLOB_SLOTS", 0)),
         "cabinet registry A": (fm.get("PA_FLASH_CAB_REG_A_ADDR", 0), fm.get("PA_FLASH_CAB_SLOT_SIZE", 0)),
         "cabinet registry B": (fm.get("PA_FLASH_CAB_REG_B_ADDR", 0), fm.get("PA_FLASH_CAB_SLOT_SIZE", 0)),

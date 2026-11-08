@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * test/test_smp_pipeline.c - the two-core pipeline's logic, with a synchronous stand-in for core 1.
  *

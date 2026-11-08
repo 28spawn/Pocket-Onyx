@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/test/test_usb_desc.c - the USB descriptor tables (include/pa_usb_desc.h) checked structurally, on the PC.
  * A host that refuses a descriptor gives no reason, so every length, interface number, endpoint and cross-reference is verified here: the configuration is walked byte by byte
  * against the USB 2.0, USB Audio 1.0 and USB MIDI 1.0 rules, and the audio format is compared with the one read from the stock firmware image.

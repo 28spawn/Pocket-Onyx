@@ -30,7 +30,7 @@ EV = {1: "BUTTONS", 2: "ENCODER", 3: "VIEW", 4: "PRESET", 5: "MODEL", 6: "SLOW_T
 STEP = {0x21: "pending swap", 0x22: "after the swap", 0x23: "before the chain", 0x24: "after the chain", 0x25: "after the chain / before the drums"}
 WHY = {0: "running", 1: "not started", 2: "skipped by buttons", 3: "start FAILED", 4: "TIMED OUT, switched off", 5: "refused a job", 6: "stack nearly full, switched off"}
 EVLOG, CAP = 0x01C7D600, 64
-NM = "C:/Users/Ricardo/tools/jieli/C$/JL/pi32/bin/pi32v2-nm.exe"
+NM = os.environ.get("PI32_NM") or shutil.which("pi32v2-nm") or str(Path.home() / "tools/jieli/C$/JL/pi32/bin/pi32v2-nm.exe")
 
 
 def load_syms(elf):
@@ -245,3 +245,9 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
+

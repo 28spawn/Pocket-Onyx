@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* The time source the imported radio driver uses: TIMER4, the 24 MHz free-running counter this firmware already
  * times itself with (pa_hw.h JL_TIMER4_BASE; main.c, audio_alnk.c). Optimist's platform runs the same counter at
  * the same rate, so its microsecond conversions (fm1_ticks() / FM1_TICKS_PER_US) hold unchanged. */

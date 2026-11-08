@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* test/test_fft_conv_mac.c - the firmware's own partitioned convolver (src/fx/fft_conv.c, the register-accumulating multiply-accumulate of pack 185) against a direct time-domain convolution, for the full
  * 1,024-tap cabinet, for the governor's 8-partition limit once the fade has finished, and through the fade (no NaN, no jump). The bench copy in bench/ is a different file: this one tests the firmware's. */
 #include <stdio.h>

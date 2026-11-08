@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/board/ble_midi_bridge.c - see include/pa_ble_midi_bridge.h. */
 #include "pa_ble_midi_bridge.h"
 

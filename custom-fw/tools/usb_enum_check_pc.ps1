@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 # custom-fw/tools/usb_enum_check_pc.ps1 - what Windows made of the unit's USB descriptors (USB-AUDIO-PLAN.md, step A gate).
 # Read-only. Run with the unit plugged in:   powershell -File custom-fw\tools\usb_enum_check_pc.ps1
 # Pass: the device node and BOTH function nodes (MI_00 audio, MI_03 MIDI) are present with status OK and no problem code, an audio endpoint exists, the MIDI port is listed.

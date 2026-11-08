@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/sys/pa_mix_limiter.h - the limiter on the guitar + drums sum
  *
  * Header-only: pa_audio_core.c uses it, and test/test_mix_limiter.c measures the same code.

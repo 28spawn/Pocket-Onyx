@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* include/pa_flash_guard.h - the two pieces of the flash driver that decide whether an operation may run, written as pure inline functions so that a host test can check them exhaustively
  * (test/test_flash_guard.c) and the SRAM driver (src/board/flash_ram.c, which cannot call anything) still compiles them in place (always_inline: no call, no table).
  *

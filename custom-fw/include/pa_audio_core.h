@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* include/pa_audio_core.h - Portable audio core shared by the device firmware,
  * the host emulator and the WebAssembly build, so all three produce the same
  * audio.

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pocket Amp Workbench &mdash; the firmware in your browser</title>
+<title>Onyx Workbench &mdash; the firmware in your browser</title>
 <style>
   :root{
     --bg:#0d0f11; --panel:#15181b; --panel2:#1d2126; --line:#2b3138;
@@ -34,7 +34,7 @@
   .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px;margin-bottom:13px}
   .card h2{font-size:12px;margin:0 0 9px;color:var(--mute);text-transform:uppercase;letter-spacing:.8px}
   /* ========================================================================
-     Pocket Amp Authentic Hardware Enclosure (Strict Circular Geometry)
+     Onyx Authentic Hardware Enclosure (Strict Circular Geometry)
      ======================================================================== */
   .device-shell {
     position: relative;
@@ -414,7 +414,7 @@
 </head>
 <body>
 <header>
-  <h1>Pocket Amp Workbench</h1>
+  <h1>Onyx Workbench</h1>
   <span class="sub">the firmware itself, compiled to WebAssembly</span>
   <span class="badge" id="state">starting</span>
   <span class="badge" id="budget">SRAM &mdash;</span>
@@ -502,10 +502,10 @@
       <div class="card">
         <h2>Input source</h2>
         <div class="row">
-          <button class="act" data-src="tone">Test tone</button>
+          <button class="act on" data-src="tone">Test tone</button>
           <button class="act" data-src="mic">Microphone</button>
           <button class="act" data-src="file">Audio file</button>
-          <button class="act on" data-src="silence">Silence</button>
+          <button class="act" data-src="silence">Silence</button>
         </div>
         <div id="micControls" style="display:none; margin-top:10px; padding:10px; background:#0d0d10; border:1px solid #2a2a35; border-radius:6px;">
           <div style="font-size:11px; font-weight:700; color:#5eead4; margin-bottom:6px;">Live Input & Anti-Feedback Settings</div>
@@ -754,7 +754,7 @@ class PaWorklet extends AudioWorkletProcessor {
   constructor() {
     super();
     this.X = null; this.mem = null; this.ready = false;
-    this.src = 'silence';
+    this.src = 'tone';
     this.enc = 0; this.btns = []; this.pot = 4095;
     this.lastTick = 0; this.nextFrame = 0;
     this.fileBuf = null; this.filePos = 0;
@@ -941,7 +941,7 @@ class PaWorklet extends AudioWorkletProcessor {
         let s = 0;
         if (i < chunk) {
           if (this.src === 'tone') {
-            s = 0.28 * Math.sin(2 * Math.PI * 220 * (now + (off + i) / sampleRate));
+            s = 0.65 * Math.sin(2 * Math.PI * 220 * (now + (off + i) / sampleRate));
           } else if (this.src === 'file' && this.fileBuf) {
             s = this.fileBuf[this.filePos % this.fileBuf.length] || 0;
             this.filePos++;
@@ -1086,6 +1086,10 @@ async function loadWorklet(audioCtx, srcCode) {
 /* ---- audio ---- */
 async function startAudio() {
   try {
+    if (ready) {
+      if (ctx && ctx.state === 'suspended') await ctx.resume();
+      return;
+    }
     if (!wasmBytes) {
       set('state', 'loading wasm...');
       wasmBytes = await loadWasm();
@@ -1122,7 +1126,14 @@ async function startAudio() {
         paint(d.lcd); telemetry(d.tel); lastPool = d.pool;
         if (d.nam !== undefined) set('t_nam', d.nam + (d.nam === 1 ? ' capture' : ' captures'));
       }
-      else if (d.type === 'ready') { ready = true; set('state', 'firmware running'); $('state').className = 'badge live'; }
+      else if (d.type === 'ready') {
+        ready = true;
+        set('state', 'firmware running');
+        $('state').className = 'badge live';
+        const activeBtn = document.querySelector('[data-src].on');
+        const activeSrc = activeBtn ? activeBtn.dataset.src : 'tone';
+        post({ type: 'src', src: activeSrc });
+      }
       else if (d.type === 'error') { set('state', 'error: ' + d.msg); $('state').className = 'badge err'; }
       else if (d.type === 'flashData') {
         const blob = new Blob([d.buf], { type: 'application/octet-stream' });
@@ -1158,7 +1169,10 @@ async function startAudio() {
     node.port.postMessage({ type: 'wasm', wasm: wasmBytes });
     $('audio').textContent = 'audio running';
     $('audio').className = 'badge live';
-    set('state', 'firmware running (silenced - pick input)');
+    const activeBtn = document.querySelector('[data-src].on');
+    const activeSrc = activeBtn ? activeBtn.dataset.src : 'tone';
+    post({ type: 'src', src: activeSrc });
+    set('state', 'firmware running (' + activeSrc + ')');
     $('state').className = 'badge live';
     setTimeout(readPresets, 300);
   } catch (err) {
@@ -1364,8 +1378,15 @@ document.querySelectorAll('[data-src]').forEach(b => b.onclick = async () => {
   }
   if (mc) mc.style.display = 'none';
   stopMic();
+  if (s !== 'silence' && (!ctx || !ready)) {
+    await startAudio();
+  }
   post({ type: 'src', src: s });
 });
+
+document.addEventListener('click', () => {
+  if (ctx && ctx.state === 'suspended') ctx.resume();
+}, { passive: true });
 
 $('micDeviceSel')?.addEventListener('change', () => { if (document.querySelector('[data-src="mic"]')?.classList.contains('on')) startMic(); });
 $('micEchoCancel')?.addEventListener('change', (e) => {
@@ -1388,6 +1409,7 @@ $('micGain')?.addEventListener('input', (e) => {
 async function loadSampleUrl(url) {
   try {
     set('state', 'loading the sample…');
+    if (!ctx || !ready) await startAudio();
     const raw = await (await fetch(url)).arrayBuffer();
     const ab = await ctx.decodeAudioData(raw);
     const n = ab.length;
@@ -1759,3 +1781,9 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b
 </script>
 </body>
 </html>
+
+
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+
+<!-- Copyright (C) 2026 The Onyx Authors (@28spawn) -->
+

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/sys/pa_diag.c - the private diagnostic channel (see include/pa_diag.h)
  *
  * USB MIDI carries 7-bit data bytes, so a frame with binary content (the flash dump)

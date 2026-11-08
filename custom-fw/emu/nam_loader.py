@@ -61,12 +61,9 @@ def recommend_amp_settings(meta: Dict[str, Any], voicing_id: int, is_amp_cab: bo
         if isinstance(v, (int, float)):
             loud = float(v)
             break
-    makeup_db = 0.0 if loud is None else max(-12.0, min(12.0, -18.0 - loud))
-    gain = meta.get("gain")
-    hi_gain = voicing_id in (2, 3) or (isinstance(gain, (int, float)) and float(gain) > 0.6)
-    if hi_gain and not is_amp_cab:
-        knobs[3] = 45                          # TREBLE -1 step
-        knobs[4] = 42                          # PRESENCE -1.3 dB: tames fizz on amp-only captures
+    # Bounded makeup gain so normal captures are not excessively attenuated
+    makeup_db = 0.0 if loud is None else max(-3.0, min(6.0, -16.0 - loud))
+    # Keep flat neutral 50% tone stack defaults to preserve exact captured frequency response
     if voicing_id == 4:                        # bass: a touch of low end back
         knobs[1] = 55
     return {"amp_knobs": knobs, "makeup_db": round(makeup_db, 2)}
@@ -145,9 +142,9 @@ def pack_wavenet_blob(weights: List[float], head_scale: float = 1.0, is_amp_cab:
     return header + weights_bytes
 
 
-# The Pocket Amp's ADC full scale in dBu. 4.0 is an ASSUMPTION (not measured): the input trim of a capture is 10 ** ((ADC_REF_DBU - capture input level) / 20), so a capture
-# made at 15 dBu gets -11 dB. If a high-gain capture sounds too clean, raise this (pa_import.py --ref-dbu 15 gives a trim of 1.0).
-ADC_REF_DBU = 4.0
+# Standard studio audio interface instrument input reference (Focusrite, Apollo, IK AXE I/O, etc. +12..+14 dBu)
+# Models trained at standard instrument levels will map to unity gain (~1.0).
+ADC_REF_DBU = 13.0
 
 
 def extract_input_level_dbu(meta: Dict[str, Any], data: Dict[str, Any]) -> Optional[float]:
@@ -301,7 +298,8 @@ def parse_nam_file(raw_bytes: bytes, filename: str = "model.nam") -> Tuple[bytes
             PA_ADC_REF_DBU = ADC_REF_DBU
             input_level_dbu = extract_input_level_dbu(meta, data)
             if input_level_dbu is not None:
-                input_trim = round(10.0 ** ((PA_ADC_REF_DBU - input_level_dbu) / 20.0), 4)
+                raw_trim = 10.0 ** ((PA_ADC_REF_DBU - input_level_dbu) / 20.0)
+                input_trim = round(max(0.60, min(1.80, raw_trim)), 4)
             else:
                 input_trim = 1.0
             blob = pack_wavenet_blob(weights_list, head_scale, is_amp_cab, input_trim)
@@ -376,7 +374,8 @@ def parse_nam_file(raw_bytes: bytes, filename: str = "model.nam") -> Tuple[bytes
         PA_ADC_REF_DBU = ADC_REF_DBU
         input_level_dbu = extract_input_level_dbu(meta, data)
         if input_level_dbu is not None:
-            input_trim = round(10.0 ** ((PA_ADC_REF_DBU - input_level_dbu) / 20.0), 4)
+            raw_trim = 10.0 ** ((PA_ADC_REF_DBU - input_level_dbu) / 20.0)
+            input_trim = round(max(0.60, min(1.80, raw_trim)), 4)
         else:
             input_trim = 1.0
         blob = pack_wavenet_blob(weights_list, head_scale, is_amp_cab, input_trim)
@@ -623,3 +622,6 @@ def parse_wav_ir(raw_bytes: bytes, max_taps: int = 1024) -> Tuple[List[float], D
         "format_tag": tag,
         "taps_loaded": len(taps),
     }
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

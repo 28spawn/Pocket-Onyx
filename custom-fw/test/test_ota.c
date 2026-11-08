@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/test/test_ota.c - the app side of the JieLi OTA handshake
  *
  * The two frames the updater sends over USB MIDI, and the ID block the query is answered

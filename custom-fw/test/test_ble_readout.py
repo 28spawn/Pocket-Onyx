@@ -73,3 +73,6 @@ with redirect_stdout(buf):
     J.show_ble(Fake())
 assert "no record" in buf.getvalue()
 print("ble readout: all passed")
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

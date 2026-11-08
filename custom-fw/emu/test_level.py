@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """The emulator's output level: the MASTER pot and the input -> output gain.
 
 Why this test exists

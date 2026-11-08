@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """The stored captures and cabinets (10 + 15), on the firmware's own code: upload, list, delete, overwrite, the counts that follow, a reboot, and the
 
 cases that must be refused. The flash is the emulator's simulated chip, so the windows of pa_flash_map.h apply.

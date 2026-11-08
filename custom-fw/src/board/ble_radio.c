@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* Bluetooth LE radio: the unity build of the imported Optimist stack (third_party/optimist_ble, see its README and
  * NOTICE.md for the authors and licences) with this firmware's platform glue (ble_platform/), the start-up policy and
  * the debug log. BLE-PORT-PLAN.md has the plan; include/pa_ble_radio.h the contract.
@@ -47,7 +49,7 @@ __asm__(
 );
 
 /* ---- configuration of the stack for this device (ble_cfg.h lists every knob) ---- */
-#define BLE_DEVICE_NAME "Pocket AMP_BLE"    /* advertised BLE device name */
+#define BLE_DEVICE_NAME "Onyx_BLE"    /* advertised BLE device name */
 #define BLE_NAME_HEX 0                       /* the name as it is, no " XXXX" suffix */
 static uint16_t pa_ble_adv_units = 400u;     /* the advertising interval in 0.625 ms units: 400 = 250 ms (stock and the stack's default are 100 ms; slower means fewer scan-request interrupts competing with the audio) */
 #define BLE_ADV_INTERVAL pa_ble_adv_units
@@ -101,7 +103,7 @@ struct pa_ble_diag pa_ble_dgb;               /* the link instrumentation block (
 /* ---- this unit's radio calibration: read from the unit's own record log at boot (pa_ble_trims.h); the copy compiled in from a backup is only the fallback ---- */
 #include "../../include/pa_ble_trims.h"
 static pa_ble_trims_t s_trims;
-static uint8_t s_trims_src;                   /* 0 none, 1 read from this unit's flash, 2 compiled in */
+static uint8_t s_trims_src;                   /* 0 none, 1 read from this unit's flash, 2 compiled in, 3 this firmware's mirror of the calibration */
 #if defined(__has_include)
 #if __has_include("ble_platform/ble_trims_unit.h")
 #include "ble_platform/ble_trims_unit.h"
@@ -114,6 +116,7 @@ static void pa_trims_init(void)
 {
     if (s_trims_src) return;
     if (pa_ble_trims_load_from_flash(&s_trims)) { s_trims_src = 1u; return; }
+    if (pa_ble_trims_mirror_load(&s_trims)) { s_trims_src = 3u; return; }        /* 1.16: the stock's log is blank or damaged: this firmware's own copy of it */
 #if PA_BLE_TRIMS_PRESENT
     {
         uint32_t i;
@@ -514,7 +517,7 @@ void pa_ble_radio_boot(uint32_t buttons)
         rnd = ble_hw_addr(a);                    /* a random static address from the hardware random source */
         ble_init(a, rnd);
         {   /* The name goes into the ADVERTISEMENT itself (flags 3 B + name 2+14 B = 19 B), the 128-bit MIDI service UUID into the scan response (18 B):
-             * a passive scanner then lists "Pocket AMP_BLE" from the first packet, without the SCAN_REQ / SCAN_RSP exchange. The stack puts the name only in the scan response. */
+             * a passive scanner then lists "Onyx_BLE" from the first packet, without the SCAN_REQ / SCAN_RSP exchange. The stack puts the name only in the scan response. */
             uint8_t ad[31], sr[2 + 16], k = (uint8_t)(bgap.n > 26u ? 26u : bgap.n);   /* (a legacy PDU holds 31 B) */
             ad[0] = 2u; ad[1] = 0x01u; ad[2] = 0x06u;
             ad[3] = (uint8_t)(k + 1u); ad[4] = 0x09u;
@@ -612,6 +615,9 @@ int pa_ble_radio_running(void) { return s_st[PA_BLE_ST_STATE] >= PA_BLE_S_UP; }
  * (ble_ll_enable: LL_CONN -> ble_ll_disconnect) and the stack does not advertise again while it is off. A radio that was started QUIET (HOME held at power-on: the BLE interrupts are still
  * masked) is left alone. */
 static volatile uint8_t s_user_off;
+/* 1.16: once the radio runs on the stock's own log, keep a copy of it in this firmware's flash (main loop, a few seconds after the boot: it may write the flash). */
+void pa_ble_radio_mirror_trims(void) { if (s_trims_src == 1u) pa_ble_trims_mirror_store(&s_trims); }
+
 void pa_ble_radio_set_enabled(int on) {
     if (s_st[PA_BLE_ST_STATE] < PA_BLE_S_UP || s_st[PA_BLE_ST_STATE] == PA_BLE_S_FAILED || s_quiet)
         return;

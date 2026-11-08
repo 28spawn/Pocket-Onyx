@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* include/pa_overload.h - when does a run of codec overruns mean the system is overloaded (the OVERLOAD popup)?
  *
  * A preset or model swap runs inside the audio interrupt for 1.8-5.4 ms (1.451 ms is a block), with the output muted, and each swap costs exactly ONE codec RX overrun (bench 2026-11-04,

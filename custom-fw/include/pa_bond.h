@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* include/pa_bond.h - the Bluetooth bond kept across a power-off.
  *
  * The stack (third_party/optimist_ble) pairs a central (Just Works, LE legacy) and calls ble_app_bond() with the keys it made: Rand, EDIV and our LTK. It keeps ONE key slot in RAM

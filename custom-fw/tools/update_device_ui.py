@@ -418,3 +418,6 @@ def update_workbench_html():
 if __name__ == "__main__":
     update_ui_html()
     update_workbench_html()
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

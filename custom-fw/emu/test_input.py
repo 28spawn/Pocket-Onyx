@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """Verify that the emulator now runs the FIRMWARE'S input model.
 
 The emulator used to call pa_ui_handle_inputs() directly with the raw button

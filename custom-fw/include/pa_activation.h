@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * pa_activation.h — Pocket Amp 512-Entry Piecewise-Linear Sigmoid & Tanh Activation LUTs
  *

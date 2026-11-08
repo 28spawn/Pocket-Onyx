@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* include/pa_dsp_cost.h - calibrated per-slot DSP cycle cost.
  *
  * The device measures the real thing with the pi32v2 free-running cycle

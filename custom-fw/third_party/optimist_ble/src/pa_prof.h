@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-only OR MPL-2.0 */
 /* third_party/optimist_ble/src/pa_prof.h (PA-MOD) - the run-time experiment switches of the Pocket Amp firmware (custom-fw/include/pa_ble_diag.h, profile bits).
  * In the firmware (PA_BLE_GLUE, defined by src/board/ble_radio.c before it includes this stack) PA_PROF(bit) reads the live profile word; built alone (the stack's own
  * tests) it answers with the defaults. */

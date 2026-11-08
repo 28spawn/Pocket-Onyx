@@ -1,6 +1,6 @@
 @echo off
 REM ---------------------------------------------------------------------------
-REM  Pocket Amp - live firmware emulator.
+REM  Onyx - live firmware emulator.
 REM
 REM  Runs the REAL firmware (compiled as pocket_amp_emu.dll) with the board
 REM  layer replaced, and serves the front panel in your browser.

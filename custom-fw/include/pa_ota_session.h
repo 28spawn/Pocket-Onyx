@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* include/pa_ota_session.h - the firmware's half of the USB-MIDI update sequence (step 1) - USB-MIDI only.
  *
  * The host (the web editor's Firmware tab, or standard updater) sends the "upgrade" frame F0 22 24 35 7F F7. The running firmware then pulls parts of the

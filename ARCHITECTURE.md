@@ -1,6 +1,6 @@
-# Pocket Amp Custom Firmware — Architecture
+# Onyx Custom Firmware — Architecture
 
-Complete module map for the **M-VAVE / Donner Pocket Amp** custom firmware, targeting the
+Complete module map for the **Onyx** custom firmware, targeting the
 **JieLi AC791N (pi32v2, 360 MHz assumed - see `PA_CPU_HZ`)** SoC.
 
 Source of truth: `custom-fw/`. All paths below are relative to the repository root.

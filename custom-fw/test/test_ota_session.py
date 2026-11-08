@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """The firmware's half of the vendor MIDI update (src/sys/pa_ota_session.c) on host, against real packages and a simulated flash (test/test_ota_session.c): the loader of the package is staged byte for byte, the
 record has the SPL's markers, nothing outside the five staging sectors is written, a host without "success" commits nothing, damaged packages are refused, the boot clean-up touches only a staging area.
 

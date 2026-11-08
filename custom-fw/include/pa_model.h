@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * pa_model.h — Pocket Amp Exact NAM A2 16-Unit Q21 GRU Model Structure
  *

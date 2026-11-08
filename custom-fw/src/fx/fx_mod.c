@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/fx/fx_mod.c - the MOD block: seven stereo modulation effects.
  *
  *   0 CHORUS       two modulated taps (15 / 16 ms +-5 ms), L/R in quadrature
@@ -5,11 +7,13 @@
  *   2 FLANGER      1 .. 6.8 ms through-zero-free flanger with feedback
  *   3 TREMOLO      amplitude, L/R in quadrature            (MIX and FDBK unused)
  *   4 VIBRATO      pitch, 100 % wet                         (MIX and FDBK unused)
- *   5 UNIVIBE      four staggered allpass stages, photocell-shaped sweep
- *   6 AUTO FILTER  envelope + LFO swept resonant band-pass, 200 Hz .. 4.2 kHz
+ *   5 WAH          LFO-swept resonant band-pass (the wah pedal rocked by RATE), 380 Hz .. 2.2 kHz
+ *   6 AUTO WAH     the same filter swept by the playing: hard picking opens it, RATE = how fast it closes
+ *
+ * (1.13: UNIVIBE and AUTO FILTER were replaced: next to PHASER and VIBRATO the univibe was hard to tell apart, and the auto filter was the same sweep with a duller voice.)
  *
  * Knobs (set_param ids): 0 RATE (0.10 .. 8.10 Hz), 1 DEPTH, 2 MIX, 3 FDBK (resonance on
- * the AUTO FILTER), 10 type. pa_mod_rate_mhz() gives RATE in real units for the screen.
+ * the WAH types), 10 type. pa_mod_rate_mhz() gives RATE in real units for the screen.
  *
  * What changed (custom-fw/test/test_mod.c measures each):
  *   - the delay line is float: 1024 x 4 B, the same 4 KB as the old 2048 x int16, but it
@@ -43,8 +47,8 @@ typedef enum {
     MOD_TYPE_FLANGER    = 2,
     MOD_TYPE_TREMOLO    = 3,
     MOD_TYPE_VIBRATO    = 4,
-    MOD_TYPE_UNIVIBE    = 5,
-    MOD_TYPE_AUTOFILTER = 6,
+    MOD_TYPE_WAH        = 5,
+    MOD_TYPE_AUTOWAH    = 6,
     MOD_TYPE_COUNT      = 7
 } mod_type_t;
 
@@ -65,7 +69,7 @@ typedef struct {
     uint32_t   warm;              /* samples run since the delay line was cleared (type change, reset): the delay-line types are bypassed, then crossfaded in, once it holds a signal */
 
     /* auto filter */
-    float      env, svf_low, svf_band, svf_f, svf_damp;
+    float      env, rel, svf_low, svf_band, svf_f, svf_damp;
 } mod_state_t;
 
 extern void *pa_alloc(uint32_t);
@@ -119,18 +123,11 @@ static inline float ap_coef(float f) {
 }
 
 static void mod_update_sweep(mod_state_t *s, float uni_l, float uni_r) {
-    static const float stagger[MOD_AP_STAGES] = { 0.55f, 0.75f, 1.0f, 1.4f };
     float u[2] = { uni_l, uni_r };
     for (int c = 0; c < 2; c++) {
-        float f;
-        if (s->type == MOD_TYPE_UNIVIBE) {
-            float sh = u[c] * u[c];                                   /* photocell: lingers low */
-            f = 400.0f * expf(2.3025851f * s->depth * (sh - 0.5f));  /* 126 Hz .. 1.26 kHz */
-        } else {
-            f = 630.0f * expf(2.3025851f * s->depth * (u[c] - 0.5f)); /* 200 Hz .. 2 kHz */
-        }
+        const float f = 630.0f * expf(2.3025851f * s->depth * (u[c] - 0.5f)); /* 200 Hz .. 2 kHz */
         for (int st = 0; st < MOD_AP_STAGES; st++)
-            s->apa[c][st] = ap_coef(s->type == MOD_TYPE_UNIVIBE ? f * stagger[st] : f);
+            s->apa[c][st] = ap_coef(f);
     }
 }
 
@@ -182,7 +179,6 @@ PA_HOT static void mod_run_stereo(fx_node_t *nd, int32_t *buf_L, int32_t *buf_R,
                 mixed = 0;
                 break;
             case MOD_TYPE_PHASER:
-            case MOD_TYPE_UNIVIBE:
                 if (s->ctl == 0) mod_update_sweep(s, lu, ru);
                 wl = allpass_chain(s, 0, xl);
                 wr = allpass_chain(s, 1, xr);
@@ -192,26 +188,36 @@ PA_HOT static void mod_run_stereo(fx_node_t *nd, int32_t *buf_L, int32_t *buf_R,
                 wr = xr * (1.0f - s->depth * ru);
                 mixed = 0;
                 break;
-            case MOD_TYPE_AUTOFILTER: {
-                float r = __builtin_fabsf(xl);
-                s->env += (r > s->env ? 0.00753f : 0.000151f) * (r - s->env);   /* 3 ms / 150 ms */
+            case MOD_TYPE_WAH:
+            case MOD_TYPE_AUTOWAH: {
+                const int autow = (s->type == MOD_TYPE_AUTOWAH);
+                const float r = fabsf(xl);
+                s->env += (r > s->env ? 0.00753f : s->rel) * (r - s->env);       /* attack 3 ms; release: WAH 150 ms, AUTO WAH from the RATE knob */
                 if (s->ctl == 0) {
-                    /* -42 .. -6 dBFS of envelope -> 0..1 of the sweep */
-                    float e = s->env > 1e-6f ? s->env : 1e-6f;
-                    float nrm = (8.6858896f * logf(e) + 42.0f) * (1.0f / 36.0f);
-                    if (nrm < 0.0f) nrm = 0.0f;
-                    if (nrm > 1.0f) nrm = 1.0f;
-                    /* half the playing's envelope, half the LFO: after a saturated amp
-                     * (a high-gain capture) the envelope hardly moves, and RATE must still
-                     * sweep the filter on its own */
-                    float sweep = 0.5f * nrm + 0.5f * lu;
-                    float fc = 200.0f * expf(0.6931472f * 4.4f * s->depth * sweep);
+                    const float rr = s->fb > 0.0f ? s->fb : 0.0f;
+                    s->svf_damp = 0.8f - 0.65f * rr;                              /* band-pass Q about 1.2 .. 5 */
+                    float sweep;
+                    if (autow) {
+                        /* the playing opens the filter: DEPTH is the sensitivity: the 30 dB window that opens the filter sits at -6 .. +24 dBFS of envelope at DEPTH 0 and at -42 .. -12 dBFS at DEPTH 100 %, the squared curve keeps the low end of the range for soft playing */
+                        const float e = s->env > 1e-6f ? s->env : 1e-6f;
+                        float nrm = (8.6858896f * logf(e) + 6.0f + 36.0f * s->depth) * (1.0f / 30.0f);
+                        if (nrm < 0.0f) nrm = 0.0f;
+                        if (nrm > 1.0f) nrm = 1.0f;
+                        sweep = nrm;
+                        const float frac = (float)(s->lfo_inc - 9739u) * (1.0f / 779134.0f);
+                        s->rel = 1.0f / (44100.0f * (0.45f - 0.40f * (frac > 1.0f ? 1.0f : frac)));   /* RATE: 450 ms (slow) .. 50 ms (fast) */
+                    } else {
+                        sweep = lu;                                               /* the foot rocking: RATE is the speed, DEPTH how far it travels */
+                        s->rel = 0.000151f;
+                    }
+                    const float span = autow ? 1.9f : 1.75f * (0.35f + 0.65f * s->depth);
+                    const float fc = (autow ? 520.0f : 380.0f) * expf(span * sweep);   /* WAH 380 Hz .. 2.2 kHz; AUTO WAH 520 Hz .. 3.5 kHz (1.14: 1.5 dB brighter on DI playing) */
                     s->svf_f = 2.0f * sinf(3.14159265f * fc / MOD_FS);
                 }
                 s->svf_low += s->svf_f * s->svf_band;
-                float high = xl - s->svf_low - s->svf_damp * s->svf_band;
+                const float high = xl - s->svf_low - s->svf_damp * s->svf_band;
                 s->svf_band += s->svf_f * high;
-                wl = wr = 1.4f * s->svf_damp * s->svf_band + 0.3f * s->svf_low;
+                wl = wr = 1.6f * s->svf_damp * s->svf_band;
                 break;
             }
             default: break;
@@ -260,7 +266,8 @@ static void mod_create(fx_node_t *nd) {
         s->depth    = 0.5f;
         s->fb       = 0.3f;
         s->mix      = 0.5f;
-        s->svf_damp = 1.4f - 1.25f * s->fb;
+        s->svf_damp = 0.8f - 0.65f * s->fb;
+        s->rel      = 0.000151f;
         s->svf_f    = 0.05f;
         mod_set_mix(s);
         mod_update_sweep(s, 0.5f, 0.5f);
@@ -294,8 +301,6 @@ static void mod_set_param(fx_node_t *nd, int id, int32_t val) {
             if (f >  0.85f) f =  0.85f;
             if (f < -0.85f) f = -0.85f;
             s->fb = f;
-            float r = f < 0.0f ? 0.0f : f;                            /* auto filter resonance */
-            s->svf_damp = 1.4f - 1.25f * r;
             break;
         }
         case 10: {
@@ -324,6 +329,7 @@ static void mod_reset(fx_node_t *nd) {
     memset(s->apy, 0, sizeof(s->apy));
     memset(s->ph_fb, 0, sizeof(s->ph_fb));
     s->env = 0.0f;
+    s->rel = 0.000151f;
     s->svf_low = 0.0f;
     s->svf_band = 0.0f;
     s->ctl = 0;

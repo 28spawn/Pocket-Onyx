@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * custom-fw/emu/emu_bridge.c — Pocket Amp Hardware-in-the-Loop (HIL) Native C Emulator Bridge
  *
@@ -1459,6 +1461,13 @@ EMU_EXPORT void emu_set_governor(int level) { g_pa_gov_level = (uint8_t)level; g
 EMU_EXPORT void emu_usb_audio_start(void) { pa_usb_audio_set_rate(&g_usb_ble, 44100u); pa_usb_audio_capture_start(&g_usb_ble); pa_usb_audio_playback_start(&g_usb_ble); }
 EMU_EXPORT int  emu_usb_capture_read(uint8_t *out, int cap) { return (int)pa_usb_audio_ep3_in_fill(&g_usb_ble, out, (uint32_t)cap); }
 EMU_EXPORT void emu_usb_playback_write(const uint8_t *pkt, int len) { pa_usb_audio_ep3_out_rx(&g_usb_ble, pkt, (uint32_t)len); }
+extern int pa_audio_core_swap_pending(void);
+extern uint32_t pa_settings_save_seq(void);
+/* tests: mark the settings dirty with a stamp `ahead_ms` in the FUTURE of the firmware tick's clock reading: on the device the tick reads the clock once at its start and the UI stamps with a fresh
+ * reading later in the same tick (a tick takes 10 - 250 ms), so the stamp is a little later than the tick's own `now`. */
+EMU_EXPORT void emu_mark_settings_dirty_ahead(int ahead_ms) { g_ui.settings_dirty = 1; g_ui.settings_dirty_ms = plat_ms() + (uint32_t)ahead_ms; }
+EMU_EXPORT uint32_t emu_settings_save_seq(void) { return pa_settings_save_seq(); }     /* tests: how many settings records were written */
+EMU_EXPORT int emu_swap_pending(void) { return pa_audio_core_swap_pending(); }     /* tests: a preset / model / cabinet swap is waiting for the mute */
 EMU_EXPORT int emu_get_usb_loopback(void) { return (int)g_usb_ble.loopback_enabled; }     /* tests: the USB driver's loopback switch */
 #include "pa_bond.h"
 /* tests: the Bluetooth bond log (pa_bond.h): stash keys as the radio does, run the main loop's write, read what is stored (-1 none, else the stored EDIV) */
@@ -1482,6 +1491,10 @@ EMU_EXPORT void emu_get_scope(float *in_256, float *out_256) {
     }
 }
 
+extern uint8_t pa_audio_core_applied_type(uint8_t slot);
+extern uint32_t pa_audio_core_swap_count(void);
+EMU_EXPORT int emu_get_applied_type(int slot) { return pa_audio_core_applied_type((uint8_t)slot); }     /* tests: the model the audio thread last swapped the slot to */
+EMU_EXPORT uint32_t emu_get_swap_count(void) { return pa_audio_core_swap_count(); }                    /* tests: how many deferred swaps the audio thread has applied */
 EMU_EXPORT int emu_get_slot_type(int slot) {
     if (slot < 0 || slot >= PA_SLOT_COUNT) return 0;
     return (int)g_ui.slot_type[slot];
@@ -1509,3 +1522,10 @@ EMU_EXPORT int emu_ble_trims_parse(const uint8_t *log, uint32_t len, uint8_t *ou
     if (m == 0xFu && out) { memcpy(out, t.x106, 2); memcpy(out + 2, t.x107, 7); memcpy(out + 9, t.x108, 20); memcpy(out + 29, t.x187, 68); }
     return (int)m;
 }
+
+/* tests: the radio calibration mirror (src/sys/pa_ble_trims_mirror.c) in the simulated flash. store: the 97 bytes of the four records; load: 1 and the 97 bytes when the mirror is valid. rewrite: the
+ * shared sector is erased and rewritten the way the settings log (reg 0) or a NAM registry commit (reg given, 1,136 bytes) does it; the mirror must come back. */
+extern int pa_flash_shared_rewrite(const void *reg, uint32_t reg_len);
+EMU_EXPORT void emu_trims_mirror_store(const uint8_t *b97) { pa_ble_trims_t t; memcpy(&t, b97, sizeof t); pa_ble_trims_mirror_store(&t); }
+EMU_EXPORT int emu_trims_mirror_load(uint8_t *b97) { pa_ble_trims_t t; if (!pa_ble_trims_mirror_load(&t)) return 0; memcpy(b97, &t, sizeof t); return 1; }
+EMU_EXPORT int emu_shared_rewrite(int with_registry) { static uint8_t reg[1136]; memset(reg, 0xA5, sizeof reg); return pa_flash_shared_rewrite(with_registry ? reg : 0, with_registry ? (uint32_t)sizeof reg : 0u); }

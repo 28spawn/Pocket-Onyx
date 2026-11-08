@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 #include "../../include/pa_config.h"
 /* src/sys/pa_audio_core.c - the portable audio core (see pa_audio_core.h).
  *
@@ -32,6 +34,9 @@ volatile uint8_t g_pa_gov_level;           /* set by the audio interrupt's load 
 volatile uint16_t g_pa_in_trace[PA_IN_TRACE_N];        /* the raw input's peak per 46 ms since the audio started (>> 8 of the 24-bit value) */
 volatile int16_t  g_pa_in_trace_mean[PA_IN_TRACE_N];  /* ... and its mean */
 volatile uint8_t g_pa_overload_force;     /* tests: 1 = behave as overloaded (the popup) */
+#define PA_SETTINGS_QUIET_MS   5000u    /* the settings are written this long after the last change... */
+#define PA_SETTINGS_MIN_GAP_MS 8000u    /* ...and never more often than this */
+static volatile uint32_t s_flash_ops;      /* flash operations that quiesced the audio (pa_audio_core_flash_end): each costs the overruns a swap does, and the overload rule must not read them as overload */
 static volatile uint32_t s_swap_done_seq;   /* counts the swaps the audio thread has applied: the main loop redraws the screen for each one (the screen is drawn from the chain, which a swap changes) */
 static uint32_t pa_perf_permille(uint32_t modelled);   /* the measured CPU load on the device, the model elsewhere (below) */
 #if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM)
@@ -427,7 +432,7 @@ static void settings_to_ui(const pa_settings_t *st, pa_ui_ctx_t *ui) {
     ui->stereo_width      = (st->stereo_width == 0u || st->stereo_width > 101u) ? PA_STEREO_WIDTH_DEFAULT : (uint8_t)(st->stereo_width - 1u);
     ui->out_route         = st->out_route > 4u ? 0u : st->out_route;
     ui->out_balance       = (st->out_balance < -50 || st->out_balance > 50) ? 0 : st->out_balance;
-    ui->bt_mode         = st->bt_enabled > 2u ? 1u : st->bt_enabled;     /* 0 OFF, 1 BLE, 2 BLE + A2DP (the old record's 0 / 1 keep their meaning) */
+    ui->bt_mode         = st->bt_enabled ? 1u : 0u;     /* 0 OFF, 1 BLE, 2 BLE + A2DP (the old record's 0 / 1 keep their meaning) */
     ui->bt_state        = ui->bt_mode ? 1 : 0;                      /* the host builds: broadcasting; the device overwrites it from the radio every tick */
     ui->tuner.mute_output = st->tuner_mute;
     ui->tuner.ref_a4_hz = (st->tuner_ref_hz >= 430 && st->tuner_ref_hz <= 450) ? st->tuner_ref_hz : 440;
@@ -582,8 +587,16 @@ void pa_audio_core_tick(pa_fx_chain_t *chain, pa_ui_ctx_t *ui, pa_drums_t *drums
             ui->master_volume = (uint8_t)pct;
             ui->out_level_pct = (uint8_t)pct;
             g_pa_audio.master_vol_q15 = pa_audio_core_master_q15((uint8_t)pct);
-            pa_ui_mark_settings_dirty(ui);
-            ui->dirty = 1;
+            /* NOT marked as a setting to save (1.17): the pot is read again at every boot (the output stays silent until it has been), so the stored level is never used, and every pause in a turn of
+             * the knob used to cost a flash write (the output muted, the interrupts off, the second core parked) that the overload rule then counted as an overload. */
+            {
+                static uint32_t s_master_dirty_ms;
+                if (s_master_dirty_ms == 0u || (uint32_t)(now - s_master_dirty_ms) >= 50u
+                    || pct == 0u || pct == 100u) {
+                    s_master_dirty_ms = now;
+                    ui->dirty = 1;
+                }
+            }
         }
     }
 #endif
@@ -717,25 +730,33 @@ void pa_audio_core_tick(pa_fx_chain_t *chain, pa_ui_ctx_t *ui, pa_drums_t *drums
         }
     }
 
-    {   /* The OVERLOAD popup. The system is overloaded when one of the protections has had to act: the audio interrupt auto-bypassed the amp (eight blocks in a row too late), the stereo governor switched
-         * the second channel off, the load governor reached level 2 (the cabinet's partitions are cut), or the codec reported a burst of overruns (4 in one second). The popup comes once per episode
-         * (a rising edge) and not again for 8 s; it stays 3 s, on any screen, and tells the player what to do. */
+    {   /* OVERLOAD: require ~250 ms sustained so a fast master/param spike does not flash the banner. */
         extern volatile uint8_t g_pa_stereo_allow;
-        static uint8_t s_ol_prev;
-        static uint32_t s_ol_until, s_ol_last, s_xr_prev, s_xr_t0, s_xr_burst_t, s_sw_prev;
+        static uint8_t s_ol_shown;
+        static uint32_t s_ol_until, s_ol_last, s_ol_since, s_xr_prev, s_xr_t0, s_xr_burst_t, s_sw_prev;
         if ((uint32_t)(now - s_xr_t0) >= 1000u) {
             const uint32_t xr = g_pa_audio.xrun_count;
-            const uint32_t sw = s_swap_done_seq;
-            if (pa_xrun_burst(xr - s_xr_prev, sw - s_sw_prev)) s_xr_burst_t = now;     /* a swap costs one overrun: only the overruns beyond the swaps' own count */
+            const uint32_t sw = s_swap_done_seq + s_flash_ops;
+            if (pa_xrun_burst(xr - s_xr_prev, sw - s_sw_prev)) s_xr_burst_t = now;
             s_xr_prev = xr; s_sw_prev = sw; s_xr_t0 = now;
         }
-        const uint8_t ol = (uint8_t)(g_pa_audio.bypass || !g_pa_stereo_allow || g_pa_gov_level >= 2u || g_pa_overload_force ||
-                                     (s_xr_burst_t != 0u && (uint32_t)(now - s_xr_burst_t) < 1500u));
-        if (ol && !s_ol_prev && (s_ol_last == 0u || (uint32_t)(now - s_ol_last) >= 8000u)) {
-            ui->overload_ms = 3000u; s_ol_until = now + 3000u; s_ol_last = now; ui->dirty = 1;
+        const uint8_t ol = (uint8_t)(g_pa_audio.bypass || !g_pa_stereo_allow || g_pa_gov_level >= 2u
+                                     || g_pa_overload_force
+                                     || (s_xr_burst_t != 0u && (uint32_t)(now - s_xr_burst_t) < 1500u));
+        if (ol) {
+            if (s_ol_since == 0u) s_ol_since = now ? now : 1u;
+            const int sustained = (g_pa_overload_force || (uint32_t)(now - s_ol_since) >= 250u);
+            if (sustained && !s_ol_shown && (s_ol_last == 0u || (uint32_t)(now - s_ol_last) >= 8000u)) {
+                ui->overload_ms = 3000u; s_ol_until = now + 3000u; s_ol_last = now;
+                s_ol_shown = 1u; ui->dirty = 1;
+            }
+        } else {
+            s_ol_since = 0u;
+            s_ol_shown = 0u;
         }
-        s_ol_prev = ol;
-        if (ui->overload_ms && (int32_t)(now - s_ol_until) >= 0) { ui->overload_ms = 0u; ui->dirty = 1; }
+        if (ui->overload_ms && (int32_t)(now - s_ol_until) >= 0) {
+            ui->overload_ms = 0u; ui->dirty = 1;
+        }
     }
 
     {   /* The status icons (USB diamond, Bluetooth) are part of the frame: a change of either, or the flash of the Bluetooth icon turning over (0.8 s), draws a new frame. */
@@ -796,12 +817,21 @@ void pa_audio_core_tick(pa_fx_chain_t *chain, pa_ui_ctx_t *ui, pa_drums_t *drums
     }
 
     PA_CP(0x6D);
-    /* 7. Persist the settings 2 s after the last change (one 4 KB sector write). */
-    if (ui->settings_dirty && (uint32_t)(now - ui->settings_dirty_ms) > 2000u &&
-        !(bsp && bsp->battery_brownout && bsp->battery_brownout())) {
-        settings_from_ui(&g_settings, ui);
-        if (pa_settings_save(&g_settings) == 0) ui->settings_dirty = 0;
-        else ui->settings_dirty_ms = now;                    /* retry later */
+    /* 7. Persist the settings once the person has stopped changing things: 5 s after the last change, at most once in 8 s (each save quiesces the audio: mute, interrupts off, the second core parked,
+     * and every 32nd one rewrites the whole 4 KB sector), and not at all when nothing differs from what was stored last. */
+    {
+        static uint32_t s_saved_ms; static pa_settings_t s_saved; static uint8_t s_saved_ok;
+        /* SIGNED: `now` was read at the START of this tick, and the UI stamps settings_dirty_ms with a fresh clock reading later in the same tick (a tick takes tens to hundreds of ms), so the
+         * stamp can be a little AFTER `now`. now - stamp is then a small negative number, which an unsigned subtraction turns into ~4.29 billion: the debounce passed on the spot and every change
+         * wrote the flash at once (the overload popup's real cause, together with the writes the master pot caused). */
+        if (ui->settings_dirty && (int32_t)(now - ui->settings_dirty_ms) > (int32_t)PA_SETTINGS_QUIET_MS &&
+            (s_saved_ms == 0u || (uint32_t)(now - s_saved_ms) >= PA_SETTINGS_MIN_GAP_MS) &&
+            !(bsp && bsp->battery_brownout && bsp->battery_brownout())) {
+            settings_from_ui(&g_settings, ui);
+            if (s_saved_ok && memcmp(&g_settings, &s_saved, sizeof g_settings) == 0) ui->settings_dirty = 0;      /* the same as what the flash holds: nothing to write */
+            else if (pa_settings_save(&g_settings) == 0) { ui->settings_dirty = 0; s_saved = g_settings; s_saved_ok = 1u; s_saved_ms = now ? now : 1u; }
+            else ui->settings_dirty_ms = now;                    /* retry later */
+        }
     }
 
     /* 7b. A preset / model swap just changed the chain the screen is drawn from (each slot's on/off, fade and tail state are read from its nodes). The redraw the change
@@ -827,28 +857,42 @@ void pa_audio_core_flush_settings(pa_ui_ctx_t *ui) {
 }
 
 /* ---- deferred swaps ------------------------------------------------------- */
-typedef enum { PA_SWAP_NONE = 0, PA_SWAP_PRESET, PA_SWAP_MODEL, PA_SWAP_USERCAB } pa_swap_kind_t;
-static pa_swap_kind_t s_swap_kind;
+/* What is waiting for the mute. Several requests can pile up while the knob is turned: each amp / cab / effect type that was asked for is kept in its own entry (the old single entry let a
+ * second request, an amp pick and then a cab pick a moment later, silently replace the first: the screen said one amp and the output played another), a preset is applied before the model
+ * picks that came after it, and a live user cabinet replaces a stock cab pick and the other way round. PA_SWAP_SETTLE_BLOCKS: the output stays faded out until the knob has been quiet for this
+ * many blocks, so scrolling through models is ONE silent gap and one swap, not a fade-out, a swap and a half fade-in for every click (the bursts and the flutter). A preset change does not wait. */
+#define PA_SWAP_SETTLE_BLOCKS 24u                              /* 24 x 1.45 ms = 35 ms */
+static uint8_t s_pend_preset, s_pend_ucab, s_settle;
+static uint8_t s_applied_type[PA_SLOT_COUNT];              /* the model each slot was last SWAPPED to (tests and the readout; the UI's own slot_type is what was asked for) */
+static uint8_t s_pend_have[PA_SLOT_COUNT], s_pend_type[PA_SLOT_COUNT];
+static int swap_pending(void) {
+    if (s_pend_preset || s_pend_ucab) return 1;
+    for (int i = 0; i < PA_SLOT_COUNT; i++) if (s_pend_have[i]) return 1;
+    return 0;
+}
 volatile uint8_t g_pa_user_cab_active;                         /* 1 while the cabinet is a live one from an upload (the UI shows USER CAB) */
 static int32_t  *s_ucab_taps;                                  /* the upload staging buffer, valid until the next upload begins (sysex.c refuses one while a swap is pending) */
 static uint32_t  s_ucab_n;
 void pa_audio_core_user_store_changed(void) { s_user_store_changed = 1u; }
-int pa_audio_core_user_cab_pending(void) { return s_swap_kind == PA_SWAP_USERCAB; }
+int pa_audio_core_user_cab_pending(void) { return s_pend_ucab; }
+int      pa_audio_core_swap_pending(void) { return swap_pending(); }              /* the screen holds its redraw while a swap waits for the mute (ui_app.c pa_ui_render) */
+uint8_t  pa_audio_core_applied_type(uint8_t slot) { return slot < PA_SLOT_COUNT ? s_applied_type[slot] : 0xFFu; }
+uint32_t pa_audio_core_swap_count(void) { return s_swap_done_seq; }
 
 /* A live user cabinet (an upload to PA_UPLOAD_CAB): raw Q18 taps, int32 little endian, 16..1024 of them. Loaded in the audio thread under the same fade as a model change. */
 int pa_audio_core_load_user_cab(uint8_t *buf, uint32_t len) {
     if (!buf || (len & 3u) != 0u || len < 16u * 4u || len > PA_STOCK_CAB_TAPS * 4u) return -2;
     if (((uintptr_t)buf & 3u) != 0u) return -3;
-    if (s_swap_kind != PA_SWAP_NONE) return -5;                  /* another swap is still pending: send it again */
+    if (swap_pending()) return -5;                               /* another swap is still pending: send it again */
     s_ucab_taps = (int32_t *)buf;
     s_ucab_n    = len / 4u;
-    s_swap_kind = PA_SWAP_USERCAB;
+    s_pend_ucab = 1u;
+    s_settle    = 0u;
     pa_evlog(PA_EV_SWAP_REQ, PA_SLOT_CAB, 0xFFu);
     pa_audio_core_request_mute();
     return 0;
 }
 static pa_preset_t    s_swap_preset;
-static uint8_t        s_swap_slot, s_swap_type;
 
 /* The DSP half of a model change (the UI half is the caller's). This lives in
  * the core because it touches the AMP/CAB state and must run in the audio
@@ -866,6 +910,10 @@ static void pa_audio_core_apply_model(pa_fx_chain_t *chain, pa_ui_ctx_t *ui,
                 pa_stock_load_amp(type, (pa_nam_model_t *)chain->slots[PA_SLOT_AMP]->state, NULL);
             g_active_amp_engine = 0;
             g_wn_model.active = 0;
+            if (g_wn_model.is_amp_cab) {
+                pa_fx_chain_set_slot_enabled_now(chain, PA_SLOT_CAB, 1);
+            }
+            g_wn_model.is_amp_cab = 0;
         } else {
             uint8_t u_idx = (uint8_t)(type - PA_STOCK_AMP_COUNT);
             const int ld_rc = pa_user_nam_load_into_dsp(u_idx, &g_nam_model, &g_wn_model);
@@ -875,10 +923,15 @@ static void pa_audio_core_apply_model(pa_fx_chain_t *chain, pa_ui_ctx_t *ui,
                 pa_stock_load_amp(0, &g_nam_model, NULL);
                 g_active_amp_engine = 0;
                 g_wn_model.active = 0;
+                g_wn_model.is_amp_cab = 0;
                 effective_type = 0;
                 if (ui) ui->slot_type[PA_SLOT_AMP] = 0;
             } else {
                 pa_user_nam_get_amp_defaults(u_idx, ui->slot_params[PA_SLOT_AMP]);
+                if (g_wn_model.is_amp_cab) {
+                    /* Baked-in cabinet: bypass the CAB slot so audio is not filtered twice */
+                    pa_fx_chain_set_slot_enabled_now(chain, PA_SLOT_CAB, 0);
+                }
             }
         }
         pa_amp_set_model_profile(effective_type);
@@ -920,7 +973,10 @@ void pa_audio_core_select_user_nam(pa_ui_ctx_t *ui, pa_fx_chain_t *chain,
 void pa_audio_core_request_preset(const pa_preset_t *p) {
     if (!p) return;
     s_swap_preset = *p;
-    s_swap_kind   = PA_SWAP_PRESET;
+    s_pend_preset = 1u;
+    s_pend_ucab   = 0u;                                          /* a preset brings its own cabinet and models: earlier picks are void */
+    for (int i = 0; i < PA_SLOT_COUNT; i++) s_pend_have[i] = 0u;
+    s_settle      = 0u;
     pa_evlog(PA_EV_SWAP_REQ, 0xFFu, 0u);
     pa_audio_core_request_mute();
 }
@@ -928,9 +984,11 @@ void pa_audio_core_request_preset(const pa_preset_t *p) {
 void pa_audio_core_request_model(pa_ui_ctx_t *ui, pa_fx_chain_t *chain,
                                  uint8_t slot, uint8_t type) {
     (void)ui; (void)chain;
-    s_swap_slot = slot;
-    s_swap_type = type;
-    s_swap_kind = PA_SWAP_MODEL;
+    if (slot >= PA_SLOT_COUNT) return;
+    s_pend_have[slot] = 1u;
+    s_pend_type[slot] = type;
+    if (slot == PA_SLOT_CAB) s_pend_ucab = 0u;                   /* a stock cab pick replaces a live cabinet that was still waiting */
+    s_settle = (uint8_t)PA_SWAP_SETTLE_BLOCKS;                   /* every request restarts the quiet time */
     pa_evlog(PA_EV_SWAP_REQ, slot, type);
     pa_audio_core_request_mute();
 }
@@ -964,6 +1022,8 @@ void pa_audio_core_flash_end(void) {
     if (!g_pa_irq_on) return;
     __asm__ volatile("csync\n\tsti" ::: "memory");
     g_pa_master_hold = s_fl_prev_hold;                           /* the output comes back on a one-block slew */
+    s_flash_ops++;
+    { extern volatile uint8_t g_pa_gov_swap; g_pa_gov_swap = 1u; }      /* audio_alnk.c: the load governor must not count the block the flash work delayed */
 }
 #else
 void pa_audio_core_flash_begin(void) { }
@@ -997,8 +1057,9 @@ __attribute__((weak)) void pa_smp_swap_note(uint32_t kind, uint32_t a, uint32_t 
 }
 
 static void pa_audio_core_run_pending(pa_fx_chain_t *chain, pa_ui_ctx_t *ui) {
-    if (s_swap_kind == PA_SWAP_NONE) return;
+    if (!swap_pending()) return;
     if (s_xf_state != PA_XF_MUTED) return;      /* the gain has not reached 0 yet */
+    if (s_settle) { s_settle--; return; }       /* still being turned: stay silent until the knob has been quiet for PA_SWAP_SETTLE_BLOCKS */
     pa_alnk_silence_tx();                       /* the swap below outlasts this block: whatever the DMA replays must be silence */
 #if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM)
     const uint32_t ev_t0 = plat_ticks24();
@@ -1009,22 +1070,31 @@ static void pa_audio_core_run_pending(pa_fx_chain_t *chain, pa_ui_ctx_t *ui) {
     const uint32_t t_w = plat_ticks24() - t_w0;
     const uint32_t t_a0 = plat_ticks24();
 #endif
-    const uint32_t ev_slot = (s_swap_kind == PA_SWAP_PRESET) ? 0xFFu : (uint32_t)s_swap_slot;
-    const uint32_t kind = (s_swap_kind == PA_SWAP_PRESET) ? 1u : 2u;
-    const uint32_t a = (s_swap_kind == PA_SWAP_PRESET) ? (uint32_t)s_swap_preset.amp_model_idx : (uint32_t)s_swap_slot;
-    const uint32_t b = (s_swap_kind == PA_SWAP_PRESET) ? (uint32_t)s_swap_preset.cab_model_idx : (uint32_t)s_swap_type;
-    if (s_swap_kind == PA_SWAP_PRESET) {
+    uint32_t ev_slot = 0xFFu, kind = 2u, a = 0u, b = 0u;
+    const int had_preset = s_pend_preset, had_ucab = s_pend_ucab;
+    s_pend_preset = 0u; s_pend_ucab = 0u;                     /* taken: a request that comes in while this swap runs (it takes tens of ms) stays pending and gets its own turn below */
+    if (had_preset) {
+        a = (uint32_t)s_swap_preset.amp_model_idx; b = (uint32_t)s_swap_preset.cab_model_idx; kind = 1u;
         pa_preset_apply_to_chain(&s_swap_preset, chain);
         g_pa_user_cab_active = 0u;                            /* the preset's own cabinet is loaded */
-    } else if (s_swap_kind == PA_SWAP_USERCAB) {
+    }
+    if (had_preset) { s_applied_type[PA_SLOT_AMP] = s_swap_preset.amp_model_idx; s_applied_type[PA_SLOT_CAB] = s_swap_preset.cab_model_idx; }
+    for (int sl = 0; sl < PA_SLOT_COUNT; sl++) {              /* the picks made since (or without) a preset, in slot order */
+        if (!s_pend_have[sl]) continue;
+        const uint8_t ty = s_pend_type[sl];
+        s_pend_have[sl] = 0u;
+        s_applied_type[sl] = ty;
+        if (!had_preset) { ev_slot = (uint32_t)sl; a = (uint32_t)sl; b = (uint32_t)ty; }
+        pa_audio_core_apply_model(chain, ui, (uint8_t)sl, ty);
+        if (sl == PA_SLOT_CAB) g_pa_user_cab_active = 0u;
+    }
+    if (had_ucab) {
         extern void fx_cab_ir_normalise_q18(int32_t *taps_q18, uint32_t num_taps);
         fx_cab_ir_normalise_q18(s_ucab_taps, s_ucab_n);       /* a third-party IR has no entry in the stock trim table: the same loudness as the reference cabinet */
         fx_cab_ir_load_q18(chain->slots[PA_SLOT_CAB], s_ucab_taps, s_ucab_n);
         fx_cab_ir_set_trim_db_x10(chain->slots[PA_SLOT_CAB], 0);
         g_pa_user_cab_active = 1u;
-    } else {
-        pa_audio_core_apply_model(chain, ui, s_swap_slot, s_swap_type);
-        if (s_swap_slot == PA_SLOT_CAB) g_pa_user_cab_active = 0u;
+        if (!had_preset) { ev_slot = PA_SLOT_CAB; a = PA_SLOT_CAB; b = 0xFFu; kind = 2u; }
     }
 #if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM)
     const uint32_t t_a = plat_ticks24() - t_a0;
@@ -1034,9 +1104,9 @@ static void pa_audio_core_run_pending(pa_fx_chain_t *chain, pa_ui_ctx_t *ui) {
 #else
     (void)ev_slot; (void)kind; (void)a; (void)b;
 #endif
-    s_swap_kind = PA_SWAP_NONE;
     s_swap_done_seq = s_swap_done_seq + 1u;
     pa_audio_core_release_mute();
+    if (swap_pending()) pa_audio_core_request_mute();         /* something was asked for during the swap: fade out again and apply it (the mute state would otherwise never see it) */
 }
 
 /* ---- the "jack": the device's audio I/O path, made portable ----------------
@@ -1296,6 +1366,10 @@ PA_HOT void pa_audio_core_process_block(pa_fx_chain_t *chain, pa_ui_ctx_t *ui,
         /* EXPERIMENTAL: In USB Interface mode (1: Interface, 2: Direct Monitor), completely bypass the 8-effect DSP engine!
          * This reclaims 65%+ CPU and eliminates pipeline latency so the pedal functions as a low-latency USB audio interface. */
         for (int i = 0; i < n; i++) { buf_L[i] = s_dry[i]; if (buf_R) buf_R[i] = s_dry[i]; }
+        /* The chain is not what is heard here, so the fade has nothing to do: let the state machine finish at once. Left alone it stayed in FADE_OUT for ever (xf_apply is not called in this
+         * branch), the swap that waits for the mute (a preset or model change) was never applied, and the screen's redraw hold waited for it: the presets looked stuck / copied until a restart. */
+        if (s_xf_state == PA_XF_FADE_OUT) s_xf_state = PA_XF_MUTED;
+        else if (s_xf_state != PA_XF_IDLE && s_xf_state != PA_XF_MUTED) { s_xf_state = PA_XF_IDLE; s_xf_gain = PA_Q21_ONE; }
     } else if (tuner_dry) {
         if (buf_R) for (int i = 0; i < n; i++) buf_R[i] = buf_L[i];       /* the tuner already scaled the left channel by the bypass volume */
         if (s_xf_state != PA_XF_IDLE) pa_audio_core_xf_apply(buf_L, buf_R, n);

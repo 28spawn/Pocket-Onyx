@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* test/test_ota_session.c - the firmware's half of the vendor MIDI update (src/sys/pa_ota_session.c) against a simulated host that serves a REAL package (the .fwsc files on disk) and a simulated flash.
  *   test_ota_session <package.fwsc> [<second.fwsc> ...]
  * Checks: the loader is staged byte for byte (head, body, record), nothing outside the five staging sectors is touched, the record has the SPL's markers, a host that never says "success" commits nothing and leaves the

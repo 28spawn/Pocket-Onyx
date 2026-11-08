@@ -159,3 +159,6 @@ if __name__ == "__main__":
     ap.add_argument("--name", default="Pocket")
     ap.add_argument("--preset", type=int, default=11, help="the Program Change number (0..79) to select")
     raise SystemExit(asyncio.run(main(ap.parse_args())))
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

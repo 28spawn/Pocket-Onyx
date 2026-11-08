@@ -108,3 +108,6 @@ for name, fn in cases.items():
 
 print("\nBLOCK ADAPTER OK" if not fails else f"\n{fails} FAILED")
 sys.exit(1 if fails else 0)
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

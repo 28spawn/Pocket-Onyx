@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """MIDI control over USB / BLE: every control of MIDI-MAP-CUSTOM.md that the firmware implements, driven through the REAL MIDI handler (usb_ble.c: the CC / NRPN decoder) and applied by the real
 firmware tick (pa_ui_midi_control), then read back from the UI state. Built from what the handler does, not from the map: a control the map lists but the handler does not implement is not tested as
 working (and the map marks it [N] = proposed). Also: the value rules (buttons act at >= 64, continuous controls at every value), the NRPN selection rules, out-of-range values, and the preset

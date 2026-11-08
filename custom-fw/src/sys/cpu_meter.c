@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* cpu_meter.c — per-stage DSP load meter (roadmap E12). Portable C, no device I/O here.
  * On-device: wire cpu_meter_set_clock() to the pi32v2 free-running cycle counter.
  * On host (PC sim): inject a mock clock. Rendering (ST7789) lives in ui_display.c. */

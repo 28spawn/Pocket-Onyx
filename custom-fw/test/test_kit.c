@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/test/test_kit.c — the drum kit's quality, measured
  *
  * The kit is the project's own synthesised kit (src/dsp/drum_kit.inc, made by

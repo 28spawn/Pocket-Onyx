@@ -27,3 +27,6 @@ if r.returncode:
     print(r.stdout, r.stderr[-3000:])
     sys.exit("build failed")
 sys.exit(subprocess.run([str(exe), str(tmp / "w.bin")]).returncode)
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

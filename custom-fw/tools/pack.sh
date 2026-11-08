@@ -25,4 +25,6 @@ fw_add -noenc -fw jl_isd.fw -add ota.bin -type 100 -out jl_isd.fw
 fw_add -noenc -fw jl_isd.fw -add script.ver -out jl_isd.fw
 ufw_maker -fw_to_ufw jl_isd.fw                                                   # -> jl_isd.ufw
 
-echo "successfully built and packed: $(pwd)/jl_isd.ufw ($(stat -c%s jl_isd.ufw) B)"
+echo "successfully built and packed: $(pwd)/jl_isd.ufw ($(stat -c%s jl_isd.ufw) B)"
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

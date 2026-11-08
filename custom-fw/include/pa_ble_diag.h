@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/include/pa_ble_diag.h - the Bluetooth link instrumentation block, shared by the firmware and the host tools (tools/ble_diag_decode.py reads exactly this layout).
  *
  * One block of plain data (no pointers), filled by the radio driver and read live over USB-MIDI (the diagnostic channel's RAM read, 7D 02) or from a download-mode readout:

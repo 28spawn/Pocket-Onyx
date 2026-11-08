@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* src/dsp/pa_stereo_spread.h - THE STEREO SPREAD: what makes the headphone jack stereo when nothing else in the chain does (no cabinet in the preset, an amp that holds
  * its own cabinet, the cabinet switched off, or the governor has turned the stereo cabinet off).
  *

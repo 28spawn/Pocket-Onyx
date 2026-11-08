@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """The web editor's protocol on the firmware's own parser: the state record (cmd 80), the name lists (cmd 81),
 and the live cabinet upload (cmd 25 / 34 / 48, target 2). MIDI changes made through the MIDI handler must show in the record.
 

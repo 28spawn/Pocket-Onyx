@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * pa_ble_trims.h - the radio calibration of THIS unit, read from the stock firmware's record log at boot.
  *
@@ -31,5 +33,16 @@ uint32_t pa_ble_trims_parse(pa_ble_trims_read_fn rd, pa_ble_trims_t *out);
 int pa_ble_trims_load_from_flash(pa_ble_trims_t *out);
 
 uint16_t pa_ble_crc16_xmodem(const uint8_t *d, uint32_t n);
+
+/* ---- 1.16: the mirror. The stock's log at 0xB5000 is written by nobody but the stock firmware, and a flash tool run erased it once (the radio then refused to start: "no calibration"). So once the log
+ * has been read, a copy of the four records is kept in this firmware's own part of the flash (include/pa_flash_map.h PA_FLASH_TRIMS_MIRROR_ADDR, inside the shared sector, carried across every
+ * rewrite of that sector). At boot the order is: the stock's log, then the mirror, then (a build made for one unit) the copy compiled in. */
+#define PA_BLE_TRIMS_MIRROR_REC 128u                                  /* the record: magic, version, the 97 bytes, pad, CRC-32 */
+int  pa_ble_trims_mirror_load(pa_ble_trims_t *out);                   /* 1 = a valid mirror was read into *out */
+void pa_ble_trims_mirror_store(const pa_ble_trims_t *t);              /* call from the main loop: may write the flash, only when the mirror is missing or differs */
+int  pa_ble_trims_mirror_snapshot(uint8_t rec[PA_BLE_TRIMS_MIRROR_REC]); /* for settings.c: the record the erased shared sector must get back (1 = there is one) */
+/* pure, for the host test: build and check a record */
+void pa_ble_trims_mirror_build(const pa_ble_trims_t *t, uint8_t rec[PA_BLE_TRIMS_MIRROR_REC]);
+int  pa_ble_trims_mirror_parse(const uint8_t rec[PA_BLE_TRIMS_MIRROR_REC], pa_ble_trims_t *out);
 
 #endif

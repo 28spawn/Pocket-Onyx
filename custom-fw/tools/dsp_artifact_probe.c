@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/tools/dsp_artifact_probe.c
  *
  * Measurement harness for the Pocket Amp DSP. It drives the real fx_node_t

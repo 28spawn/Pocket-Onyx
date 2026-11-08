@@ -118,3 +118,6 @@ def decode(raw, lay):
     for t, _k, txt in rows:
         out.append("    %s  %s" % (ago(t), txt))
     return out
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

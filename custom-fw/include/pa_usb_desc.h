@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/include/pa_usb_desc.h - the USB descriptors of the Pocket Amp (USB-AUDIO-PLAN.md, step A).
  *
  * Shared by the firmware (src/board/usb_dev.c) and the host test (test/test_usb_desc.c), which walks the tables and checks every length, number and link, so a mistake

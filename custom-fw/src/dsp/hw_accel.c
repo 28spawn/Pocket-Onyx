@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 #include "../../include/pa_config.h"
 /*
  * hw_accel.c — JieLi AC791N Hardware Vector/Matrix/FIR Accelerator Driver & Host Emulator

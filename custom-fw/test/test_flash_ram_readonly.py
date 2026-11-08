@@ -77,3 +77,6 @@ else:
     print("  skip the instruction audit check (no built ELF / objdump)")
 print("RESULT: " + ("FAILED" if fails else "ALL PASSED"))
 sys.exit(1 if fails else 0)
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

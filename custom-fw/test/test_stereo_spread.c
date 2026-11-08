@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* test/test_stereo_spread.c - the stereo spread (src/dsp/pa_stereo_spread.h): on a dual-mono guitar-like signal the left and right channels come out EQUALLY LOUD (within
  * 0.3 dB, for a low-heavy, a mid, a bright and a cabinet-filtered spectrum: the earlier design made one ear 4-7 dB louder on those), each channel keeps the level of the input,
  * the correlation between the channels falls as the width grows (fully uncorrelated at 100), the mono sum keeps the tone (only quieter by the decorrelation), a real stereo input

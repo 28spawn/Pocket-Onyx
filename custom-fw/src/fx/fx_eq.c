@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/fx/fx_eq.c — the EQ block: three types
  *
  *   0 5-BAND        five peaking bands, 100 Hz / 400 Hz / 1 kHz / 3 kHz / 8 kHz, Q 1.2,

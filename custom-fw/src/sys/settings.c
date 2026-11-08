@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* src/sys/settings.c — persistent system settings: magic + sequence + CRC32 (IMP-10).
  * The settings sector is an APPEND LOG of 64-byte slots (64 slots): a save programs the next blank slot (one 64-byte page write, about 0.3 ms plus the quiesce) and the sector is erased only when
  * the 64th slot is used, so a save does not cost a 17 ms erase and the flash sees 1/64th of the erases. The load takes the valid slot with the highest sequence number. A slot torn by a power cut fails
@@ -8,16 +10,19 @@
 #include "../../include/pa_flash_map.h"
 #include "../../include/pa_preset.h"     /* pa_crc32 */
 #include "../../include/pa_bond.h"       /* the Bluetooth bond lives in the same sector */
+#include "../../include/pa_ble_trims.h"   /* so does the radio calibration mirror */
 
 #define SET_ADDR    (PA_FLASH_SYS_SETTINGS_ADDR)
 #define SET_SLOT    64u
 #define SET_SLOTS   (PA_FLASH_SYS_SETTINGS_SIZE / SET_SLOT)         /* 32: the first half of the sector it shares with the NAM registry */
 _Static_assert(sizeof(pa_settings_t) <= SET_SLOT, "a settings record must fit one 64-byte slot");
 _Static_assert(PA_FLASH_SYS_SETTINGS_ADDR == PA_FLASH_SHARED_SECTOR && PA_FLASH_USER_NAM_META_A_ADDR == PA_FLASH_SHARED_SECTOR + PA_FLASH_SYS_SETTINGS_SIZE &&
-               PA_FLASH_BOND_ADDR == PA_FLASH_USER_NAM_META_A_ADDR + PA_FLASH_USER_NAM_META_SIZE &&
-               PA_FLASH_SYS_SETTINGS_SIZE + PA_FLASH_USER_NAM_META_SIZE + PA_FLASH_BOND_SIZE == PA_FLASH_SECTOR_SIZE, "the settings log, the NAM registry and the Bluetooth bond log fill one sector");
+               PA_FLASH_TRIMS_MIRROR_ADDR == PA_FLASH_USER_NAM_META_A_ADDR + PA_FLASH_USER_NAM_META_SIZE &&
+               PA_FLASH_BOND_ADDR == PA_FLASH_TRIMS_MIRROR_ADDR + PA_FLASH_TRIMS_MIRROR_SIZE &&
+               PA_FLASH_SYS_SETTINGS_SIZE + PA_FLASH_USER_NAM_META_SIZE + PA_FLASH_TRIMS_MIRROR_SIZE + PA_FLASH_BOND_SIZE == PA_FLASH_SECTOR_SIZE, "the settings log, the NAM registry, the radio calibration mirror and the Bluetooth bond log fill one sector");
 
 static uint32_t s_seq = 0;
+uint32_t pa_settings_save_seq(void) { return s_seq; }     /* the sequence number of the newest saved record: it moves once per save (tests, diagnostics) */
 static uint32_t s_next = 0;      /* the slot the next save programs (SET_SLOTS = the log is full: rewrite the sector first) */
 static pa_settings_t s_last;     /* the newest valid record (loaded or saved): put back into slot 0 whenever the shared sector is erased */
 static int s_have_last = 0;
@@ -74,6 +79,8 @@ int pa_flash_shared_rewrite(const void *reg, uint32_t reg_len) {
     static uint8_t keep[PA_FLASH_USER_NAM_META_SIZE];
     uint8_t rec[SET_SLOT];
     uint8_t bond[PA_BOND_SLOT];
+    uint8_t mirror[PA_BLE_TRIMS_MIRROR_REC];
+    const int have_mirror = pa_ble_trims_mirror_snapshot(mirror);   /* the radio calibration mirror goes back after the erase too */
     const int have_bond = pa_bond_snapshot(bond);                /* the newest Bluetooth bond (or the one being appended) goes back after the erase, like the settings and the registry */
     if (reg == 0) {
         if (pa_spi_nor_read(PA_FLASH_USER_NAM_META_A_ADDR, keep, sizeof keep) != 0) return -1;
@@ -98,6 +105,7 @@ int pa_flash_shared_rewrite(const void *reg, uint32_t reg_len) {
         s_next = 1;
     }
     if (rc == 0 && have_bond) rc = pa_spi_nor_write(PA_FLASH_BOND_ADDR, bond, PA_BOND_SLOT);
+    if (rc == 0 && have_mirror) rc = pa_spi_nor_write(PA_FLASH_TRIMS_MIRROR_ADDR, mirror, PA_BLE_TRIMS_MIRROR_REC);
     pa_bond_rewritten(have_bond);
     pa_spi_nor_end();
     pa_spi_nor_sync();

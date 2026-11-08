@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/fx/fx_delay.c — Pocket Amp V105 Stereo 5-Mode Delay + Wet Modulation + "Delay Tail"
  *
  * Matches the official Pocket Amp User Manual (Pages 10–11) & V105 Release Notes:

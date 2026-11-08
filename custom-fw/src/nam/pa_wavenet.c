@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * pa_wavenet.c — Pocket Amp Embedded 23-Layer Dilated WaveNet Inference Engine
  *
@@ -353,10 +355,10 @@ static const biquad_coeffs_t k_lpf_profiles[PA_VOICE_COUNT] = {
     { 0.69819890f, 1.39639781f, 0.69819890f, 1.30313964f, 0.48965598f },
     /* CRUNCH: 16.0 kHz LPF */
     { 0.53713881f, 1.07427763f, 0.53713881f, 0.84713918f, 0.30141607f },
-    /* HIGHGAIN: 7.2 kHz LPF (analog speaker de-fizz roll-off, eliminates digital aliasing) */
-    { 0.15020956f, 0.30041913f, 0.15020956f, -0.64533964f, 0.24617781f },
-    /* FUZZ: 6.8 kHz LPF (suppresses harsh square-wave aliasing) */
-    { 0.13723070f, 0.27446140f, 0.13723070f, -0.71434280f, 0.26326570f },
+    /* HIGHGAIN: 16.0 kHz LPF (preserves pick attack and full harmonic bandwidth) */
+    { 0.53713881f, 1.07427763f, 0.53713881f, 0.84713918f, 0.30141607f },
+    /* FUZZ: 16.0 kHz LPF (preserves fuzz harmonic bite) */
+    { 0.53713881f, 1.07427763f, 0.53713881f, 0.84713918f, 0.30141607f },
     /* BASS: 14.0 kHz LPF */
     { 0.42908473f, 0.85816945f, 0.42908473f, 0.50018742f, 0.21615149f }
 };

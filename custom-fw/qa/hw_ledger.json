@@ -1,7 +1,7 @@
 {
   "_readme": "Hardware and recovery evidence for the QA gate (custom-fw/tools/qa_gate.py). Fill it in as you do the bench work in TEST-PROTOCOL.md. Every claim needs evidence: a photo, a log or a file path. The gate reads this file; it never writes it.",
   "device": {
-    "serial_or_label": "4150353835313708",
+    "serial_or_label": "unit1",
     "flash_chip": "<marking>",
     "flash_size_bytes": 1048576,
     "flash_is_separate_8pin_chip": null,
@@ -65,7 +65,7 @@
         "status": "proven",
         "date": "2026-10-30",
         "evidence": "FM-1 Transporter method (XIAO RP2040 on D+/D-/GND, USB_KEY at power-on). 2026-10-30: dumps on V1.03 (11c01191...) and V1.05 (66ac9ffd...); full app region (0x5000-0xB5000) rewritten with stock V1.05 and booted; recovery test: app sector 0x5000 blanked -> unit dead (black screen, no USB device on the PC) -> UBOOT entered via USB_KEY -> sector restored with drill --repair -> full re-read identical to 66ac9ffd... -> booted, identity Pocket AMP_105. Logs: custom-fw/qa/backups/unit1_v105_recovery/ (break.out, repair.out, console.log).",
-        "hardware": "Seeed XIAO RP2040 with the Pocket Amp Transporter build (FM-1 Transporter a632d92, MIT, write window widened to 0x0-0xB5000; built from C:/Users/Ricardo/Downloads/pa-transporter-build), custom-fw/tools/pa_transporter.py"
+        "hardware": "Seeed XIAO RP2040 with the Pocket Amp Transporter build (FM-1 Transporter a632d92, MIT, write window widened to 0x0-0xB5000; built from ~/Downloads/pa-transporter-build), custom-fw/tools/pa_transporter.py"
       }
     },
     "restore_drill": {
@@ -1999,6 +1999,30 @@
         "done": 67,
         "result": "FAILED: final read-back differs in 1 sector(s), first 0x0B4000",
         "journal": "flash_journal_20261105-170735.json"
+      },
+      {
+        "date": "2026-11-06T22:38:15",
+        "expected_sha256": "f67b1cb83b9efaf3194778e61d424a3edb477802c35d67f381e5a43acdf1a503",
+        "sectors": 1,
+        "done": 1,
+        "result": "ok",
+        "journal": "flash_journal_20261106-223815.json"
+      },
+      {
+        "date": "2026-11-06T22:43:10",
+        "expected_sha256": "65225f64188a707517bc6df5c7f1f57b98b160c555795d5f235179101ef51f08",
+        "sectors": 1,
+        "done": 1,
+        "result": "ok",
+        "journal": "flash_journal_20261106-224307.json"
+      },
+      {
+        "date": "2026-11-06T23:25:25",
+        "expected_sha256": "96bd3a09042bcdaa6aa169c94d109ba9757ec85e0831c50ced2065dd23383691",
+        "sectors": 97,
+        "done": 97,
+        "result": "FAILED: final read-back differs in 1 sector(s), first 0x0B4000",
+        "journal": "flash_journal_20261106-232517.json"
       }
     ]
   },

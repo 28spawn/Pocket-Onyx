@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/wasm/pa_wasm.c - WebAssembly board shim for the Pocket Amp firmware.
  *
  * This is NOT an emulator of the firmware. It is the firmware's own portable

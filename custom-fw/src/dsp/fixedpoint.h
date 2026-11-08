@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* fixedpoint.h — reusable fixed-point DSP primitives (I/O-free, host-testable).
  * Fixed-point Multiply-Accumulate (MAC) DSP kernel:
  *   out[i] += (in[i] * coeff) >> 7  with saturating Q arithmetic. */

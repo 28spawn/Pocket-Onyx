@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/include/pa_biquad.h - one biquad section over a block, Q21, bit-exact between the C reference and the assembly kernel.
  *   y  = sat32(q21(b0 x) + s1)
  *   s1 = sat32(sat32(q21(b1 x) - q21(a1 y)) + s2)

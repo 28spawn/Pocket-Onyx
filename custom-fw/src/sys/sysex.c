@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * src/sys/sysex.c — M-VAVE Pocket Amp SysEx Streaming Parser & Command Dispatcher
  */
@@ -121,10 +123,10 @@ static uint32_t pa_sysex_put_u32(char *out, uint32_t cap, uint32_t at, uint32_t 
  * identification requirements.
  */
 #ifndef PA_DEVICE_NAME
-#define PA_DEVICE_NAME "DONNER Pocket AMP"
+#define PA_DEVICE_NAME "Onyx"
 #endif
 #ifndef PA_DEVICE_MODEL
-#define PA_DEVICE_MODEL "PocketAmp"
+#define PA_DEVICE_MODEL "Onyx"
 #endif
 /* PA_FW_VERSION now lives in pa_config.h (one definition, shared with the OTA ID block) */
 
@@ -187,8 +189,16 @@ static pa_sysex_state_fn g_state_provider;
 static pa_sysex_names_fn g_names_provider;
 void pa_sysex_set_editor_providers(pa_sysex_state_fn state, pa_sysex_names_fn names) { g_state_provider = state; g_names_provider = names; }
 
+static uint8_t s_up_result;                     /* 0 none yet, 1 the last transfer was stored, 2 it was refused (acknowledged to the sender, see PA_REPLY_PA_UPLOAD) */
+static void upload_ack(uint8_t state) {
+    uint8_t a[4] = { (uint8_t)g_upload.rx_bytes, (uint8_t)(g_upload.rx_bytes >> 8), (uint8_t)(g_upload.rx_bytes >> 16), state };
+    pa_sysex_reply(PA_REPLY_PA_UPLOAD, a, sizeof a);
+}
 static void commit_upload_session(void) {
     if (!g_upload.armed || g_upload.rx_bytes == 0) return;
+    /* A transfer that is not all there is refused, never stored: the MIDI receive ring (512 bytes, emptied once per UI tick, which can take 100 ms and more) drops bytes when a
+     * sender is faster than that, and the old code committed whatever had arrived: a capture that said 1,871 weights and held 1,671, which the loader then rejected for ever. */
+    if (g_upload.rx_bytes != g_upload.declared_len) { g_sx.frames_err++; g_upload.status = 1u; g_upload.armed = 0; s_up_result = 2u; return; }
 
     int rc = -1;
     if (g_upload.target_type == PA_UPLOAD_PRESET) {
@@ -199,6 +209,8 @@ static void commit_upload_session(void) {
                 rc = pa_preset_save(g_upload.target_slot, p);
             }
         }
+    } else if (g_upload.target_type == PA_UPLOAD_PRESET_RESTORE) {
+        if (g_upload.rx_bytes >= (uint32_t)sizeof(pa_preset_t)) rc = pa_preset_restore(g_upload.target_slot, (const pa_preset_t *)g_upload.buffer);
     } else if (g_upload.target_type == PA_UPLOAD_NAM) {
         if (g_upload.target_slot == 0xFFu) {                                   /* the first free logical slot */
             uint8_t f = 0;
@@ -303,6 +315,7 @@ static void commit_upload_session(void) {
      * failure. */
     int ok = (g_upload.target_type == PA_UPLOAD_NAM) ? (rc >= 0) : (rc == 0);
     g_upload.status = ok ? 0u : 1u;
+    s_up_result = ok ? 1u : 2u;
     g_upload.armed = 0;
 }
 
@@ -313,10 +326,18 @@ void pa_sysex_init(void) {
     pa_upload_session_init();
 }
 
+/* The audio core: is a preset / model / live-cabinet swap still waiting for the mute? (weak: a build without the audio core has none) */
+__attribute__((weak)) int pa_audio_core_swap_pending(void) { return 0; }
+
 static void pa_sysex_dispatch(uint8_t cmd, const uint8_t *payload, uint32_t len) {
     g_sx.frames_ok++;
 
     if (cmd == PA_CMD_WRITE_BEGIN) { /* cmd25 (0x19) */
+        if (len >= 5 && payload[3] == PA_UPLOAD_CAB && payload[4] == 0xFEu && pa_audio_core_swap_pending()) {
+            /* A live cabinet goes into the slot the swap is about to rewrite, and the audio core takes only one asset at a time (it answers -5 at the commit). Say so NOW, before the
+             * sender spends the transfer: the previous transfer, if any, is left as it is, and the editor asks again in a moment. */
+            g_sx.frames_err++; s_up_result = 2u; upload_ack(2u); return;
+        }
         if (len >= 3) {
             uint32_t decl_len = ((uint32_t)payload[0]) |
                                 (((uint32_t)payload[1]) << 8) |
@@ -326,8 +347,9 @@ static void pa_sysex_dispatch(uint8_t cmd, const uint8_t *payload, uint32_t len)
             g_upload.target_slot  = (len > 4) ? payload[4] : 0u;
             g_upload.rx_bytes     = 0;
             g_upload.status       = 0;
+            s_up_result           = 0u;
             g_upload.armed        = (decl_len != 0u && decl_len <= PA_UPLOAD_BUFFER_SIZE) ? 1u : 0u;
-            if (!g_upload.armed) { g_upload.status = 1u; g_sx.frames_err++; return; }
+            if (!g_upload.armed) { g_upload.status = 1u; g_sx.frames_err++; s_up_result = 2u; upload_ack(2u); return; }
 
             /* Check if initial body data is appended after header */
             if (len > 5) {
@@ -339,6 +361,7 @@ static void pa_sysex_dispatch(uint8_t cmd, const uint8_t *payload, uint32_t len)
                     commit_upload_session();
                 }
             }
+            upload_ack(g_upload.armed ? 0u : (s_up_result == 1u ? 1u : 2u));
         }
     } else if (cmd == PA_CMD_COMMIT && g_upload.armed) {
         /* The stock's armed commit (cmd 48): the pending transfer is swapped
@@ -382,6 +405,26 @@ static void pa_sysex_dispatch(uint8_t cmd, const uint8_t *payload, uint32_t len)
         uint8_t rec[PA_STATE_REC_SIZE];
         const uint32_t n = g_state_provider ? g_state_provider(rec, sizeof rec) : 0u;
         if (n) pa_sysex_reply(PA_REPLY_PA_STATE, rec, n);
+    } else if (cmd == PA_CMD_PA_FLASH) {
+        /* a window of the flash for the editor's backup (read only; the same bytes the diagnostic channel reads) */
+        uint8_t out[6 + 128];
+        uint32_t addr = 0u, n = 0u;
+        if (len >= 5u) { addr = (uint32_t)payload[0] | ((uint32_t)payload[1] << 8) | ((uint32_t)payload[2] << 16) | ((uint32_t)payload[3] << 24); n = payload[4]; }
+        memset(out, 0, sizeof out);
+        memcpy(out, &addr, 4);
+        out[4] = (uint8_t)n;
+        if (n == 0u || n > 128u || addr >= PA_FLASH_SIZE || n > PA_FLASH_SIZE - addr || pa_spi_nor_read(addr, &out[6], n) != 0) { out[5] = 1u; pa_sysex_reply(PA_REPLY_PA_FLASH, out, 6u); }
+        else pa_sysex_reply(PA_REPLY_PA_FLASH, out, 6u + n);
+    } else if (cmd == PA_CMD_PA_PRESET) {
+        /* one stored preset, for the PC's backup tool (tools/preset_bank_pc.py): [index, status] + the pa_preset_t record */
+        uint8_t out[2 + sizeof(pa_preset_t)];
+        const uint8_t idx = len > 0 ? payload[0] : 0xFFu;
+        pa_preset_t rec;
+        memset(out, 0, sizeof out);
+        out[0] = idx;
+        if (idx < PA_PRESET_COUNT && pa_preset_load(idx, &rec) == 0) memcpy(&out[2], &rec, sizeof rec);
+        else out[1] = 1u;
+        pa_sysex_reply(PA_REPLY_PA_PRESET, out, sizeof out);
     } else if (cmd == PA_CMD_PA_NAMES) {
         uint8_t out[5 + 15 * 16];
         const uint32_t n = g_names_provider ? g_names_provider(len > 0 ? payload[0] : 0u, len > 1 ? payload[1] : 0u, out, sizeof out) : 0u;
@@ -415,6 +458,8 @@ static void pa_sysex_dispatch(uint8_t cmd, const uint8_t *payload, uint32_t len)
         uint32_t n = pa_sysex_state_block(blk);
         if (len > 0u && len < n) n = len;
         pa_sysex_reply(PA_REPLY_BLOCK, blk, n);
+    } else if (cmd == PA_CMD_WRITE_CHUNK && !g_upload.armed) {
+        upload_ack(s_up_result == 1u ? 1u : (s_up_result == 2u ? 2u : 3u));       /* a late or repeated chunk: say how the transfer ended (or that none is open) */
     } else if (cmd == PA_CMD_WRITE_CHUNK && g_upload.armed) {
         /* Subsequent streaming chunk received during active upload session */
         if (len > 0) {
@@ -429,6 +474,7 @@ static void pa_sysex_dispatch(uint8_t cmd, const uint8_t *payload, uint32_t len)
                 commit_upload_session();
             }
         }
+        upload_ack(g_upload.armed ? 0u : (s_up_result == 1u ? 1u : 2u));              /* every chunk is answered, an empty one only asks: the sender resumes from what the unit holds */
     }
 }
 

@@ -6,19 +6,21 @@
 #   make fw      — Link app.elf, extract app.bin, and package Pocket_AMP_Custom.fwsc
 
 BOARD ?= pocket_amp
+BLE   ?= 0
 
 ifeq ($(BOARD),blackbox)
   BOARD_DEF = -DBOARD_BLACKBOX=1
 else
   BOARD_DEF = -DBOARD_POCKET_AMP=1
 endif
+BLE_DEF = -DPA_BLE=$(BLE)
 
 HOST_CC   ?= cc
 HOST_CFLAGS = -O2 -Wall -Wextra -Iinclude -DPA_HOST_SIM=1 $(BOARD_DEF)
 
 # Auto-detect JieLi toolchain on Windows or Linux
 ifeq ($(OS),Windows_NT)
-  JIELI_ROOT ?= C:/Users/Ricardo/tools/jieli/C$$/JL/pi32
+  JIELI_ROOT ?= $(or $(JL_TOOLCHAIN), $(HOME)/tools/jieli/C$$/JL/pi32)
   PI32_CC    ?= $(JIELI_ROOT)/bin/clang.exe
   PI32_LD    ?= $(JIELI_ROOT)/bin/pi32v2-ld.exe
   PI32_OC    ?= $(JIELI_ROOT)/bin/llvm-objcopy.exe
@@ -35,7 +37,7 @@ else
   PYTHON     ?= python3
 endif
 
-PI32_CFLAGS = -target pi32v2 -mcpu=r3 -O2 -Wall -ffreestanding -fno-builtin -isystem $(PI32_INC) -Iinclude $(BOARD_DEF)
+PI32_CFLAGS = -target pi32v2 -mcpu=r3 -O2 -Wall -ffreestanding -fno-builtin -isystem $(PI32_INC) -Iinclude -Isrc/board/ble_platform -Ithird_party/optimist_ble/src -Ithird_party/optimist_ble/hal $(BOARD_DEF) $(BLE_DEF)
 
 DSP_SRCS = \
 	src/dsp/activation.c \
@@ -80,6 +82,7 @@ BOARD_SRCS = \
 	src/board/ui_app.c \
 	src/board/usb_ble.c \
 	src/board/ble_midi.c \
+	src/board/ble_radio.c \
 	src/board/main.c
 
 ALL_FW_SRCS = $(DSP_SRCS) $(FX_SRCS) $(SYS_SRCS) $(BOARD_SRCS)

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * pa_stock_assets.h - Dynamic Flash Loader & Fallback for Stock Amps and Cabs
  *

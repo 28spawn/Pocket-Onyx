@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """Host-side BLE monitor for a baseline unit (measured from the PC).
 
 Read-only towards the unit: it only scans, connects, discovers services, subscribes to the BLE-MIDI characteristic and disconnects.

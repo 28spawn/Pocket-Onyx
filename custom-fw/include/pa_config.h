@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* pa_config.h — build-time configuration knobs.
  * Pocket Amp custom firmware (JieLi AC791N / wl82). Change these to push limits;
  * see ROADMAP.md for the rationale/costs of each. */
@@ -19,7 +21,7 @@
 #define PA_CPU_HZ              360000000u
 #define PA_BLOCK_N             64      /* samples/channel per DAC block (64..128) */
 
-/* Board identification. Defaults to Pocket AMP if not specified */
+/* Board identification. Defaults to Onyx if not specified */
 #ifndef BOARD_POCKET_AMP
 #if !defined(BOARD_BLACKBOX)
 #define BOARD_POCKET_AMP       1
@@ -29,21 +31,28 @@
 /* The firmware version the editor and the updater compare against;
  * the device-info record and the OTA ID block both carry this number.
  * One definition, so the two cannot drift apart. */
+/* PA_BACKLIGHT_FIXED 1: the backlight is held at 100 % (a steady output, no PWM). The brightness setting is kept but has no effect, and the short dip at a screen change is off.
+ * The brightness is a 10-step software PWM ticked from the audio interrupt (gpio_scan.c): any change in the audio interrupt's timing (a swap, the tuner, the drums, a heavier amp or
+ * cab) made the light itself flicker, with no redraw involved. */
+#ifndef PA_BACKLIGHT_FIXED
+#define PA_BACKLIGHT_FIXED 1
+#endif
+
 #ifndef PA_FW_VERSION
-#define PA_FW_VERSION          105u   /* shown as 1.05; the OTA ID block says V105 */
+#define PA_FW_VERSION          118u   /* shown as 1.18; the OTA ID block says V118 */
 #endif
 #ifndef PA_DEVICE_NAME
 #if defined(BOARD_BLACKBOX)
-#define PA_DEVICE_NAME         "M-VAVE BlackBox"
+#define PA_DEVICE_NAME         "BlackBox"
 #else
-#define PA_DEVICE_NAME         "DONNER Pocket AMP"
+#define PA_DEVICE_NAME         "Onyx"
 #endif
 #endif
 #ifndef PA_DEVICE_MODEL
 #if defined(BOARD_BLACKBOX)
 #define PA_DEVICE_MODEL        "BlackBox"
 #else
-#define PA_DEVICE_MODEL        "PocketAmp"
+#define PA_DEVICE_MODEL        "Onyx"
 #endif
 #endif
 
@@ -71,6 +80,15 @@
 #define PA_FEAT_DENSE_ACT_LUT  1   /* A2: 512-entry linear-interpolated LUT vs stock 128-entry */
 #define PA_FEAT_SMP_CPU1       0   /* SP-1: Dual-core CPU1 offload (disabled until verified on physical AC791N hardware) */
 #define PA_FEAT_DRUMS          1   /* SP-2: Built-in procedural 808/909 drum & metronome synth */
+
+/* Builder item: BLE (Bluetooth LE Radio)
+ * Off by default (0). By default, the firmware build never powers or touches
+ * the Bluetooth / Wi-Fi radio hardware of the device. Must be explicitly enabled
+ * at build time (-Ble flag in build.ps1 / -DPA_BLE=1 / make BLE=1) to compile in
+ * the Optimist BLE stack and enable the hardware radio. */
+#ifndef PA_BLE
+#define PA_BLE 0
+#endif
 
 /* The front panel has a MASTER volume pot on SARADC channel 0 (0..4095, Q12).
  * On device this ADC does not exist (digital VOL-/+ buttons);

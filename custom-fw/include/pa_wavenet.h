@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * pa_wavenet.h — Pocket Amp Embedded 23-Layer Dilated WaveNet Inference Engine
  *

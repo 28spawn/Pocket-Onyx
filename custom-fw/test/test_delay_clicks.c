@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* test/test_delay_clicks.c - turning the delay's knobs while a note rings must not click.
  *
  * A steady 1 kHz note goes through the delay with feedback, so the output is a sum of sines of the same frequency: a smooth waveform whose second difference is small

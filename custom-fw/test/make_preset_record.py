@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """The preset record the host tool builds, as hex, for the wasm test.
 
 `custom-fw/tools/mvave_device.py` builds the preset record - pa_preset_t, the

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 The Onyx Authors (@28spawn)
 /* The NAM volume: a capture loaded from the page must come up at the SAME
  * level as the same capture picked from the effect menu.
  *

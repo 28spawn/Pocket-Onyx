@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* test/test_usb_midi_e2e.c - the USB-MIDI receive-to-response pipeline, end to end, on the PRODUCTION code.
  *
  *   pa_usb_midi_rx_packet() -> midi_rx_ring -> pa_usb_ble_poll() -> pa_diag_feed() / pa_sysex_input_byte() (+ the OTA scanner)

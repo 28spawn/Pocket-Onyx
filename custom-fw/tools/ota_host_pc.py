@@ -39,3 +39,6 @@ while time.time() - last < a.idle:
     body = bytes([0, 0x59, 0x30, (len(data) + 8) & 255, (len(data) + 8) >> 8, 0, typ]) + addr.to_bytes(4, "little") + bytes([len(data) & 255, len(data) >> 8, 0]) + data
     body += bytes([(~sum(body[6:])) & 255]); time.sleep(0.01); mo.send_message([0xF0] + list(M.pack_8to7(body)) + [0xF7])
 print(f"stopped asking after {n} requests ({a.idle:.0f} s idle)")
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

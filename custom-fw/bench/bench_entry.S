@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 /*
  * custom-fw/bench/bench_entry.S - entry and timing loops for the RAM-resident WaveNet
  * benchmark. The JieLi ROM download mode (UBOOT1.00) jumps here after the host uploads

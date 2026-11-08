@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """A tiny pi32v2 interpreter for exactly the instruction subset of the WaveNet CPU-stage kernels (wn_asm_mix / wn_asm_head), driven by llvm-objdump text.
 It is only as good as its model of the ISA, so it is calibrated first on the stock-identical kernel (known-good on the unit) before it judges anything else."""
 import re

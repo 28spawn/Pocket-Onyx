@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * test/test_dsp_chain.c — Host Verification Test for NAM A2 GRU, 512-Entry LUTs, and 8-Slot FX Chain
  */

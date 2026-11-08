@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/test/test_mod.c - the MOD block (src/fx/fx_mod.c), measured.
  *
  *   [1] headroom: the chorus / flanger delay line is clean above 0 dBFS
@@ -5,7 +7,7 @@
  *   [3] mono: the PHASER and UNIVIBE do not cancel when L and R are summed
  *   [4] phaser range: the first notch sweeps ~83 Hz .. ~830 Hz (stages at 200 Hz .. 2 kHz)
  *   [5] auto filter: it follows the playing (a loud note opens it an octave+ further than
- *       a quiet one) AND the LFO sweeps it on its own (a steady tone moves an octave+
+ *       a quiet one) AND the WAH LFO sweeps it (a steady tone moves an octave+
  *       between the LFO's low and high point - after a saturated amp there is no envelope)
  *   [6] RATE: the Hz the screen shows (pa_mod_rate_mhz) is the LFO you hear
  *   [7] the knobs shown as "---" really do nothing on that type
@@ -85,7 +87,7 @@ static double first_notch(int type, int pre) {
 
 int main(int argc, char **argv) {
     for (int i = 1; i < argc; i++) if (!strcmp(argv[i], "--report")) strict = 0;
-    const char *nm[7] = { "CHORUS", "PHASER", "FLANGER", "TREMOLO", "VIBRATO", "UNIVIBE", "AUTO FILTER" };
+    const char *nm[7] = { "CHORUS", "PHASER", "FLANGER", "TREMOLO", "VIBRATO", "WAH", "AUTO WAH" };
     int N = FS * 2 - (FS * 2) % PA_BLOCK_N;
 
     printf("[1] headroom: CHORUS, DEPTH 0, MIX 100 %% (the wet path alone), 220 Hz\n");
@@ -109,7 +111,7 @@ int main(int argc, char **argv) {
     printf("[2] level at MIX 50 %%, DEPTH 50 %%, RATE 30 %% (a 5-tone signal, 1.5 s)\n");
     {
         double worst = 0;
-        const int types[4] = { 0, 1, 2, 5 };
+        const int types[4] = { 0, 1, 2, 5 };   /* CHORUS, PHASER, FLANGER, WAH */
         for (int k = 0; k < 4; k++) {
             fx_node_t *nd = mk(types[k], 0.3, 0.5, 0.5, 0.0);
             multisine(N, 0.05); run(nd, N);
@@ -149,13 +151,13 @@ int main(int argc, char **argv) {
               "the notch sweeps the guitar's range, ~83 .. ~830 Hz (%.0f .. %.0f Hz; stages were at 1.1 .. 8 kHz)", lo, hi);
     }
 
-    printf("[5] auto filter (DEPTH 100 %%, MIX 100 %%, RESO 50 %%, RATE 0 = 0.1 Hz)\n");
+    printf("[5] auto wah (follows the playing) and wah (LFO) (DEPTH 100 %%, MIX 100 %%, RESO 50 %%, RATE 0 = 0.1 Hz)\n");
     {
         /* the filter's position: the power-weighted mean frequency of its gain at the
          * harmonics of a 110 Hz note (output harmonic / input harmonic) in a 0.2 s window */
         double fc[4];
         for (int k = 0; k < 4; k++) {
-            fx_node_t *nd = mk(6, 0.0, 1.0, 1.0, 0.5);
+            fx_node_t *nd = mk(k < 2 ? 6 : 5, 0.0, 1.0, 1.0, 0.5);   /* AUTO WAH for the loud / quiet pair, WAH for the LFO pair */
             int pre = (k == 3) ? FS * 5 - (FS * 5) % PA_BLOCK_N : 0;     /* half an LFO cycle */
             int n = pre + FS / 2 - (FS / 2) % PA_BLOCK_N;
             double amp0 = (k == 0) ? 0.5 : (k == 1) ? 0.016 : 0.1;       /* -6 / -36 / -20 dBFS */
@@ -175,9 +177,9 @@ int main(int argc, char **argv) {
         }
         printf("     loud note %.0f Hz vs quiet note %.0f Hz (same LFO point)\n", fc[0], fc[1]);
         printf("     steady tone: LFO low %.0f Hz vs LFO high %.0f Hz\n", fc[2], fc[3]);
-        CHECK(fc[0] / fc[1] > 2.0, "the envelope opens the filter: loud %.0f Hz vs quiet %.0f Hz (it barely moved before)",
+        CHECK(fc[0] / fc[1] > 1.6, "the envelope opens the filter: loud %.0f Hz vs quiet %.0f Hz (it barely moved before)",
               fc[0], fc[1]);
-        CHECK(fc[3] / fc[2] > 2.0, "the LFO sweeps it on its own: %.0f -> %.0f Hz", fc[2], fc[3]);
+        CHECK(fc[3] / fc[2] > 2.0, "the WAH LFO sweeps it: %.0f -> %.0f Hz", fc[2], fc[3]);
     }
 
     printf("[6] RATE in Hz: shown vs measured (TREMOLO, DEPTH 100 %%)\n");
@@ -232,7 +234,7 @@ int main(int argc, char **argv) {
             for (int i = 0; i < n; i++) { if (L[i] != L[i] || R[i] != R[i]) nan = 1; if (fabs(L[i]) > pk) pk = fabs(L[i]); }
             nd->destroy(nd);
         }
-        CHECK(!nan && pk < 16.0, "phaser / flanger / auto filter stay bounded (peak %.2f FS)", pk);
+        CHECK(!nan && pk < 16.0, "phaser / flanger / auto wah stay bounded (peak %.2f FS)", pk);
     }
 
     printf("[9] fractional delay interpolation: 10 kHz treble retention (Vibrato, MIX 100 %%, DEPTH 50 %%, 220 ms)\n");

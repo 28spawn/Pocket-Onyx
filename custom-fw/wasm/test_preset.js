@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 The Onyx Authors (@28spawn)
 /* Preset management over the wire.
  *
  * The firmware's upload session (SysEx cmd 25) has a target: 0 is a PRESET.

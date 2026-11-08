@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * src/sys/stock_assets.c - the 20 stock amp slots and 20 stock cabinet slots
  *
@@ -162,13 +164,32 @@ const char *pa_stock_get_cab_name(uint8_t idx) {
     return flash_name(1, idx, k_fallback_cab_names[idx]);
 }
 
+/* One 16-float vector (64 bytes) of the record into the model blob: word i goes to blob_off + i * stride, either stored or ADDED to what is there (the AM4 biases are sums).
+ * Its own 64-byte read: a small stack, one driver call. */
+static void vec_to_blob(uint32_t flash_addr, uint8_t *blob, uint32_t blob_off, uint32_t stride, int add) {
+    uint8_t vec[64];
+    if (pa_spi_nor_read(flash_addr, vec, sizeof vec) != 0) return;
+    for (uint32_t i = 0; i < 16u; i++) {
+        int32_t v = q_float(rec_f32(vec, i * 4u));
+        if (add) { int32_t cur; memcpy(&cur, blob + blob_off + i * stride, sizeof cur); v += cur; }
+        put_i32(blob, blob_off + i * stride, v);
+    }
+}
+
 int pa_stock_load_amp(uint8_t idx, pa_nam_model_t *out_model, float *out_dc_bias) {
     if (idx >= PA_STOCK_AMP_COUNT || !out_model) return -1;
 
     if (s_flash_has_assets) {
         win_t w; win_init(&w);
         uint32_t addr = PA_FLASH_FACTORY_CAB_ADDR + idx * AMP_REC_SIZE;
-        if (win_fill(&w, addr) == 0) {
+        /* One flash quiesce for the whole record. 0xBF000 is outside the XIP window, so EVERY pa_spi_nor_read below goes through the flash driver, and each
+         * call on its own fades the output, waits up to 20 ms for three audio blocks and parks core 1: the ~900 reads of one amp (the three matrix windows
+         * alternate on every element) took longer than the 8 s watchdog, and the unit froze a moment after a preset change and rescued itself to the
+         * download mode. pa_spi_nor_begin/end nest, so the reads inside cost the driver time only. */
+        pa_spi_nor_begin();
+        const int first = win_fill(&w, addr);
+        if (first != 0) pa_spi_nor_end();
+        if (first == 0) {
             const int am4 = (win_u8(&w, addr) == 'A' && win_u8(&w, addr + 1) == 'M' && win_u8(&w, addr + 2) == '4');
             const uint32_t base = am4 ? AM4_WEIGHTS : AM3_WEIGHTS;
             /* AM3: W_out at +0xCC0, no biases. AM4: six bias vectors at +0xCC0..+0xE3F, then
@@ -178,34 +199,39 @@ int pa_stock_load_amp(uint8_t idx, pa_nam_model_t *out_model, float *out_dc_bias
             uint8_t *blob = (uint8_t *)out_model;
             memset(out_model, 0, sizeof(*out_model));
 
-            for (uint32_t i = 0; i < 16u; i++) {
-                for (uint32_t j = 0; j < 16u; j++) {
-                    put_i32(blob, 0    + i * 68u + j * 4u, q_float(win_f32(&w, addr, base + 0x0C0u + (i * 16u + j) * 4u)));
-                    put_i32(blob, 1088 + i * 68u + j * 4u, q_float(win_f32(&w, addr, base + 0x4C0u + (i * 16u + j) * 4u)));
-                    put_i32(blob, 2176 + i * 64u + j * 4u, q_float(win_f32(&w, addr, base + 0x8C0u + (i * 16u + j) * 4u)));
+            /* Few flash calls AND a small stack. The first fix read the record in big blocks into stack buffers (about 1.7 KB); this runs on the audio thread's stack, which has
+             * no room for that (1.07 and 1.08 broke the audio chain on the unit). Now one 256-byte window is used three times, matrix after matrix (each pass is sequential, so the
+             * window refills every 64 floats: 4 reads a matrix), and each 16-float vector (64 bytes) is read on its own: about 30 driver calls in all, 330 bytes of stack. */
+            for (uint32_t m = 0; m < 3u; m++) {
+                const uint32_t moff = base + 0x0C0u + m * 0x400u;                 /* the three 16 x 16 matrices at +0x0C0, +0x4C0, +0x8C0 */
+                win_init(&w);
+                for (uint32_t i = 0; i < 16u; i++) {
+                    for (uint32_t j = 0; j < 16u; j++) {
+                        const int32_t v = q_float(win_f32(&w, addr, moff + (i * 16u + j) * 4u));
+                        if (m == 0u)      put_i32(blob, 0    + i * 68u + j * 4u, v);
+                        else if (m == 1u) put_i32(blob, 1088 + i * 68u + j * 4u, v);
+                        else              put_i32(blob, 2176 + i * 64u + j * 4u, v);
+                    }
                 }
-                put_i32(blob, 0    + i * 68u + 64u, q_float(win_f32(&w, addr, base + 0x000u + i * 4u)));  /* W_ir */
-                put_i32(blob, 1088 + i * 68u + 64u, q_float(win_f32(&w, addr, base + 0x040u + i * 4u)));  /* W_iz */
-                put_i32(blob, 3200 + i * 4u,        q_float(win_f32(&w, addr, base + 0x080u + i * 4u)));  /* W_in */
-                put_i32(blob, 3264 + i * 4u,        q_float(win_f32(&w, addr, w_out + i * 4u)));          /* W_out */
-                if (am4) {
-                    const int32_t b_ir = q_float(win_f32(&w, addr, base + 0xCC0u + i * 4u));
-                    const int32_t b_iz = q_float(win_f32(&w, addr, base + 0xD00u + i * 4u));
-                    const int32_t b_in = q_float(win_f32(&w, addr, base + 0xD40u + i * 4u));
-                    const int32_t b_hr = q_float(win_f32(&w, addr, base + 0xD80u + i * 4u));
-                    const int32_t b_hz = q_float(win_f32(&w, addr, base + 0xDC0u + i * 4u));
-                    const int32_t b_hn = q_float(win_f32(&w, addr, base + 0xE00u + i * 4u));
-                    put_i32(blob, 3592 + i * 4u, b_ir + b_hr);   /* b_r  */
-                    put_i32(blob, 3656 + i * 4u, b_iz + b_hz);   /* b_z  */
-                    put_i32(blob, 3720 + i * 4u, b_in);          /* b_ni */
-                    put_i32(blob, 3784 + i * 4u, b_hn);          /* b_nh */
-                }
+            }
+            vec_to_blob(addr + base + 0x000u, blob, 64,   68u, 0);   /* W_ir: the 17th word of each row of the first matrix */
+            vec_to_blob(addr + base + 0x040u, blob, 1152, 68u, 0);   /* W_iz */
+            vec_to_blob(addr + base + 0x080u, blob, 3200, 4u,  0);   /* W_in */
+            vec_to_blob(addr + w_out,         blob, 3264, 4u,  0);   /* W_out */
+            if (am4) {
+                vec_to_blob(addr + base + 0xCC0u, blob, 3592, 4u, 0);   /* b_r  = b_ir + b_hr */
+                vec_to_blob(addr + base + 0xD80u, blob, 3592, 4u, 1);
+                vec_to_blob(addr + base + 0xD00u, blob, 3656, 4u, 0);   /* b_z  = b_iz + b_hz */
+                vec_to_blob(addr + base + 0xDC0u, blob, 3656, 4u, 1);
+                vec_to_blob(addr + base + 0xD40u, blob, 3720, 4u, 0);   /* b_ni = b_in */
+                vec_to_blob(addr + base + 0xE00u, blob, 3784, 4u, 0);   /* b_nh = b_hn */
             }
 
             pa_nam_reset(out_model);
             out_model->scale_q21 = PA_Q21_ONE;
             out_model->active    = 1;
             if (out_dc_bias) *out_dc_bias = g_pa_stock_amps[idx].dc_bias;
+            pa_spi_nor_end();
             return 0;
         }
     }
@@ -227,6 +253,7 @@ int pa_stock_load_cab(uint8_t idx, int32_t *out_taps_q18, uint32_t *out_num_taps
     if (s_flash_has_assets) {
         win_t w; win_init(&w);
         uint32_t addr = PA_FLASH_FACTORY_CAB_ADDR + CAB_BASE_OFF + idx * CAB_REC_SIZE;
+        pa_spi_nor_begin();                       /* one quiesce for the 3,000-odd byte reads below (see pa_stock_load_amp) */
         if (win_u8(&w, addr) == 'C' && win_u8(&w, addr + 1) == 'A' && win_u8(&w, addr + 2) == 'B') {
             const uint32_t raw = addr + CAB_TAP0_OFF;
             for (uint32_t k = 0; k < PA_STOCK_CAB_TAPS; k++) {
@@ -241,8 +268,10 @@ int pa_stock_load_cab(uint8_t idx, int32_t *out_taps_q18, uint32_t *out_num_taps
                 out_taps_q18[k] = q18;
             }
             if (out_num_taps) *out_num_taps = PA_STOCK_CAB_TAPS;
+            pa_spi_nor_end();
             return 0;
         }
+        pa_spi_nor_end();
     }
 
     /* placeholder: the synthesised default cabinet */

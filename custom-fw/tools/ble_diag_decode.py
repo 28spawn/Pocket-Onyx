@@ -107,3 +107,6 @@ if __name__ == "__main__":
         print(__doc__)
         sys.exit(2)
     print(report(decode(open(sys.argv[1], "rb").read())))
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

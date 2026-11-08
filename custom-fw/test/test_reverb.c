@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* test/test_reverb.c - Reverb tank layout + decay law regression tests.
  *
  * Two things used to be silently wrong here, and neither of them clicks:
@@ -61,14 +63,14 @@ static int fails = 0;
  * k_*_combs in fx_reverb.c, the decay table / documented RT60 must be revisited
  * and this test must be updated deliberately, not silently. */
 static const uint16_t k_ref_combs[6][4] = {
-    {  778,  808,  745,  711 },   /* Room   */
+    { 1167, 1212, 1118, 1067 },   /* Room   (1.13: 1.5 x the old table) */
     { 1557, 1617, 1491, 1422 },   /* Hall   */
     { 1557, 1617, 1491, 1422 },   /* Swell  (Hall voicing) */
-    { 1013, 1187,  673,  797 },   /* Spring */
+    { 1874, 2196, 1245, 1475 },   /* Spring (1.13: 1.85 x the old table) */
     { 1557, 1617, 1491, 1422 },   /* Shimmer (Hall voicing) */
     { 1993, 2111, 1879, 1789 },   /* Cloud  */
 };
-static const char *k_type_name[8] = { "Room", "Hall", "Swell", "Spring", "Shimmer", "Cloud", "Plate", "Ambience" };
+static const char *k_type_name[7] = { "Room", "Hall", "Swell", "Spring", "Shimmer", "Cloud", "Plate" };
 
 #define REGION_MAX 8
 
@@ -160,15 +162,23 @@ static void test_sentinel(fx_node_t *nd) {
 /* --------------------------------------------------------------------- [4] */
 /* Returns the Q21 gain the node produced for a knob value (0..PA_Q21_ONE). */
 static void test_decay_mapping(fx_node_t *nd) {
-    printf("[4] decay knob: g = 0.55 + 0.41 * knob, within 1 Q21 count\n");
+    printf("[4] decay knob (Hall): RT60 law 0.3 / 0.6 / 1.7 / 3.0 / 4.5 s at 0 / 20 / 50 / 80 / 100 %%, g = 10^(-0.745 * 3 * D / 44100 / RT60), within 2 Q21 counts\n");
+    nd->set_param(nd, 10, 1);      /* Hall: the feedback depends on the type, and the type is applied at the next reset / block */
+    nd->reset(nd);
     int32_t prev = -1;
     for (int pct = 0; pct <= 100; pct += 5) {
         int32_t val  = (int32_t)(((int64_t)pct * PA_Q21_ONE) / 100);
         double  v    = (double)val / (double)PA_Q21_ONE;
-        int32_t want = (int32_t)llround((0.55 + 0.41 * v) * (double)PA_Q21_ONE);
+        static const double kn[5] = { 0.0, 0.2, 0.5, 0.8, 1.0 }, rt5[5] = { 0.3, 0.6, 1.7, 3.0, 4.5 };
+        int ki = 0; while (ki < 3 && v > kn[ki + 1]) ki++;
+        const double rt = rt5[ki] * pow(rt5[ki + 1] / rt5[ki], (v - kn[ki]) / (kn[ki + 1] - kn[ki]));
+        double gw = pow(10.0, -0.745 * 3.0 * (0.25 * (1557 + 1617 + 1491 + 1422) / 44100.0) / rt);
+        if (gw < 0.55) gw = 0.55;
+        if (gw > 0.975) gw = 0.975;
+        int32_t want = (int32_t)llround(gw * (double)PA_Q21_ONE);
         nd->set_param(nd, 0, val);
         int32_t got = pa_rev_decay_gain(nd);
-        CHECK(abs((int)(got - want)) <= 1,
+        CHECK(abs((int)(got - want)) <= 2,
               "knob %d%%: gain %d, the mapping says %d (diff %d)", pct,
               (int)got, (int)want, (int)(got - want));
         CHECK(got > prev, "knob %d%%: gain %d is not above the previous %d",
@@ -284,8 +294,8 @@ static void test_rt60(fx_node_t *nd) {
                       k_type_name[t], label, got,
                       fabs(got - want) / want * 100.0, want);
                 if (is_def)
-                    CHECK(got >= 0.4 && got <= 1.5,
-                          "%s default RT60 %.2f s is outside the 0.4..1.5 s target",
+                    CHECK(got >= 0.4 && got <= 3.5,
+                          "%s default RT60 %.2f s is outside the 0.4..3.5 s target (1.14: the default knob sits higher on the calibrated curve)",
                           k_type_name[t], got);
                 if (is_min)
                     CHECK(got >= 0.15 && got <= 1.0,

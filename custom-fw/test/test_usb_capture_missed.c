@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* test/test_usb_capture_missed.c - the recording survives host frames that found no packet (a late USB interrupt) without a re-centre.
  *
  * Every missed 1 ms host frame leaves the read position ~44 frames behind what the audio interrupt keeps writing; the slow fill control used to let the ring climb to its overflow line

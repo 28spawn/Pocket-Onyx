@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-custom-fw/emu/server.py — M-VAVE Pocket Amp Live Firmware Emulator & ASIO Audio Host
+custom-fw/emu/server.py — Onyx Live Firmware Emulator & ASIO Audio Host
 
 Features:
   - Enables PortAudio ASIO (`SD_ENABLE_ASIO=1`) to connect directly to USB ASIO audio interfaces
@@ -26,11 +26,12 @@ import wave
 import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import sounddevice as sd
 
-from nam_loader import parse_nam_file, parse_wav_ir
+from nam_loader import parse_nam_file, parse_wav_ir, parse_riff_wav
 
 EMU_DIR = Path(__file__).resolve().parent
 DLL_PATH = EMU_DIR / "pocket_amp_emu.dll"
@@ -207,7 +208,7 @@ with emu_lock:
 # Sample Player & Guitar DI Loops.
 # The test audio and the IR bank are the project's own, synthesised by
 # custom-fw/tools/gen_test_audio.py on first start (emu/samples/ and emu/irs/ are
-plucked-string DI phrases, modelled cabinets, plate and spring reverbs.
+# plucked-string DI phrases, modelled cabinets, plate and spring reverbs).
 sys.path.insert(0, str(EMU_DIR.parent / "tools"))
 try:
     import gen_test_audio
@@ -215,57 +216,87 @@ try:
 except Exception as e:  # noqa: BLE001 - the emulator still runs without them
     print(f"[test audio] could not generate the test files: {e}", flush=True)
 SAMPLE_DIR = EMU_DIR / "samples"
+JONAS_DI_DIR = Path(os.environ.get("PA_DRY_CAPTURES_DIR", str(Path.home() / "Downloads" / "Dry Captures Jonas")))
 g_loaded_samples = {}
 g_test_mode = "live"  # Default to live instrument input from audio interface
-g_last_sample_mode = "di_clean"
+g_last_sample_mode = "jonas_chords_1"
 g_sample_playing = False
 g_sample_loop = True
 g_sample_play_pos = 0
-g_input_trim_lin = float(10.0 ** (6.0 / 20.0))  # +6 dB nominal instrument level (~2.0x)
-SAMPLE_DI_TRIM_LIN = float(10.0 ** (-20.0 / 20.0))  # -20 dB trim for normalized DI samples to match live ASIO guitar level (~0.10x)
+g_input_trim_lin = 1.0  # Unity gain default (0 dB); avoids clipping WaveNet input stage
+SAMPLE_DI_TRIM_LIN = float(10.0 ** (-7.0 / 20.0))   # ~0.45x: calibrated realistic guitar DI instrument level
 g_sample_clock = 0
 
 
+def _read_wav_mono_f32(fpath: Path):
+    """Read 16/24/32-bit PCM or 32/64-bit IEEE float WAV into mono float32 array and sample rate."""
+    raw_bytes = fpath.read_bytes()
+    info = parse_riff_wav(raw_bytes)
+    tag = info["format_tag"]
+    nch = info["channels"]
+    sr = info["sample_rate"]
+    bits = info["bits"]
+    pcm = info["data"]
+    if tag == 3 and bits == 32:
+        arr = np.frombuffer(pcm, dtype=np.float32).copy()
+    elif tag == 3 and bits == 64:
+        arr = np.frombuffer(pcm, dtype=np.float64).astype(np.float32)
+    elif tag == 1 and bits == 16:
+        arr = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+    elif tag == 1 and bits == 32:
+        arr = np.frombuffer(pcm, dtype=np.int32).astype(np.float32) / 2147483648.0
+    elif tag == 1 and bits == 24:
+        n = len(pcm) // 3
+        b = np.frombuffer(pcm[: n * 3], dtype=np.uint8).reshape(n, 3)
+        v = (b[:, 0].astype(np.int32) | (b[:, 1].astype(np.int32) << 8) | (b[:, 2].astype(np.int32) << 16))
+        v = np.where(v & 0x800000, v - 0x1000000, v)
+        arr = v.astype(np.float32) / 8388608.0
+    else:
+        raise ValueError(f"Unsupported WAV format tag={tag} bits={bits}")
+    if nch > 1:
+        arr = arr[: (len(arr) // nch) * nch].reshape(-1, nch)[:, 0]
+    return np.ascontiguousarray(arr, dtype=np.float32), sr
+
+
 def load_audio_samples():
-    global g_loaded_samples
-    samples = {
-        # GuitarSet studio session multi-tracks (CC-BY 4.0)
-        "gs_funk_comp": ("gs_funk_comp.wav", "GuitarSet Funk 16th Rhythm Chops (112 BPM, C#)"),
-        "gs_funk_solo": ("gs_funk_solo.wav", "GuitarSet Funk Melodic Lead & Fills (114 BPM, Ab)"),
-        "gs_jazz_comp": ("gs_jazz_comp.wav", "GuitarSet Jazz Swing 7th/9th Comping (130 BPM, D)"),
-        "gs_jazz_solo": ("gs_jazz_solo.wav", "GuitarSet Jazz Bebop Melodic Runs (137 BPM, Eb)"),
-        "gs_rock_comp": ("gs_rock_comp.wav", "GuitarSet Rock Arpeggiated Rhythm (85 BPM, F)"),
-        "gs_rock_solo": ("gs_rock_solo.wav", "GuitarSet Rock Expressive Lead Solo (148 BPM, C)"),
-        "gs_bossa_comp": ("gs_bossa_comp.wav", "GuitarSet Bossa Nova Fingerstyle (154 BPM, E)"),
-        "gs_bossa_solo": ("gs_bossa_solo.wav", "GuitarSet Bossa Nova Melodic Lead (166 BPM, Ab)"),
-        "gs_acoustic_strum": ("gs_acoustic_strum.wav", "GuitarSet Acoustic Open Strumming (107 BPM, Ab)"),
-        "gs_acoustic_solo": ("gs_acoustic_solo.wav", "GuitarSet Acoustic Melodic Solo (100 BPM, C#)"),
-        # synthesised DI phrases (tools/gen_test_audio.py)
-        "di_clean": ("di_clean_chords.wav", "Clean strummed chords (G C D Em)"),
-        "di_arp": ("di_arpeggio.wav", "Clean arpeggios (Am F C G)"),
-        "di_rock": ("di_rock_riff.wav", "Rock riff, power chords + palm mutes"),
-        "di_metal": ("di_metal_chug.wav", "Metal chugs, low E 16ths"),
-        "di_blues": ("di_blues_lead.wav", "Blues lead line (A minor pentatonic)"),
-        "di_bass": ("di_bass_line.wav", "Bass line (E G A, root-octave-fifth)"),
+    global g_loaded_samples, g_last_sample_mode
+    jonas_samples = {
+        # Standard Dry Captures (Jonas ? 44.1 kHz 32-bit float natural instrument-level DIs)
+        "jonas_chords_1": ("chords 1.wav", "Jonas Dry Capture ? Chords 1"),
+        "jonas_chords_2": ("chords 2.wav", "Jonas Dry Capture ? Chords 2"),
+        "jonas_chords_3": ("chords 3.wav", "Jonas Dry Capture ? Chords 3"),
+        "jonas_chords_4": ("chords 4.wav", "Jonas Dry Capture ? Chords 4"),
+        "jonas_chords_5": ("chords 5.wav", "Jonas Dry Capture ? Chords 5"),
+        "jonas_riff_1": ("riff 1.wav", "Jonas Dry Capture ? Riff 1"),
+        "jonas_riff_2": ("riff 2.wav", "Jonas Dry Capture ? Riff 2"),
+        "jonas_riff_3": ("riff 3.wav", "Jonas Dry Capture ? Riff 3"),
+        "jonas_riff_4": ("riff 4.wav", "Jonas Dry Capture ? Riff 4"),
+        "jonas_riff_5": ("riff 5.wav", "Jonas Dry Capture ? Riff 5"),
+        "jonas_lick_1": ("Lick 1.wav", "Jonas Dry Capture ? Lick 1"),
+        "jonas_lick_2": ("Lick 2.wav", "Jonas Dry Capture ? Lick 2"),
+        "jonas_lick_3": ("Lick 3.wav", "Jonas Dry Capture ? Lick 3"),
+        "jonas_lick_4": ("Lick 4.wav", "Jonas Dry Capture ? Lick 4"),
+        "jonas_lick_5": ("Lick 5.wav", "Jonas Dry Capture ? Lick 5"),
     }
-    for key, (fname, label) in samples.items():
-        fpath = SAMPLE_DIR / fname
+    for key, (fname, label) in jonas_samples.items():
+        fpath = JONAS_DI_DIR / fname
+        if not fpath.exists():
+            fpath = SAMPLE_DIR / fname
         if fpath.exists():
             try:
-                with wave.open(str(fpath), "rb") as wf:
-                    sr = wf.getframerate()
-                    raw = wf.readframes(wf.getnframes())
-                    arr = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
-                    if wf.getnchannels() > 1:
-                        arr = arr.reshape(-1, wf.getnchannels())[:, 0]
-                    g_loaded_samples[key] = {
-                        "name": label,
-                        "data": np.ascontiguousarray(arr, dtype=np.float32),
-                        "len": len(arr),
-                    }
-                    print(f"[SamplePlayer] Loaded {label} ({len(arr)/sr:.2f}s, {len(arr)} samples)")
+                arr, sr = _read_wav_mono_f32(fpath)
+                g_loaded_samples[key] = {
+                    "name": label,
+                    "data": arr,
+                    "len": len(arr),
+                    "trim": 1.0,  # Already recorded at natural instrument level (peak ~0.12..0.43)
+                }
+                print(f"[SamplePlayer] Loaded {label} ({len(arr)/sr:.2f}s, {len(arr)} samples)")
             except Exception as e:
                 print(f"[SamplePlayer] Failed loading {fname}: {e}")
+
+    if g_last_sample_mode not in g_loaded_samples and g_loaded_samples:
+        g_last_sample_mode = next(iter(g_loaded_samples.keys()))
 
 
 load_audio_samples()
@@ -371,7 +402,8 @@ def get_next_audio_input(nframes: int, indata) -> np.ndarray:
                         chunk[seam_dist - xf : seam_dist] * (1.0 - alpha)
                         + sample[:xf] * alpha
                     )
-        return (chunk * g_input_trim_lin * SAMPLE_DI_TRIM_LIN).astype(np.float32)
+        sample_trim = float(g_loaded_samples[g_test_mode].get("trim", SAMPLE_DI_TRIM_LIN))
+        return (chunk * g_input_trim_lin * sample_trim).astype(np.float32)
 
     sig = synthesize_test_guitar(nframes) * g_input_trim_lin
     return np.ascontiguousarray(sig, dtype=np.float32)
@@ -382,6 +414,12 @@ g_stream = None
 g_active_device_id = ""
 g_audio_status = "Initializing..."
 g_device_options = []
+g_audio_stream_lock = threading.RLock()
+g_stream_changing = False
+g_requested_blocksize = ASIO_BLOCK
+g_requested_samplerate = 0
+g_active_blocksize = ASIO_BLOCK
+g_active_samplerate = SAMPLE_RATE
 
 
 def discover_audio_options():
@@ -498,23 +536,32 @@ def set_resampler(dev_rate):
 
 
 def audio_callback(indata, outdata, frames, time_info, status):
-    if status:
-        print(f"[Audio Stream Warning] {status}", flush=True)
+    try:
+        if g_stream_changing:
+            outdata.fill(0)
+            return
 
-    n = min(frames, MAX_AUDIO_FRAMES)
-    sig = get_next_audio_input(n, indata)
-    _static_mono_in[:n] = sig[:n]
+        if status:
+            pass
 
-    if _rs_in is not None:                                  # IMP-03: device rate != 44.1 kHz
-        _process_resampled(_static_mono_in[:n].copy(), outdata, n)
-        return
+        n = min(frames, MAX_AUDIO_FRAMES)
+        sig = get_next_audio_input(n, indata)
+        _static_mono_in[:n] = sig[:n]
 
-    with emu_lock:
-        dll.emu_process_audio_f32(_static_in_ptr, _static_out_l_ptr, _static_out_r_ptr, n)
+        if _rs_in is not None and _rs_out is not None:           # IMP-03: device rate != 44.1 kHz
+            _process_resampled(_static_mono_in[:n].copy(), outdata, n)
+            return
 
-    outdata[:n, 0] = _static_out_L[:n]
-    if outdata.shape[1] >= 2:
-        outdata[:n, 1] = _static_out_R[:n]
+        with emu_lock:
+            dll.emu_process_audio_f32(_static_in_ptr, _static_out_l_ptr, _static_out_r_ptr, n)
+
+        outdata[:n, 0] = _static_out_L[:n]
+        if outdata.shape[1] >= 2:
+            outdata[:n, 1] = _static_out_R[:n]
+        if outdata.shape[1] > 2:
+            outdata[:n, 2:] = 0.0
+    except Exception:
+        outdata.fill(0)
 
 
 _rs_fifo = np.zeros((0, 2), dtype=np.float32)
@@ -534,136 +581,191 @@ def _rs_prime():
 
 def _process_resampled(mono_dev, outdata, n):
     """Device-rate in -> 44.1 kHz firmware DSP -> device-rate out, via a small output FIFO."""
-    global _rs_fifo
-    x = _rs_in.resample_chunk(mono_dev.astype(np.float32))
-    m = len(x)
-    if m:
-        xin = np.ascontiguousarray(x, dtype=np.float32)
-        yl = np.zeros(m, dtype=np.float32); yr = np.zeros(m, dtype=np.float32)
-        with emu_lock:
-            dll.emu_process_audio_f32(xin.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
-                                      yl.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
-                                      yr.ctypes.data_as(ctypes.POINTER(ctypes.c_float)), m)
-        y = _rs_out.resample_chunk(np.stack([yl, yr], axis=1))
-        _rs_fifo = np.concatenate([_rs_fifo, y.astype(np.float32)])
-    take = min(n, len(_rs_fifo))
-    if take < n:
-        global _rs_underruns
-        _rs_underruns += 1
-        if _rs_underruns in (1, 10, 100) or _rs_underruns % 1000 == 0:
-            print(f"[Audio] resampler output ran dry {_rs_underruns}x - raise RS_CUSHION", flush=True)
-    outdata[:n, :] = 0.0
-    outdata[:take, 0] = _rs_fifo[:take, 0]
-    if outdata.shape[1] >= 2:
-        outdata[:take, 1] = _rs_fifo[:take, 1]
-    _rs_fifo = _rs_fifo[take:]
+    global _rs_fifo, _rs_underruns
+    if _rs_in is None or _rs_out is None:
+        outdata[:n, :] = 0.0
+        return
+    try:
+        x = _rs_in.resample_chunk(mono_dev.astype(np.float32))
+        m = len(x)
+        if m:
+            xin = np.ascontiguousarray(x, dtype=np.float32)
+            yl = np.zeros(m, dtype=np.float32)
+            yr = np.zeros(m, dtype=np.float32)
+            with emu_lock:
+                dll.emu_process_audio_f32(xin.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+                                          yl.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+                                          yr.ctypes.data_as(ctypes.POINTER(ctypes.c_float)), m)
+            y = _rs_out.resample_chunk(np.stack([yl, yr], axis=1))
+            _rs_fifo = np.concatenate([_rs_fifo, y.astype(np.float32)])
+        take = min(n, len(_rs_fifo))
+        if take < n:
+            _rs_underruns += 1
+            if _rs_underruns in (1, 10, 100) or _rs_underruns % 1000 == 0:
+                print(f"[Audio] resampler output ran dry {_rs_underruns}x - raise RS_CUSHION", flush=True)
+        outdata[:n, :] = 0.0
+        if take > 0:
+            outdata[:take, 0] = _rs_fifo[:take, 0]
+            if outdata.shape[1] >= 2:
+                outdata[:take, 1] = _rs_fifo[:take, 1]
+            _rs_fifo = _rs_fifo[take:]
+        if outdata.shape[1] > 2:
+            outdata[:n, 2:] = 0.0
+    except Exception:
+        outdata[:n, :] = 0.0
 
 
-def start_audio_stream(preferred_id: str = ""):
-    global g_stream, g_active_device_id, g_audio_status
-    if g_stream is not None:
-        try:
-            g_stream.stop()
-            g_stream.close()
-        except Exception:
-            pass
-        g_stream = None
+def start_audio_stream(preferred_id: str = "", blocksize: Optional[int] = None, samplerate: Optional[int] = None):
+    global g_stream, g_active_device_id, g_audio_status, g_stream_changing
+    global g_requested_blocksize, g_requested_samplerate, g_active_blocksize, g_active_samplerate
 
-    opts = discover_audio_options()
-    if not preferred_id:
-        preferred_id = opts[0]["id"] if opts else "offline"
+    with g_audio_stream_lock:
+        g_stream_changing = True
 
-    if preferred_id == "offline":
-        g_active_device_id = "offline"
-        g_audio_status = "Safe Simulation (Sound Card Free — PC Audio Untouched)"
-        print(f"[Audio] {g_audio_status}", flush=True)
-        return True
+        if blocksize is not None:
+            g_requested_blocksize = int(blocksize)
+        if samplerate is not None:
+            g_requested_samplerate = int(samplerate)
 
-    target = next((o for o in opts if o["id"] == preferred_id), None)
-    if not target:
-        print(f"[Audio] Device ID '{preferred_id}' not found, falling back to top candidate", flush=True)
-        target = opts[0] if opts else None
-        if not target or target["id"] == "offline":
+        if g_stream is not None:
+            try:
+                g_stream.stop()
+            except Exception:
+                pass
+            try:
+                g_stream.close()
+            except Exception:
+                pass
+            g_stream = None
+            time.sleep(0.06)
+
+        opts = discover_audio_options()
+        if not preferred_id:
+            preferred_id = opts[0]["id"] if opts else "offline"
+
+        if preferred_id == "offline":
             g_active_device_id = "offline"
-            g_audio_status = "Safe Simulation (Sound Card Free)"
-            return False
-
-    candidates = [target] + [o for o in opts if o["id"] != target["id"] and o["id"] != "offline"]
-
-    for cand in candidates:
-        try:
-            is_asio = cand.get("is_asio", False)
-            in_dev_info = sd.query_devices(cand["in_dev"]) if cand["in_dev"] is not None else None
-
-            # IMP-03: never inherit the driver's current rate. default_samplerate of an ASIO device
-            # is whatever its control panel last used (the ASIO driver may report 96 kHz after any app
-            # opened it at 96k), and opening the stream there re-programs the hardware. The DSP is
-            # 44.1 kHz native, so ask for 44.1 kHz explicitly, then 48 kHz, and check the result.
-            target_sr = None
-            for sr in (44100, 48000):
-                try:
-                    sd.check_input_settings(device=cand["in_dev"], samplerate=sr, channels=2, dtype="float32")
-                    sd.check_output_settings(device=cand["out_dev"] if cand.get("out_dev") is not None else cand["in_dev"],
-                                             samplerate=sr, channels=2, dtype="float32")
-                    target_sr = sr
-                    break
-                except Exception:
-                    continue
-            if target_sr is None:
-                raise RuntimeError("device accepts neither 44.1 kHz nor 48 kHz")
-            if is_asio:
-                dev_arg = cand["in_dev"]
-                lat_arg = "low"
-                # The audio callback is Python, so it competes with the web server for the
-                # GIL. The driver's minimum buffer (often 32-64 frames, 0.7-1.5 ms) leaves no
-                # margin and crackles; ask for PA_EMU_ASIO_BLOCK frames (default 128 =
-                # 2.9 ms), and fall back to the driver's own size if it refuses.
-                bs_try = [ASIO_BLOCK, 0] if ASIO_BLOCK else [0]
-            else:
-                dev_arg = (cand["in_dev"], cand["out_dev"]) if cand["in_dev"] is not None else None
-                lat_arg = None
-                bs_try = [512 if cand["id"] == "default" else 0]
-
-            stream, last_err = None, None
-            for bs in bs_try:
-                try:
-                    stream = sd.Stream(
-                        samplerate=target_sr,
-                        blocksize=bs,
-                        device=dev_arg,
-                        channels=(2, 2),
-                        dtype="float32",
-                        latency=lat_arg,
-                        callback=audio_callback,
-                    )
-                    break
-                except Exception as e:
-                    last_err = e
-                    print(f"[Audio] {cand['label']}: blocksize {bs or 'native'} refused ({e})", flush=True)
-            if stream is None:
-                raise last_err
-            stream.start()
-            if int(round(stream.samplerate)) != target_sr:      # IMP-03: driver overrode us
-                print(f"[Audio] WARNING driver runs at {stream.samplerate:.0f} Hz, requested {target_sr}", flush=True)
-            set_resampler(int(round(stream.samplerate)))
-            g_stream = stream
-            g_active_device_id = cand["id"]
-            actual_bs = stream.blocksize if stream.blocksize > 0 else "Native"
-            g_audio_status = f"Streaming @ {target_sr} Hz ({actual_bs}): {cand['label']}"
+            g_audio_status = "Safe Simulation (Sound Card Free — PC Audio Untouched)"
+            g_stream_changing = False
             print(f"[Audio] {g_audio_status}", flush=True)
             return True
-        except Exception as e:
-            print(f"[Audio] Candidate {cand['label']} failed: {e}", flush=True)
 
-    g_active_device_id = "offline"
-    g_audio_status = "Offline Simulation Loop (Hardware Stream Failed)"
-    return False
+        target = next((o for o in opts if o["id"] == preferred_id), None)
+        if not target:
+            print(f"[Audio] Device ID '{preferred_id}' not found", flush=True)
+            target = opts[0] if opts else None
+            if not target or target["id"] == "offline":
+                g_active_device_id = "offline"
+                g_audio_status = "Safe Simulation (Sound Card Free)"
+                g_stream_changing = False
+                return False
+
+        # When the user explicitly picks a device, try ONLY that target.
+        # NEVER fall through to opening other ASIO drivers on error, which can segfault PortAudio.
+        if preferred_id and preferred_id != "auto":
+            candidates = [target]
+        else:
+            candidates = [target] + [o for o in opts if o["id"] != target["id"] and o["id"] != "offline"]
+
+        for cand in candidates:
+            try:
+                is_asio = cand.get("is_asio", False)
+                in_dev = cand["in_dev"]
+                out_dev = cand["out_dev"] if cand.get("out_dev") is not None else in_dev
+                in_info = sd.query_devices(in_dev) if in_dev is not None else None
+                out_info = sd.query_devices(out_dev) if out_dev is not None else None
+
+                max_in = in_info["max_input_channels"] if in_info else 2
+                max_out = out_info["max_output_channels"] if out_info else 2
+                ch_in = min(2, max(1, max_in)) if in_dev is not None else 2
+                ch_out = min(2, max(1, max_out)) if out_dev is not None else 2
+
+                # Sample rate selection:
+                sr_tries = []
+                if g_requested_samplerate in (44100, 48000):
+                    sr_tries.append(g_requested_samplerate)
+                else:
+                    sr_tries = [44100, 48000]
+
+                target_sr = None
+                for sr in sr_tries:
+                    if is_asio:
+                        target_sr = sr
+                        break
+                    try:
+                        if in_dev is not None:
+                            sd.check_input_settings(device=in_dev, samplerate=sr, channels=ch_in, dtype="float32")
+                        if out_dev is not None:
+                            sd.check_output_settings(device=out_dev, samplerate=sr, channels=ch_out, dtype="float32")
+                        target_sr = sr
+                        break
+                    except Exception:
+                        continue
+
+                if target_sr is None:
+                    def_sr = int(in_info.get("default_samplerate", 44100)) if in_info else 44100
+                    if def_sr in (44100, 48000):
+                        target_sr = def_sr
+                    else:
+                        raise RuntimeError(f"device accepts neither 44.1 kHz nor 48 kHz (reports {def_sr})")
+
+                if is_asio:
+                    dev_arg = cand["in_dev"]
+                    lat_arg = "low"
+                    req_bs = g_requested_blocksize
+                    bs_try = [req_bs, 0] if req_bs > 0 else [0]
+                else:
+                    dev_arg = (cand["in_dev"], cand["out_dev"]) if cand["in_dev"] is not None else None
+                    lat_arg = None
+                    bs_try = [g_requested_blocksize] if g_requested_blocksize > 0 else ([512 if cand["id"] == "default" else 0])
+
+                stream, last_err = None, None
+                for bs in bs_try:
+                    try:
+                        stream = sd.Stream(
+                            samplerate=target_sr,
+                            blocksize=bs,
+                            device=dev_arg,
+                            channels=(ch_in, ch_out),
+                            dtype="float32",
+                            latency=lat_arg,
+                            callback=audio_callback,
+                        )
+                        break
+                    except Exception as e:
+                        last_err = e
+                        print(f"[Audio] {cand['label']}: blocksize {bs or 'native'} refused ({e})", flush=True)
+
+                if stream is None:
+                    raise last_err
+
+                stream.start()
+                actual_sr = int(round(stream.samplerate))
+                if actual_sr != target_sr:
+                    print(f"[Audio] WARNING driver runs at {stream.samplerate:.0f} Hz, requested {target_sr}", flush=True)
+                set_resampler(actual_sr)
+                g_stream = stream
+                g_active_device_id = cand["id"]
+                actual_bs = stream.blocksize if stream.blocksize > 0 else "Native"
+                g_active_blocksize = stream.blocksize
+                g_active_samplerate = actual_sr
+                g_audio_status = f"Streaming @ {actual_sr} Hz ({actual_bs}): {cand['label']}"
+                print(f"[Audio] {g_audio_status}", flush=True)
+                g_stream_changing = False
+                return True
+            except Exception as e:
+                print(f"[Audio] Candidate {cand['label']} failed: {e}", flush=True)
+
+        g_active_device_id = "offline"
+        g_audio_status = "Safe Simulation Loop (Hardware Stream Failed)"
+        g_stream_changing = False
+        return False
 
 
 # Background thread to pump DSP when no hardware stream is active
 def fallback_dsp_worker():
     while True:
-        if g_stream is None or not g_stream.active:
+        if not g_stream_changing and (g_stream is None or not g_stream.active):
             mono_in = get_next_audio_input(BLOCK_SIZE, None)
             out_L = np.zeros(BLOCK_SIZE, dtype=np.float32)
             out_R = np.zeros(BLOCK_SIZE, dtype=np.float32)
@@ -801,6 +903,8 @@ class EmuRequestHandler(BaseHTTPRequestHandler):
                 "input_channel": g_input_channel,
                 "sticky_channel": g_sticky_channel,
                 "input_trim_db": round(20.0 * math.log10(max(1e-6, g_input_trim_lin)), 1),
+                "audio_blocksize": g_active_blocksize,
+                "audio_samplerate": g_active_samplerate,
                 "wavenet_voicing": dll.emu_get_wavenet_voicing(),
                 "lcd_b64": lcd_b64,
                 "telemetry": {
@@ -1083,8 +1187,16 @@ class EmuRequestHandler(BaseHTTPRequestHandler):
 
         if self.path == "/api/set_device":
             dev_id = body.get("id", "")
-            start_audio_stream(dev_id)
-            self._send_json({"ok": True, "status": g_audio_status, "active_id": g_active_device_id})
+            bs = int(body.get("buffer_size", g_requested_blocksize))
+            sr = int(body.get("sample_rate", g_requested_samplerate))
+            start_audio_stream(dev_id, blocksize=bs, samplerate=sr)
+            self._send_json({
+                "ok": True,
+                "status": g_audio_status,
+                "active_id": g_active_device_id,
+                "buffer_size": g_active_blocksize,
+                "sample_rate": g_active_samplerate
+            })
             return
 
         if self.path in ("/api/test_signal", "/api/sample_player"):
@@ -1227,7 +1339,7 @@ def main():
         srv = ThreadingHTTPServer((host, port), EmuRequestHandler)
 
     print(f"==================================================================")
-    print(f" M-VAVE Pocket Amp Live Firmware Emulator Running!")
+    print(f" Onyx Live Firmware Emulator Running!")
     print(f" Audio Status : {g_audio_status}")
     print(f" Open Web UI  : http://{host}:{port}")
     print(f"==================================================================")
@@ -1236,3 +1348,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
+

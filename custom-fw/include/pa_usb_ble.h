@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/include/pa_usb_ble.h — Pocket Amp USB Composite, OTG Loopback & MIDI Pedal Controller
  *
  * Includes User Manual Page 14–15 features:

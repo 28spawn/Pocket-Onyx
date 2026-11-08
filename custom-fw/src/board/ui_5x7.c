@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * src/board/ui_5x7.c — Compact 5x7 ASCII Bitmap Font Renderer for ST7735S/ST7789 TFT (QW-6 / BR-4)
  */
@@ -130,7 +132,7 @@ void pa_dl_replay(uint32_t by0, uint32_t by1) {
 /* 1 unless the screen is being drawn in bands and this rectangle is outside the current band (st7735s.c) */
 __attribute__((weak)) int st7735s_band_hit(uint16_t y, uint16_t h) { (void)y; (void)h; return 1; }
 
-/* 5x7 column-major ASCII font for characters 0x20 (' ') through 0x5F ('_') */
+/* 5x7 column-major ASCII font (standard public-domain 5x7 bitmap font) for 0x20 (' ') through 0x5F ('_') */
 static const uint8_t k_font5x7[64][5] = {
     {0x00,0x00,0x00,0x00,0x00}, /* 0x20 ' ' */
     {0x00,0x00,0x5F,0x00,0x00}, /* 0x21 '!' */

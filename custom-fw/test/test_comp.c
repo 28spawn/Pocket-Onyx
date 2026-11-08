@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/test/test_comp.c - the DYN block's compressors, measured.
  *
  * Types: 2 = COMP+GATE (the compressor after the noise gate), 4 = COMP (the compressor alone,

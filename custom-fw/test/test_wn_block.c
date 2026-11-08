@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/test/test_wn_block.c - the WaveNet block engine (accelerator conv mode, Q24 weights, Q21 samples) against the per-sample float engine.
  * Usage: test_wn_block <wave-blob-file>   (test_wn_block.py makes the blob from a .nam with emu/nam_loader.py) */
 #include <stdio.h>

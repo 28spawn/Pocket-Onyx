@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * pa_sysex.h — Pocket Amp M-VAVE SysEx Protocol Parser & Dispatcher (QW-7 / BR-5)
  *
@@ -40,7 +42,8 @@ enum pa_upload_target {
     PA_UPLOAD_PRESET   = 0,
     PA_UPLOAD_NAM      = 1,
     PA_UPLOAD_CAB      = 2,
-    PA_UPLOAD_SETTINGS = 3
+    PA_UPLOAD_SETTINGS = 3,
+    PA_UPLOAD_PRESET_RESTORE = 4   /* a preset record stored AS IS (its seq and EMPTY flag kept): the backup restore; PA_UPLOAD_PRESET is the editor's save */
 };
 
 #if defined(PA_HOST_SIM) || defined(PA_HOST_BUILD)
@@ -75,6 +78,8 @@ typedef struct {
  *  105 home view (0 grid, 1 list)   106..107 groove BPM (u16 LE)   108 groove pattern   109 groove volume %   110 drums on   111..114 stomp map (slot ids for VOL-, VOL+, <, >)
  *  115 stored captures that exist   116 1 when a live (RAM) user cabinet is loaded   117..124 the chain: slot ids in signal order   125 stored cabinets that exist
  *  126 free capture slots (of 16)   127 free cabinet slots (of 15)
+ * PA_CMD_PA_PRESET [index 0..79] is answered with ONE frame of PA_REPLY_PA_PRESET: [index, status] + the pa_preset_t record (sizeof bytes; status 0 = valid, 1 = unreadable / out of range, the record then all zero).
+ *   A backup reads the 80 slots this way; a restore sends each record back with the preset upload (cmd 25, target PA_UPLOAD_PRESET, slot = index; the record must carry its magic and CRC).
  * PA_CMD_PA_NAMES [kind, start] (kind 0 = every amp type in type-knob order, stock then stored captures; 1 = every cabinet type) is answered with [kind, total, start, n, first_user] + n names of 16 bytes;
  * a deleted capture or cabinet is an EMPTY name (its type number stays, presets use it), first_user is the first type that can be deleted.
  * PA_CMD_PA_USER [op, kind, index, name...]: op 0 deletes the stored capture (kind 0) or cabinet (kind 1) at that index (index = type - first_user), op 1 renames it, op 2 clears ALL of that kind and wipes the area (index ignored); replied with [op, kind, index, result].

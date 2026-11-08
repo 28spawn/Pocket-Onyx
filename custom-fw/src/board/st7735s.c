@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * src/board/st7735s.c — Pocket Amp ST7789 240x240 RGB565 SPI1 DMA Display Driver (QW-6 / BR-4)
  *

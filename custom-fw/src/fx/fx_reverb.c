@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/fx/fx_reverb.c — Pocket Amp 6-Algorithm Stereo Reverb + "Reverb Tail"
  *
  * Matches the official Pocket Amp User Manual (Pages 12–13) & V105 Release Notes:
@@ -197,6 +199,8 @@ typedef struct {
     int32_t    hpass_coeff;
     int32_t    diff_gain;
     int32_t    mod_depth;       /* Room/Hall cyclical pitch depth */
+    int32_t    decay_knob;      /* the DECAY knob (Q21) as set: the feedback gain depends on the type, so a type change recomputes it from this */
+    int32_t    wet_gain;        /* MIX x the type's wet scale (Q21): what the wet signal is multiplied by */
     int32_t    swell_rise_rate; /* Swell envelope attack slew per sample */
     int32_t    swell_env;       /* Current Swell wet envelope (0..PA_Q21_ONE) */
     uint8_t    spring_combs;    /* 1..4 active springs in Spring mode */
@@ -229,8 +233,8 @@ extern void  pa_free(void *);
 /* Frozen. A change here changes D, hence RT60 at the same decay knob position -
  * see the DECAY comment in reverb_set_param() and custom-fw/test/test_reverb.c. */
 static const uint16_t k_hall_combs[REV_NUM_COMBS]   = { 1557, 1617, 1491, 1422 };
-static const uint16_t k_room_combs[REV_NUM_COMBS]   = {  778,  808,  745,  711 };
-static const uint16_t k_spring_combs[REV_NUM_COMBS] = { 1013, 1187,  673,  797 };
+static const uint16_t k_room_combs[REV_NUM_COMBS]   = { 1167, 1212, 1118, 1067 };   /* 1.13: 1.5 x the old 778 / 808 / 745 / 711 (RT60 up to ~3.3 s instead of ~2.2 s) */
+static const uint16_t k_spring_combs[REV_NUM_COMBS] = { 1874, 2196, 1245, 1475 };   /* 1.13: 1.85 x the old 1013 / 1187 / 673 / 797, the delay lines of a 22.05 kHz design (RT60 up to ~5.4 s instead of ~2.9 s); 2196 fits the 2200 stride */
 static const uint16_t k_cloud_combs[REV_NUM_COMBS]  = { 1993, 2111, 1879, 1789 };
 static const uint16_t k_ap_lens[REV_NUM_ALLPASS]    = {  225,  556,  441 };
 
@@ -334,10 +338,14 @@ static void rev_clear_comb_state(reverb_state_t *s) {
     s->float_family = 0;
 }
 
+static int32_t rev_decay_from_knob(int type, int32_t val);
+static void rev_update_wet(reverb_state_t *s);
 static void rev_apply_type(reverb_state_t *s) {
     const rev_type_t want = (rev_type_t)s->type_req;
     if (want == s->type) return;
     s->type = want;
+    s->decay = rev_decay_from_knob(want, s->decay_knob);   /* g and the wet level depend on the type: changed here, once the old tail has faded out */
+    rev_update_wet(s);
     s->swell_env = 0;                   /* the Swell rises from silence in a new type, not from where the last one left it */
     s->hp_x1 = 0; s->hp_y1 = 0;
     if (want >= REV_TYPE_PLATE) float_layout(s);
@@ -346,23 +354,19 @@ static void rev_apply_type(reverb_state_t *s) {
 }
 
 /* the float engines' wet output for one sample of (already high-passed) input */
-static void float_wet(reverb_state_t *s, float x, float *wl, float *wr) {
+static void float_wet(reverb_state_t *s, float x, float *wl, float *wr,
+                      float pl_damp, float pl_bw, float pl_exc, float amb_diff, float amb_lp_k) {
     if (s->type == REV_TYPE_PLATE) {
-        if (!s->pl_g_valid || s->pl_g_knob != s->pl_decay_knob) {        /* two powf calls: 128 of them a block when they sat here per sample */
-            s->pl_g_knob = s->pl_decay_knob;
-            s->pl_g = powf(10.0f, -3.0f * PL_G_SPACING / (44100.0f * plate_rt60(s->pl_decay_knob)));
-            s->pl_g_valid = 1u;
-        }
         const float g = s->pl_g;
-        const float damp = 0.7f * rev_knob01(s->damp);                 /* TONE: damping (0 = none) */
-        const float bw = 0.9995f - 0.6f * rev_knob01(s->damp);         /* and input bandwidth */
+        const float damp = pl_damp;                                      /* TONE: damping (0 = none) */
+        const float bw = pl_bw;                                          /* and input bandwidth */
         s->pl_bw += (x - s->pl_bw) * bw;
         float v = s->pl_bw;
         for (int i = 0; i < PL_NDIFF; i++) v = fl_allpass(&s->pl_diff[i], v, k_pl_diff_g[i]);
         s->pl_lfo += 0.000114f;                                          /* ~0.8 Hz */
         if (s->pl_lfo > 1.0f) s->pl_lfo -= 1.0f;
         const float tri = (s->pl_lfo < 0.5f) ? 4.0f * s->pl_lfo - 1.0f : 3.0f - 4.0f * s->pl_lfo;
-        const float exc = (float)PL_MOD_MAX * 0.5f * rev_knob01(s->mod_depth);
+        const float exc = pl_exc;
         float out[2];
         for (int b = 0; b < 2; b++) {
             float in = v + g * s->pl_fb[1 - b];                         /* the figure eight */
@@ -389,17 +393,6 @@ static void float_wet(reverb_state_t *s, float x, float *wl, float *wr) {
         *wr = 0.07f * R;
     } else {
         fl_write(&s->amb_line, x);
-        if (!s->amb_valid || s->amb_knob_c != s->amb_size_knob) {          /* the tap positions follow the size knob: once per change */
-            const float size = amb_size_ms(s->amb_size_knob) * 44.1f;     /* samples */
-            for (int c = 0; c < 2; c++)
-                for (int k = 0; k < AMB_TAPS; k++) {
-                    uint32_t back = (uint32_t)(size * k_amb_r[c][k]) + 1u;
-                    if (back > AMB_LINE) back = AMB_LINE;
-                    s->amb_back[c][k] = back;
-                }
-            s->amb_knob_c = s->amb_size_knob;
-            s->amb_valid = 1u;
-        }
         float acc[2] = { 0.0f, 0.0f };
         for (int c = 0; c < 2; c++) {
             float gain = 0.9f;
@@ -409,10 +402,10 @@ static void float_wet(reverb_state_t *s, float x, float *wl, float *wr) {
                 gain *= 0.82f;
             }
         }
-        const float diff = 0.25f + 0.45f * rev_knob01(s->mod_depth);   /* Depth = diffusion */
+        const float diff = amb_diff;                                     /* Depth = diffusion */
         float l = fl_allpass(&s->amb_ap[0], acc[0], diff);
         float r = fl_allpass(&s->amb_ap[1], acc[1], diff);
-        const float lp = 0.9f - 0.75f * rev_knob01(s->damp);          /* TONE: darker up */
+        const float lp = amb_lp_k;                                       /* TONE: darker up */
         s->amb_lp += ((l + r) * 0.5f - s->amb_lp) * lp;
         *wl = 0.55f * (l * 0.7f + s->amb_lp * 0.3f);
         *wr = 0.55f * (r * 0.7f + s->amb_lp * 0.3f);
@@ -423,6 +416,33 @@ static void reverb_run_float(fx_node_t *nd, reverb_state_t *s, int32_t *buf_L, i
     int32_t tail_peak = 0;
     const int32_t dry_gain = (s->mix <= PA_Q21_ONE / 2) ? PA_Q21_ONE
                            : (s->mix >= PA_Q21_ONE ? 0 : 2 * (PA_Q21_ONE - s->mix));
+    if (s->type == REV_TYPE_PLATE) {
+        if (!s->pl_g_valid || s->pl_g_knob != s->pl_decay_knob) {        /* two powf calls: 128 of them a block when they sat here per sample */
+            s->pl_g_knob = s->pl_decay_knob;
+            s->pl_g = powf(10.0f, -3.0f * PL_G_SPACING / (44100.0f * plate_rt60(s->pl_decay_knob)));
+            s->pl_g_valid = 1u;
+        }
+    } else {
+        if (!s->amb_valid || s->amb_knob_c != s->amb_size_knob) {        /* the tap positions follow the size knob: once per change */
+            const float size = amb_size_ms(s->amb_size_knob) * 44.1f;   /* samples */
+            for (int c = 0; c < 2; c++)
+                for (int k = 0; k < AMB_TAPS; k++) {
+                    uint32_t back = (uint32_t)(size * k_amb_r[c][k]) + 1u;
+                    if (back > AMB_LINE) back = AMB_LINE;
+                    s->amb_back[c][k] = back;
+                }
+            s->amb_knob_c = s->amb_size_knob;
+            s->amb_valid = 1u;
+        }
+    }
+    const float damp01   = rev_knob01(s->damp);
+    const float mod01    = rev_knob01(s->mod_depth);
+    const float pl_damp  = 0.7f * damp01;
+    const float pl_bw    = 0.9995f - 0.6f * damp01;
+    const float pl_exc   = (float)PL_MOD_MAX * 0.5f * mod01;
+    const float amb_diff = 0.25f + 0.45f * mod01;
+    const float amb_lp_k = 0.9f - 0.75f * damp01;
+
     for (int i = 0; i < n; i++) {
         int32_t x_L = buf_L[i];
         int32_t x_R = buf_R ? buf_R[i] : x_L;
@@ -431,7 +451,8 @@ static void reverb_run_float(fx_node_t *nd, reverb_state_t *s, int32_t *buf_L, i
         s->hp_x1 = raw_in;
         s->hp_y1 = hp_out;
         float wl, wr;
-        float_wet(s, (float)hp_out * (1.0f / 2097152.0f), &wl, &wr);
+        float_wet(s, (float)hp_out * (1.0f / 2097152.0f), &wl, &wr,
+                  pl_damp, pl_bw, pl_exc, amb_diff, amb_lp_k);
         if (!(wl == wl) || !(wr == wr)) {                     /* never let a NaN out */
             float_layout(s);
             wl = wr = 0.0f;
@@ -443,11 +464,11 @@ static void reverb_run_float(fx_node_t *nd, reverb_state_t *s, int32_t *buf_L, i
         int32_t abs_w = (wet_L < 0) ? -wet_L : wet_L;
         if (abs_w > tail_peak) tail_peak = abs_w;
         if (nd->tail_draining) {
-            buf_L[i] = sat32((int64_t)x_L + q21_mul(wet_L, s->mix));
-            if (buf_R) buf_R[i] = sat32((int64_t)x_R + q21_mul(wet_R, s->mix));
+            buf_L[i] = sat32((int64_t)x_L + q21_mul(wet_L, s->wet_gain));
+            if (buf_R) buf_R[i] = sat32((int64_t)x_R + q21_mul(wet_R, s->wet_gain));
         } else {
-            buf_L[i] = sat32((int64_t)q21_mul(x_L, dry_gain) + q21_mul(wet_L, s->mix));
-            if (buf_R) buf_R[i] = sat32((int64_t)q21_mul(x_R, dry_gain) + q21_mul(wet_R, s->mix));
+            buf_L[i] = sat32((int64_t)q21_mul(x_L, dry_gain) + q21_mul(wet_L, s->wet_gain));
+            if (buf_R) buf_R[i] = sat32((int64_t)q21_mul(x_R, dry_gain) + q21_mul(wet_R, s->wet_gain));
         }
     }
     if (nd->tail_draining) {
@@ -475,7 +496,7 @@ PA_HOT static void reverb_run_classic_f(fx_node_t *nd, reverb_state_t *s, int32_
     const float inv = 1.0f / 2097152.0f;
     const int active_combs = (s->type == REV_TYPE_SPRING) ? (int)s->spring_combs : REV_NUM_COMBS;
     const float damp1 = (float)s->damp * inv, damp2 = (float)(PA_Q21_ONE - s->damp) * inv, decay = (float)s->decay * inv;
-    const float hpc = (float)s->hpass_coeff * inv, mixf = (float)s->mix * inv;
+    const float hpc = (float)s->hpass_coeff * inv, mixf = (float)s->mix * inv, wetf = (float)s->wet_gain * inv;
     const float g_ap = (float)((s->type == REV_TYPE_SPRING) ? 1468006 : s->diff_gain) * inv;
     const int modulated = (s->type == REV_TYPE_CLOUD || s->type == REV_TYPE_ROOM || s->type == REV_TYPE_HALL);
     const float mod_k = (float)s->mod_depth * (float)REV_MOD_MAX * (1.0f / 536870912.0f);     /* (tri >> 15) * depth * MAX >> 29 */
@@ -564,11 +585,11 @@ PA_HOT static void reverb_run_classic_f(fx_node_t *nd, reverb_state_t *s, int32_
 
         float oL, oR = 0.0f;
         if (nd->tail_draining) {
-            oL = (float)x_L + wet_L * mixf;
-            if (buf_R) oR = (float)x_R + wet_R * mixf;
+            oL = (float)x_L + wet_L * wetf;
+            if (buf_R) oR = (float)x_R + wet_R * wetf;
         } else {
-            oL = (float)x_L * dry_gain + wet_L * mixf;
-            if (buf_R) oR = (float)x_R * dry_gain + wet_R * mixf;
+            oL = (float)x_L * dry_gain + wet_L * wetf;
+            if (buf_R) oR = (float)x_R * dry_gain + wet_R * wetf;
         }
         if (oL > lim) oL = lim; else if (oL < -lim) oL = -lim;
         buf_L[i] = (int32_t)oL;
@@ -728,15 +749,15 @@ PA_HOT static void reverb_run_stereo_core(fx_node_t *nd, int32_t *buf_L, int32_t
         if (abs_w > tail_peak) tail_peak = abs_w;
 
         if (nd->tail_draining) {
-            buf_L[i] = sat32((int64_t)x_L + q21_mul(wet_L, s->mix));
-            if (buf_R) buf_R[i] = sat32((int64_t)x_R + q21_mul(wet_R, s->mix));
+            buf_L[i] = sat32((int64_t)x_L + q21_mul(wet_L, s->wet_gain));
+            if (buf_R) buf_R[i] = sat32((int64_t)x_R + q21_mul(wet_R, s->wet_gain));
         } else {
             /* the dry stays at unity up to MIX 50 %, then fades out (the wet is MIX itself):
              * engaging the reverb no longer turns the guitar down */
             int32_t dry_gain = (s->mix <= PA_Q21_ONE / 2) ? PA_Q21_ONE
                              : (s->mix >= PA_Q21_ONE ? 0 : 2 * (PA_Q21_ONE - s->mix));
-            buf_L[i] = sat32((int64_t)q21_mul(x_L, dry_gain) + q21_mul(wet_L, s->mix));
-            if (buf_R) buf_R[i] = sat32((int64_t)q21_mul(x_R, dry_gain) + q21_mul(wet_R, s->mix));
+            buf_L[i] = sat32((int64_t)q21_mul(x_L, dry_gain) + q21_mul(wet_L, s->wet_gain));
+            if (buf_R) buf_R[i] = sat32((int64_t)q21_mul(x_R, dry_gain) + q21_mul(wet_R, s->wet_gain));
         }
     }
 
@@ -843,6 +864,8 @@ static void reverb_create(fx_node_t *nd) {
                                          * produces the same gain. Do not retune
                                          * this: it is ~1.37 s RT60 on Hall. */
         s->mix             = 734003;
+        s->decay_knob      = 1482310;   /* 71 %: the g = 0.84 default above */
+        rev_update_wet(s);
         s->damp            = 629145;
         s->hpass_coeff     = 2055208;
         s->diff_gain       = 1048576;
@@ -875,11 +898,56 @@ static void reverb_destroy(fx_node_t *nd) {
     nd->state = 0;
 }
 
-/* DECAY knob -> comb feedback g (see the DECAY comment in reverb_set_param). */
-static int32_t rev_decay_from_knob(int32_t val) {
-    int32_t g = 1153433 + q21_mul(val, 859832);
-    if (g > 2013265) g = 2013265;
+/* DECAY knob -> comb feedback g. 1.14: calibrated on real DI guitar, in RT60 terms: 0.3 s at 0 %, 0.6 s at 20 %, 1.7 s at 50 %, 3 s at 80 %, 4.5 s at 100 % (Hall; the other types
+ * scale it). g is derived from the type's mean comb period D, because RT60 = k * 3 / |log10 g| * D / 44100 (the DECAY comment in reverb_set_param). Before, g was a straight line
+ * of the knob: 0.5 - 0.8 s at 50 % and the whole range crammed into the top fifth. */
+static float rev_type_k(int type) {
+    switch (type) {
+        case REV_TYPE_ROOM:   return 0.76f;
+        case REV_TYPE_SPRING: return 0.82f;
+        case REV_TYPE_CLOUD:  return 0.75f;
+        default:              return 0.745f;   /* Hall, Swell, Shimmer: the Hall tank */
+    }
+}
+static float rev_type_rt_scale(int type) {
+    switch (type) {
+        case REV_TYPE_ROOM:    return 0.85f;
+        case REV_TYPE_SHIMMER: return 1.1f;
+        case REV_TYPE_CLOUD:   return 1.3f;
+        default:               return 1.0f;
+    }
+}
+static float rev_comb_mean(int type) {
+    const uint16_t *tbl = rev_comb_table(type);
+    return 0.25f * (float)(tbl[0] + tbl[1] + tbl[2] + tbl[3]);
+}
+/* the RT60 (s) the screen shows and the feedback is set for */
+static float rev_rt_target(int type, float k) {
+    static const float kn[5] = { 0.0f, 0.2f, 0.5f, 0.8f, 1.0f }, rt[5] = { 0.3f, 0.6f, 1.7f, 3.0f, 4.5f };
+    int i = 0;
+    while (i < 3 && k > kn[i + 1]) i++;
+    const float f = (k - kn[i]) / (kn[i + 1] - kn[i]);
+    return rev_type_rt_scale(type) * rt[i] * powf(rt[i + 1] / rt[i], f);
+}
+static float rev_g_for(int type, float k) {
+    if (type == REV_TYPE_SHIMMER) {                  /* the Shimmer keeps the original straight-line curve: its injection is tied to (1 - g), and with the longer calibrated decays the octave got 13 dB weaker */
+        const float g0 = 0.55f + 0.41f * k;
+        return g0 > 0.96f ? 0.96f : g0;
+    }
+    const float lg = rev_type_k(type) * 3.0f * (rev_comb_mean(type) / 44100.0f) / rev_rt_target(type, k);   /* |log10 g| */
+    float g = powf(10.0f, -lg);
+    if (g < 0.55f) g = 0.55f;
+    if (g > 0.975f) g = 0.975f;
     return g;
+}
+static int32_t rev_decay_from_knob(int type, int32_t val) {
+    return (int32_t)(rev_g_for(type, rev_knob01(val)) * 2097152.0f);
+}
+
+/* The wet level per type (calibrated on DI guitar so that MIX 50 % puts the wet about 3 - 4 dB under the dry: before it sat 11 - 14 dB under it; more than this made the cab-swap steps exceed the F-18 limit). */
+static const float k_wet_scale[8] = { 1.6f, 1.6f, 1.6f, 1.6f, 2.2f, 1.5f, 7.0f, 1.0f };
+static void rev_update_wet(reverb_state_t *s) {
+    s->wet_gain = (int32_t)((float)s->mix * k_wet_scale[s->type & 7u]);
 }
 
 /* The decay the screen shows: RT60 = 3 / |log10 g| * D / 44100 over the type's mean comb
@@ -893,17 +961,8 @@ uint32_t pa_rev_decay_ms(int type, int32_t knob_q21) {
         return (uint32_t)(plate_rt60(rev_knob01(knob_q21)) * PL_RT_MEASURED * 1000.0f + 0.5f);
     if (type == REV_TYPE_AMBIENCE)                /* SIZE: the span of the reflections */
         return (uint32_t)(amb_size_ms(rev_knob01(knob_q21)) + 0.5f);
-    const uint16_t *tbl = rev_comb_table(type);
-    float d = 0.25f * (float)(tbl[0] + tbl[1] + tbl[2] + tbl[3]);
-    float g = (float)rev_decay_from_knob(knob_q21) * (1.0f / 2097152.0f);
-    float k;
-    switch (type) {
-        case REV_TYPE_ROOM:   k = 0.76f;  break;
-        case REV_TYPE_SPRING: k = 0.82f;  break;
-        case REV_TYPE_CLOUD:  k = 0.75f;  break;
-        default:              k = 0.745f; break;   /* Hall, Swell, Shimmer: the Hall tank */
-    }
-    float rt = k * 3.0f / __builtin_fabsf(log10f(g)) * d / 44100.0f;
+    const float g = rev_g_for(type, rev_knob01(knob_q21));
+    const float rt = rev_type_k(type) * 3.0f / __builtin_fabsf(log10f(g)) * (rev_comb_mean(type) / 44100.0f);
     return (uint32_t)(rt * 1000.0f + 0.5f);
 }
 
@@ -928,7 +987,8 @@ static void reverb_set_param(fx_node_t *nd, int id, int32_t val) {
          * the gain is applied once per SAMPLE and produced multi-minute tails
          * plus a knob that did nothing. test_reverb.c measures the actual RT60
          * of every type and fails if this mapping and the law disagree. */
-        s->decay = rev_decay_from_knob(val);
+        s->decay_knob = val;
+        s->decay = rev_decay_from_knob(s->type, val);
         s->pl_decay_knob = rev_knob01(val);
         s->amb_size_knob = rev_knob01(val);
         break;
@@ -942,6 +1002,7 @@ static void reverb_set_param(fx_node_t *nd, int id, int32_t val) {
             break;
         case 3: /* Knob 3: MIX */
             s->mix = val;
+            rev_update_wet(s);
             break;
         case 5: /* Aux */
             if (val < 0) val = 0;
@@ -966,6 +1027,8 @@ static void reverb_set_param(fx_node_t *nd, int id, int32_t val) {
             /* Only the request: the audio thread applies it at the start of its next block (rev_apply_type). Plate and Ambience lay the tank out their own way
              * (and clear it); a switch back to a comb type is cleared by reverb_run_stereo(). */
             s->type_req = (uint8_t)((uint32_t)val % REV_TYPE_COUNT);
+            if (s->type_req == REV_TYPE_AMBIENCE) s->type_req = REV_TYPE_ROOM;
+            /* (an old preset that still holds the Ambience, removed in 1.13, gets the Room) */
             break;
         default: break;
     }

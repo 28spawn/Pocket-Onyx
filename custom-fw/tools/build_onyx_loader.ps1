@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 # tools/build_onyx_loader.ps1 - build the Onyx update loader (loader/onyx_loader.c + third_party/pendel_loader, MPL-2.0) into build_pi32/onyx_loader/loader.bin
 # (the raw RAM image the SPL loads at 0x01C0A800). Called by build.ps1; can be run alone. The loader writes the app area only: see loader/onyx_loader.c.
 param([string]$Out = "")

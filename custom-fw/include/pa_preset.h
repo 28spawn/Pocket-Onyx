@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * pa_preset.h — Pocket Amp 80-Preset Torn-Write-Safe A/B NOR Store (QW-4)
  *
@@ -77,6 +79,7 @@ int      pa_preset_factory_reset(void);
 int      pa_preset_clean_user(void);        /* P41..P80 -> EMPTY, P01..P40 untouched */
 int      pa_preset_load(uint8_t idx, pa_preset_t *out);
 int      pa_preset_save(uint8_t idx, const pa_preset_t *in);
+int      pa_preset_restore(uint8_t idx, const pa_preset_t *in);   /* store a record exactly as given (magic and CRC checked; seq and the EMPTY flag kept): a backup restore */
 void     pa_preset_apply_to_chain(const pa_preset_t *p, pa_fx_chain_t *chain);
 void     pa_preset_capture_from_chain(pa_preset_t *p, const pa_fx_chain_t *chain, uint8_t preset_vol,
                                       const int32_t params[PA_SLOT_COUNT][6], const uint8_t slot_type[PA_SLOT_COUNT]);

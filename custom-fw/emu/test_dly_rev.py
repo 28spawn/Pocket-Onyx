@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """Delay and reverb, end to end through the firmware's audio core (the emulator DLL).
 
   [1] DELAY: every type's echo lands at the TIME the screen shows (pa_dly_time_ms), on
@@ -279,22 +281,6 @@ for pct in (0, 100):
           f"SLAPBACK TIME {pct}%: echo at {el[0] if el else 0:6.1f} ms (screen {want:.0f}), "
           f"the second repeat {drop:.0f} dB under the first")
 
-print("=== [8] the new reverbs ===")
-setup()
-d.emu_set_slot_type(7, 7)                                   # AMBIENCE, SIZE 50 % = 25 ms
-for p_, v in enumerate((50, 0, 30, 100)):
-    d.emu_set_slot_param(7, p_, v)
-d.emu_set_slot_enabled(7, 1)
-L, R = run(click(1.0))
-y = L.astype(np.float64) ** 2 + R.astype(np.float64) ** 2
-c0 = FS // 10
-size_ms = 8.0 * 10 ** 0.5
-inside = float(np.sum(y[c0 + 20: c0 + int((size_ms + 15) / 1000 * FS)]))
-after = float(np.sum(y[c0 + int(0.2 * FS):]))
-total = float(np.sum(y[c0 + 20:])) + 1e-30
-check(inside / total > 0.9 and after / total < 1e-3,
-      f"AMBIENCE: {100 * inside / total:.0f} % of the reflections inside SIZE ({size_ms:.0f} ms + 15), "
-      f"{10 * math.log10(after / total + 1e-30):.0f} dB left after 200 ms (no long tail)")
 
 print("\n" + ("DELAY + REVERB OK" if fails == 0 else f"{fails} FAILURE(S)"))
 sys.exit(0 if fails == 0 else 1)

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """The USB audio mode (an audio interface's direct monitoring), through the real audio core and the real USB audio driver (usb_ble.c) in the emulator DLL: a 220 Hz tone is the guitar at the
 input, a 600 Hz tone is what the PC plays. AMP: the unit's own sound (and the PC's) on the output. INTERFACE: the output is the PC's tone and nothing of the unit's, the recording is the dry
 guitar and never contains the PC's tone (no loopback possible). INTERFACE + DIRECT MONITOR: the dry guitar is also on the output.

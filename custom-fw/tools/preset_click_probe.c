@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/tools/preset_click_probe.c - Preset Switching Discontinuity & Click Verifier
  *
  * Verifies that the firmware's mute/unmute crossfade handshake suppresses pops/clicks

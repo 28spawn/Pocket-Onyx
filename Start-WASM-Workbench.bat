@@ -1,6 +1,6 @@
 @echo off
 REM ---------------------------------------------------------------------------
-REM  Pocket Amp - WebAssembly workbench (the same firmware, in the browser).
+REM  Onyx - WebAssembly workbench (the same firmware, in the browser).
 REM
 REM  Serves the wasm build and opens the workbench (presets, the panel, tone loading and audio controls all run there).
 REM

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 The Onyx Authors (@28spawn)
 /* The SysEx upload path, in the browser build.
  *
  * The firmware's SysEx carries a binary payload: the inner frame is 8-bit

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * custom-fw/src/board/ble_midi.c - the BLE-MIDI 1.0 framing.
  *

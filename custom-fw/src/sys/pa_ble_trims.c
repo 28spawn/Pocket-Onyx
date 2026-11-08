@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* src/sys/pa_ble_trims.c - the radio calibration read from the unit's own record log (include/pa_ble_trims.h). */
 #include <string.h>
 #include "../../include/pa_ble_trims.h"

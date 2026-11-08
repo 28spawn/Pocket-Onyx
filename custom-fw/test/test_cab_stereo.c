@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* test/test_cab_stereo.c - the stereo cabinet (fx_cab_ir.c, stereo_width): width 0 is the old mono cabinet bit for bit, the right channel
  * has the left one's tone but not its waveform, the width sets the correlation, the stereo EQ keeps the channels apart, and the settings
  * round-trip. Runs the real node through its run / run_stereo entry points like the chain does. */

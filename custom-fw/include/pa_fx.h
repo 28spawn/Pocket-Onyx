@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* pa_fx.h — common effect-node interface & V105 Customizable 6+1 Stereo/Tail Chain Manager.
  * Matches Pocket Amp User Manual (Pages 4, 6, 7–13) and V105 Release Notes. */
 #ifndef PA_FX_H

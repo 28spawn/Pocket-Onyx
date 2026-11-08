@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* test/test_reverb_type_clicks.c - changing the reverb's type while it rings must not click or burst.
  *
  * A reverb tail is smooth (the combs are damped, so neighbouring samples are close): the difference between two neighbouring samples is small next to the level. A switch
@@ -15,7 +17,7 @@
 void *pa_alloc(uint32_t n) { return calloc(1, n); }
 void  pa_free(void *p)     { free(p); }
 
-static const char *k_name[8] = { "Room", "Hall", "Swell", "Spring", "Shimmer", "Cloud", "Plate", "Ambience" };
+static const char *k_name[7] = { "Room", "Hall", "Swell", "Spring", "Shimmer", "Cloud", "Plate" };
 
 static double run_pair(fx_node_t *nd, int a, int b, int in_blocks)
 {
@@ -56,8 +58,8 @@ int main(void)
     nd->create(nd);
     int fails = 0;
     double worst_all = 0;
-    for (int a = 0; a < 8; a++)
-        for (int b = 0; b < 8; b++) {
+    for (int a = 0; a < 7; a++)
+        for (int b = 0; b < 7; b++) {
             if (a == b) continue;
             const double r = run_pair(nd, a, b, 60);
             if (r > worst_all) worst_all = r;
@@ -65,7 +67,7 @@ int main(void)
         }
     printf("worst change over all 56 pairs: %.2f\n", worst_all);
     /* the pairs the owner heard */
-    static const int pairs[][2] = { {0,7}, {0,1}, {1,0}, {2,3}, {3,2}, {3,4}, {4,5} };
+    static const int pairs[][2] = { {0,6}, {0,1}, {1,0}, {2,3}, {3,2}, {3,4}, {4,5} };
     for (unsigned k = 0; k < sizeof pairs / sizeof pairs[0]; k++)
         printf("  %s -> %s: %.2f\n", k_name[pairs[k][0]], k_name[pairs[k][1]], run_pair(nd, pairs[k][0], pairs[k][1], 60));
     printf(fails ? "RESULT: FAILED (%d)\n" : "RESULT: ALL PASSED\n", fails);

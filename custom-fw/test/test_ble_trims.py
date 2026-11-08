@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """The radio calibration the firmware reads from the unit's own record log at boot (include/pa_ble_trims.h, src/sys/pa_ble_trims.c): the four records 106, 107, 108 and 187 of the stock log at flash 0xB5000,
 checked the way tools/gen_ble_trims.py checks them. Through the emulator DLL, on the real log of the original backup (when it is on this machine) and on logs built here.
 

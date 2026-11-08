@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* include/pa_prof.h - per-part timing sums in SRAM for the effects (device only; the host, emulator and WebAssembly builds compile it away).
  *
  * Where does an effect's time go, on the unit, in the real audio path? Each effect owns a block of SRAM words: [0] magic, [1] blocks counted, then one sum of 24 MHz ticks per part (and

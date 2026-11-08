@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* test/test_flash_guard.c - the SRAM flash driver's argument check against the map, for every address, and the boot guard's state machine.
  *
  * The RAM function cannot include pa_flash_map.h, so include/pa_flash_guard.h repeats the three rewritable windows. This test makes the repetition safe: for every offset of the chip (every 16 bytes) and

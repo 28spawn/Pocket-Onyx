@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 # custom-fw/tools/usb_replug_etw_pc.ps1 - record the Windows USB host-controller trace (ETW) across timed replugs (what Windows does while the audio endpoints are late).
 # Run from an ADMINISTRATOR PowerShell with the unit plugged in:
 #     powershell -ExecutionPolicy Bypass -File custom-fw\tools\usb_replug_etw_pc.ps1 [-Cycles 3]

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 # Compile-only check of the imported BLE stack for the pi32v2 target (BLE-PORT-PLAN.md step 0). Nothing is linked, flashed or run.
 #   powershell -File custom-fw\tools\check_ble_build.ps1
 # Builds src/board/ble_radio.c with PA_BLE=1 (must compile with no warning and no error) and PA_BLE=0 (must produce an empty object),

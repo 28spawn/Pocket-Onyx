@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/fx/fx_cab_ir.c — Partitioned Q18 Hardware FIR Cabinet Convolver + Low/High Cut
  *
  * Implements:

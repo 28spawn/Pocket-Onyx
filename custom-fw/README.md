@@ -1,6 +1,6 @@
-# Pocket Amp Custom Firmware — Engine & Architecture
+# Onyx Custom Firmware — Engine & Architecture
 
-A maintainable, modular C firmware source tree for the **M-VAVE Pocket Amp** targeting the **JieLi AC791N / pi32v2** SoC at **360 MHz assumed** (`PA_CPU_HZ` in `include/pa_config.h`; the data-sheet rate is 320 MHz).
+A maintainable, modular C firmware source tree for the **Onyx** audio platform targeting the **JieLi AC791N / pi32v2** SoC at **360 MHz assumed** (`PA_CPU_HZ` in `include/pa_config.h`; the data-sheet rate is 320 MHz).
 
 ---
 
@@ -45,7 +45,7 @@ The script will:
    clang -target pi32v2 -mcpu=r3 -O2 -Iinclude -nostdlib ...
    ```
 3. Link into `build_app.bin` with `app.ld`.
-4. Package valid `Pocket_AMP_Custom.ufw` and `Pocket_AMP_Custom.fwsc` firmware containers.
+4. Package verified `Onyx.fwsc` and `Onyx.ufw` firmware containers.
 
 ### Emulator DLL Compilation
 ```powershell

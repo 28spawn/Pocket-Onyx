@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/include/pa_usb_chunk.h - how the USB-MIDI transmit queue is cut into bulk IN packets, and the one rule that keeps the host from waiting forever.
  *
  * A bulk IN transfer ends on the host side only when a SHORT packet (under 64 bytes, a zero-length one included) arrives or its buffer is full. The transmit queue is drained 64 bytes

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 #include "../../include/pa_config.h"
 /*
  * custom-fw/src/fx/fft_conv.c - float FFT convolution for the cabinet (see include/fft_conv.h).

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 # custom-fw/tools/usb_etw_capture.ps1 - record the Windows USB host-controller trace (ETW) around one unchanged run of usb_diag_trace_pc.py.
 # Run from an ADMINISTRATOR PowerShell, with the unit freshly replugged and booted normally and no other program holding its MIDI port:
 #     powershell -ExecutionPolicy Bypass -File custom-fw\tools\usb_etw_capture.ps1 [-Seconds 25]

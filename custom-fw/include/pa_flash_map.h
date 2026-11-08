@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * pa_flash_map.h - the Pocket Amp's SPI NOR flash, as it really is: ONE MEGABYTE (JEDEC ID 0x856014).
  *
@@ -86,7 +88,9 @@ static inline int pa_flash_rw_ok(uint32_t addr, uint32_t len) {
 #define PA_FLASH_USER_NAM_META_A_ADDR 0x00088800u
 #define PA_FLASH_USER_NAM_META_B_ADDR PA_FLASH_USER_NAM_META_A_ADDR   /* one copy */
 #define PA_FLASH_USER_NAM_META_ADDR   PA_FLASH_USER_NAM_META_A_ADDR
-#define PA_FLASH_USER_NAM_META_SIZE   0x00000600u   /* the registry's part of the shared sector (the registry is 1,136 B) */
+#define PA_FLASH_USER_NAM_META_SIZE   0x00000500u   /* the registry's part of the shared sector (the registry is 1,136 B; 1.16: 0x600 before, the last 0x100 of it now hold the radio calibration mirror) */
+#define PA_FLASH_TRIMS_MIRROR_ADDR    0x00088D00u   /* 1.16: a copy of the four radio calibration records read from the stock's log at 0xB5000 (src/sys/pa_ble_trims_mirror.c), for the day that log is blank */
+#define PA_FLASH_TRIMS_MIRROR_SIZE    0x00000100u
 #define PA_FLASH_BOND_ADDR            0x00088E00u   /* the Bluetooth bond: an append log of 64-byte slots (src/sys/pa_bond.c) */
 #define PA_FLASH_BOND_SIZE            0x00000200u
 #define PA_FLASH_BOND_SLOTS           8u

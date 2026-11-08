@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 #include "../../include/pa_config.h"
 /*
  * nam_engine.c — Pocket Amp NAM A2 16-Unit Q21 GRU Engine (Big Rock 2)

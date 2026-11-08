@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * pa_audio.h — Pocket Amp Full-Duplex ALNK0 I2S Audio Driver (Big Rock 1)
  *

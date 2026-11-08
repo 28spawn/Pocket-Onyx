@@ -100,3 +100,6 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         print("\nMonitor stopped.")
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

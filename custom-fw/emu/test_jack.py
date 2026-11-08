@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """End-to-end check of the emulator's new JACK path.
 
 The emulator no longer runs its own audio loop: it converts the host's float

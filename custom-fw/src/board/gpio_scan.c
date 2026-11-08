@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * src/board/gpio_scan.c — Pocket Amp Buttons, Rotary Encoder & SARADC Scanner (QW-6 / BR-4)
  *
@@ -378,6 +380,9 @@ void plat_battery_poll(void) {
  * timing does not depend on how long the main loop is busy. Error diffusion over the 0..10 duty: duty 8
  * gives 1,1,1,1,0 repeating (about 138 Hz), duty 10 is steady on and duty 0 steady off. */
 void pa_backlight_isr_tick(void) {
+#if PA_BACKLIGHT_FIXED
+    return;                                                       /* held on by plat_backlight_on / plat_backlight_set: nothing to do in the audio interrupt */
+#endif
 #if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM)
     static uint8_t s_err;
     s_err = (uint8_t)(s_err + g_bl_duty10);
@@ -399,6 +404,13 @@ void plat_backlight_on(void) {
 }
 
 __attribute__((weak)) void plat_backlight_set(uint8_t pct) {
+#if PA_BACKLIGHT_FIXED
+    (void)pct; g_bl_duty10 = 10u;                                 /* steady on: no PWM, so nothing in the audio interrupt's timing can show as flicker */
+#if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM)
+    PA_WRITE32(JL_PORTA_OUT, PA_READ32(JL_PORTA_OUT) & ~PA_LCD_BL_PORTA_BIT);   /* active low: on, and it stays on (the audio interrupt no longer drives the pin) */
+#endif
+    return;
+#endif
     if (pct > 100u) pct = 100u;
     uint8_t d = (uint8_t)((pct + 5u) / 10u);
     g_bl_duty10 = d ? d : 1u;                                     /* never fully dark */

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * custom-fw/bench/bench_fx.h - the DRV and MOD blocks, timed per model / type.
  */

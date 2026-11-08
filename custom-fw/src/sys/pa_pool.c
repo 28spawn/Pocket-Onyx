@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * src/sys/pa_pool.c - deterministic static-pool allocator for effect state (see notes below).
  */
@@ -98,13 +100,20 @@ static void pool_set_home(uint32_t need, uint32_t off, uint32_t size) {
     g_homes[slot].need = need; g_homes[slot].off = off;
 }
 
+/* Every request that returns NULL is counted, with the size asked for last (the same words the readout at 0x01C7E780 shows): a slot that stays off because the pool was full is then
+ * visible to a diagnostic or a host tool, not only to whoever reads the effect's screen. */
+uint32_t pa_pool_alloc_fail_count(void) { return POOL_STAT(3); }
+uint32_t pa_pool_alloc_fail_last_bytes(void) { return POOL_STAT(4); }
+static void *pool_refuse(uint32_t n) { POOL_STAT(3)++; POOL_STAT(4) = n; return NULL; }
+
 void *pa_alloc(uint32_t n) {
     if (!g_pool_ready) pool_init();
-    if (n == 0u || n > UINT32_MAX - 7u) return NULL;
+    if (n == 0u) return NULL;                                  /* not a failure: nothing was asked for */
+    if (n > UINT32_MAX - 7u) return pool_refuse(n);
     uint32_t aligned_n = (n + 7u) & ~7u;
-    if (aligned_n > UINT32_MAX - (uint32_t)sizeof(pa_blk_t)) return NULL;
+    if (aligned_n > UINT32_MAX - (uint32_t)sizeof(pa_blk_t)) return pool_refuse(n);
     uint32_t need = aligned_n + (uint32_t)sizeof(pa_blk_t);
-    if (need > PA_DSP_POOL_BYTES) return NULL;
+    if (need > PA_DSP_POOL_BYTES) return pool_refuse(n);      /* bigger than the whole pool */
     /* Two ends. The pool is nearly full with every effect on (147,256 of 147,456 bytes with the stereo cabinet), so where a block goes decides whether the
      * next one fits. Large blocks (the delay line, the reverb tank, the cabinet and its spectra) are put at the TOP of the last free block that holds them,
      * small ones at the bottom of the first: the small states then never split the hole a large block left, and that hole is still whole when the same
@@ -193,3 +202,8 @@ void pa_free(void *p) {
 }
 #endif
 
+#if defined(PA_HOST_SIM) && !defined(PA_POOL_TEST)
+/* the host / emulator allocator is the C heap: it is not the pool and has no counters */
+uint32_t pa_pool_alloc_fail_count(void) { return 0u; }
+uint32_t pa_pool_alloc_fail_last_bytes(void) { return 0u; }
+#endif

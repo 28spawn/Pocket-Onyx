@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/nam/pa_wavenet_asm.c - the CPU stage of the WaveNet block engine in pi32v2 assembly (device only): wn_asm_mix and wn_asm_head.
  *
  * ORIGIN. Written from the specification alone: the C reference wn_post_mix_c / wn_post_head_c in pa_wavenet.c (the arithmetic below is theirs), the pi32v2

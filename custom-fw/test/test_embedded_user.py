@@ -36,3 +36,6 @@ r = subprocess.run(cmd, cwd=FW, capture_output=True, text=True)
 if r.returncode:
     print(r.stdout, r.stderr[-3000:]); sys.exit("build failed")
 sys.exit(subprocess.run([str(exe)]).returncode)
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

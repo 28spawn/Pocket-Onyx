@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* src/sys/pa_user_cab.c - the stored cabinets (include/pa_user_cab.h). */
 #include <string.h>
 #include "../../include/pa_user_cab.h"

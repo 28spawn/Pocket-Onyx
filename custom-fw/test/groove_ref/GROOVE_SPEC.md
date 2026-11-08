@@ -1,6 +1,6 @@
 # Groove Station: implementation spec (option 3, "Big transport")
 
-![layout](GROOVE_SPEC.png)
+*(Pixel layout specification for Onyx Groove Station)*
 
 Reference renders are `groove_px_3_transport.png` (playing) and
 `groove_px_3_transport_stopped.png` (stopped). The reference code is `transport()` in
@@ -10,7 +10,7 @@ Reference renders are `groove_px_3_transport.png` (playing) and
 
 - **240×240 screen, 1:1 pixels.** No anti-aliasing, no smoothing, no fractional positions.
 - **Coordinates are inclusive.** `x 8–231` means pixel 8 up to and including pixel 231.
-- **Font:** the 5×7 table in [`../onyx_font5x7.h`](../onyx_font5x7.h), uppercase only.
+- **Font:** the 5×7 table in [`../../src/board/onyx_font5x7.h`](../../src/board/onyx_font5x7.h), uppercase only.
   - Each character advances 6 px × scale.
   - A string's width is `(len × 6 − 1) × scale`.
   - At scale *s*, every font pixel is drawn as an *s*×*s* block.

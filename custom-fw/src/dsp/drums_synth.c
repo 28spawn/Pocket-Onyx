@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/dsp/drums_synth.c — Groove Station drum machine
  *
  * Plays the project's own rhythm library (src/dsp/drum_patterns.inc, written in

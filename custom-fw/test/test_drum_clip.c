@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/test/test_drum_clip.c - does any Groove Station voice clip or distort?
  *
  * The real engine (drums_synth.c is included, so the test can trigger one voice on its own)

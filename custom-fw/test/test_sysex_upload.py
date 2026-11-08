@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """Does the custom firmware accept USB-MIDI SysEx model uploads?
 
 The editor application pushes a model to the device over USB-MIDI:

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 The Onyx Authors (@28spawn)
 /* Render the Groove Station and dump the LCD, so it can be compared with the
  * design kit's reference render (GROOVE_SPEC.md, groove_px_3_transport.png).
  *

@@ -33,3 +33,6 @@ assert text.index("cind_ok") < text.index("VERSION_IND") < text.index("MTU_RSP")
 bad = bytearray(raw); struct.pack_into("<I", bad, lay["magic"], 0)
 assert "magic" in d.decode(bytes(bad), lay)[0]
 print("ble link decode: all passed")
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """
 custom-fw/wasm/serve.py - a local HTTP server for the Pocket Amp WASM workbench.
 
@@ -19,6 +21,7 @@ import webbrowser
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SAMPLES = os.path.abspath(os.path.join(HERE, "..", "emu", "samples"))
+JONAS_DI_DIR = os.environ.get("PA_DRY_CAPTURES_DIR", os.path.join(os.path.expanduser("~"), "Downloads", "Dry Captures Jonas"))
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -42,6 +45,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # COOP/COEP headers for SharedArrayBuffer support in browsers
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
         self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
+        self.send_header("Cross-Origin-Resource-Policy", "cross-origin")
+        self.send_header("Access-Control-Allow-Origin", "*")
         super().end_headers()
 
     def do_GET(self):
@@ -57,16 +62,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # Serve sample list
         if path == "/api/samples":
             names = []
+            if os.path.isdir(JONAS_DI_DIR):
+                names.extend(sorted(f for f in os.listdir(JONAS_DI_DIR)
+                                    if f.lower().endswith(".wav")))
             if os.path.isdir(SAMPLES):
-                names = sorted(f for f in os.listdir(SAMPLES)
-                               if f.lower().endswith(".wav"))
+                names.extend(sorted(f for f in os.listdir(SAMPLES)
+                                    if f.lower().endswith(".wav") and f not in names))
             self._json({"samples": names})
             return
 
         # Stream test samples
         if path.startswith("/samples/"):
-            name = os.path.basename(path)
-            p = os.path.join(SAMPLES, name)
+            name = urllib.parse.unquote(os.path.basename(path))
+            p = os.path.join(JONAS_DI_DIR, name)
+            if not os.path.isfile(p):
+                p = os.path.join(SAMPLES, name)
             if os.path.isfile(p) and name.lower().endswith(".wav"):
                 try:
                     with open(p, "rb") as f:

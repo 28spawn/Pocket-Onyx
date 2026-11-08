@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """The emulator's front-panel buttons: press, release, click and HOLD.
 
 Why this test exists

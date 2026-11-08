@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """Read-only: log every link close the unit records (ble_dg close_* fields at DG+224..240) while a host connects.
 For each change: reason, who closed it (3 = establishment rule), the event counter, ms since the last RX, ms since the CONNECT_IND, and the unit's clock.
 The establishment rule closes after (1 + win_offset + win_size + 6 x interval) x 1.25 ms; compare since_start with it."""

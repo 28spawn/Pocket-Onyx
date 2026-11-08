@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """The BLE-MIDI path, end to end, through the firmware.
 
 The custom firmware has one MIDI ingress: a 512-byte ring that both the USB
@@ -117,7 +119,7 @@ check(r is not None, "the firmware answered")
 if r:
     print(f"    the reply: type {r['type']} (0x{r['type']:02x}), {r['length']} bytes")
     check(r["checksum_ok"], "the reply's checksum is right")
-    check(b"DONNER Pocket AMP" in r["data"],
+    check(b"Onyx" in r["data"],
           "the reply carries the name the editor matches on")
 
 print("\n=== the same command over BLE-MIDI ===")
@@ -129,7 +131,7 @@ if ble is not None:
     check(ble == usb, "the BLE reply is byte-identical to the USB reply")
     rb = unpack_reply(ble)
     check(rb is not None and rb["checksum_ok"], "the BLE reply's checksum is right")
-    check(rb and b"DONNER Pocket AMP" in rb["data"],
+    check(rb and b"Onyx" in rb["data"],
           "the BLE reply carries the device name")
 
 print("\n=== a command over BLE with a negotiated MTU ===")

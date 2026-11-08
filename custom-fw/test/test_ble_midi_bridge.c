@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/test/test_ble_midi_bridge.c - the BLE-MIDI bridge queues (src/board/ble_midi_bridge.c) on the host. */
 #include <stdio.h>
 #include <string.h>

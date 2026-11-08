@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* Host test: the three float GRU steps against the original Q21 step, same weights, same input:
  *   nam_step_float   CPU only
  *   nam_step_hw      all 16 rows on the (emulated) accelerator

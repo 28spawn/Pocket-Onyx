@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """The battery, the stock firmware's way: the percentage is computed from the averaged SARADC channel 9 count with the stock formula (0 below 528, 100 above 635, else
 (adc * 100 - 52646) / 109), the charging state comes from the USB power bit, and the warning levels follow the percentage. Through the real tick.
 

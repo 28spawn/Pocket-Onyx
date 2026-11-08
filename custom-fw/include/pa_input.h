@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* pa_input.h - the portable front-panel input layer.
  *
  * The firmware used to read the RAW button level every 60 Hz tick, which

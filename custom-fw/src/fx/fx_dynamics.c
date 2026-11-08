@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/fx/fx_dynamics.c — Pocket Amp "6+1" FX Module (Noise Gate++ / AI Gate MS + Boost / Compress)
  *
  * Matches User Manual Pages 7–8 ("FX module can select Noise Gate or NG+Boost or NG+Compress,

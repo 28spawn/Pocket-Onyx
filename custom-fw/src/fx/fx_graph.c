@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/fx/fx_graph.c — Customizable-Order 6+1 Effect Graph + Stereo/Tail/Limiter */
 
 #include "../../include/pa_hw.h"
@@ -15,6 +17,7 @@
 #define PA_ISR_CP(n) ((void)0)
 #endif
 #include <math.h>
+#include "pa_wild.h"
 
 extern void *pa_alloc(uint32_t n);
 extern void  pa_free(void *p);
@@ -319,7 +322,7 @@ uint8_t pa_fx_slot_type_count(pa_fx_slot_id_t slot) {
         case PA_SLOT_MOD:      return 7;
         case PA_SLOT_EQ:       return 3;     /* 5-BAND, LOW/HIGH CUT, PARAMETRIC-3 */
         case PA_SLOT_DELAY:    return 9;     /* + DIGITAL, PING PONG, REVERSE, SLAPBACK */
-        case PA_SLOT_REVERB:   return 8;     /* + PLATE, AMBIENCE */
+        case PA_SLOT_REVERB:   return 7;     /* + PLATE (AMBIENCE was removed in 1.13) */
         default:               return 1;
     }
 }
@@ -378,6 +381,12 @@ void pa_fx_chain_set_output_limit_mode(pa_fx_chain_t *chain, pa_lmt_mode_t mode)
 }
 
 static inline void apply_output_limiter_stereo(pa_fx_chain_t *chain, int32_t *pL, int32_t *pR, int n) {
+    /* A wild sample (more than 64 full scales out: the footprint of a saturated float-to-integer conversion, never of music) is dropped to silence before the limiter sees it: its gain
+     * reduction would otherwise swallow the next stretch of real signal. A loud but real overshoot is NOT touched: the limiter handles it. */
+    for (int i = 0; i < n; i++) {
+        if (pa_q21_wild(pL[i])) pL[i] = 0;
+        if (pR && pR != pL && pa_q21_wild(pR[i])) pR[i] = 0;
+    }
     if (chain->output_limit_mode == PA_LMT_MODE_OFF) {
         *pL = sat32(*pL);
         if (pR) *pR = sat32(*pR);

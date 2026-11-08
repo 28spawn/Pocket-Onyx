@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """Polyphase allpass half-band design (elliptic-derived, after L. de Soras' HIIR).
 Prints coefficients and verifies an up->down chain numerically."""
 import math, sys

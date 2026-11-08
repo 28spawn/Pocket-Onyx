@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/board/usb_ble.c — Pocket Amp USB Composite, Loopback & Chocolate Plus MIDI Pedal Driver */
 
 #include "pa_usb_ble.h"

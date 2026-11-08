@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 The Onyx Authors (@28spawn)
 /* Verify the JACK (the firmware's 24-bit audio I/O) in the WASM build.
  *
  * The browser's audio (on Windows: Windows Audio / WASAPI) is converted to
@@ -80,8 +82,7 @@ console.log('=== the jack is 64 stereo frames (like the device\'s half-buffer) =
 check(J === 64, `64 frames per jack quantum (got ${J})`);
 
 console.log('\n=== a signal in the jack comes out of the jack ===');
-for (let k = 0; k < 250; k++) pushJack(0.5);
-const pk = peakL();
+const pk = settledPeak(200, 50);
 /* no factory partition in the test build: the amp is the synthetic placeholder, so the level is low */
 check(pk > 100, `the left slot carries signal (peak ${pk} of 8388607)`);
 

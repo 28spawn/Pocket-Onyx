@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/dsp/drum_codec.h - how the Groove Station's voices are read back
  *
  * The kit (drum_kit.inc, made by tools/gen_drum_kit.py) is not stored as 16-bit PCM any more.  Each voice is one of

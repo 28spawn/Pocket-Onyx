@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * pa_hw_accel.h — JieLi AC791N Hardware Vector/Matrix/FIR Coprocessor (0x01EE0400)
  *

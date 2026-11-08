@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* src/sys/pa_bond.c - the Bluetooth bond kept across a power-off (include/pa_bond.h).
  *
  * A 512-byte append log in the last part of the shared settings sector: 8 slots of 64 bytes. A slot is valid with its magic and its CRC; the newest sequence number wins; a slot with flags 0 is a

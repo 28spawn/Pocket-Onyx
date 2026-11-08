@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/sys/smp_cpu1.c - core 1 runs the front of the chain with the amp (see include/pa_smp.h). Device only. */
 #include "pa_smp.h"
 

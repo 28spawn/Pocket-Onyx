@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/fx/fx_drive.c - the DRV block: six drive / fuzz pedals.
  *
  *   0 TS-808     Ibanez TS808: 720 Hz high-passed gain path into symmetric soft diodes,
@@ -30,6 +32,7 @@
 #include "pa_fx.h"
 #include "pa_config.h"
 #include "../dsp/fixedpoint.h"
+#include "pa_wild.h"
 #include "../dsp/pa_oversample.h"
 #include "pa_prof.h"
 
@@ -73,12 +76,12 @@ static const drv_model_t k_models[DRIVE_MW_COUNT] = {
  * `test_drive --calibrate` (custom-fw/test/test_drive.c); re-run it after any change to
  * the models, the clippers or the tone stage. */
 static const float k_match_db[DRIVE_MW_COUNT][5] = {
-    { -5.14f, -7.56f, -9.63f, -11.31f, -12.79f },   /* TS-808 */
-    { -4.39f, -7.25f, -9.59f, -10.87f, -10.83f },   /* KLON */
-    { -4.45f, -8.95f, -11.30f, -11.94f, -12.02f },   /* OCD */
-    { -2.99f, -10.12f, -12.65f, -12.83f, -12.84f },   /* RAT */
-    { -9.74f, -9.97f, -10.04f, -10.06f, -10.07f },   /* BIG MUFF */
-    { -8.00f, -13.21f, -16.06f, -16.54f, -16.62f },   /* FUZZ FACE */
+    { -8.83f, -13.34f, -17.16f, -19.98f, -22.00f },   /* TS-808 */
+    { -3.49f, -8.31f, -13.57f, -17.58f, -19.80f },   /* KLON */
+    { -4.71f, -12.06f, -17.58f, -20.76f, -22.18f },   /* OCD */
+    { -1.90f, -12.55f, -19.84f, -22.69f, -23.58f },   /* RAT */
+    { -15.11f, -17.83f, -19.12f, -19.76f, -20.16f },   /* BIG MUFF */
+    { -7.33f, -14.58f, -20.44f, -24.23f, -26.16f },   /* FUZZ FACE */
 };
 
 /* ---- the oversampling filters, run a whole block per section ------------------------------------------------------------------------
@@ -274,7 +277,7 @@ static void drive_update(drive_state_t *s) {
     s->gain  = m->g_min * powf(m->g_max / m->g_min, s->grit);
     s->hp_a  = expf(-6.2831853f * m->hp_hz / DRV_FS);
     s->lp_a  = onepole_a(m->lp_hz);
-    s->tone_a    = onepole_a(600.0f * powf(10000.0f / 600.0f, s->tone));
+    s->tone_a    = onepole_a(1000.0f * powf(16000.0f / 1000.0f, s->tone));   /* 1.14: 1 .. 16 kHz (was 0.6 .. 10 kHz): TONE 50 % sits at 4 kHz, the drives were 3 - 4 dB darker than the clean signal on real DI playing */
     s->muff_lp_a = onepole_a(500.0f);
     s->muff_hp_a = expf(-6.2831853f * 1200.0f / DRV_FS);
     s->clean = (s->type == DRIVE_MW_808)  ? 1.0f
@@ -406,8 +409,10 @@ static void drive_block(drive_state_t *s, int32_t *buf, int n, int os) {
                 const float dc = v - dc_x1 + 0.99857f * dc_y1;
                 dc_x1 = v; dc_y1 = dc;
                 float o = dc * out_gain;
-                if (o >  2147483000.0f) o =  2147483000.0f;
-                if (o < -2147483000.0f) o = -2147483000.0f;
+                if (pa_f_wild(o)) {
+                    if (pa_f_nonfinite(o)) { dc_x1 = dc_y1 = 0.0f; mlp_y1 = mhp_x1 = mhp_y1 = 0.0f; o = 0.0f; }   /* NaN / infinity: the sample AND the filters it would poison */
+                    else o = o > 0.0f ? 2147483000.0f : -2147483000.0f;                                              /* a huge finite value: saturate, as before */
+                }
                 buf[i] = (int32_t)o;
             }
             s->mlp_y1 = mlp_y1; s->mhp_x1 = mhp_x1; s->mhp_y1 = mhp_y1;
@@ -420,8 +425,10 @@ static void drive_block(drive_state_t *s, int32_t *buf, int n, int os) {
                 const float dc = v - dc_x1 + 0.99857f * dc_y1;
                 dc_x1 = v; dc_y1 = dc;
                 float o = dc * out_gain;
-                if (o >  2147483000.0f) o =  2147483000.0f;
-                if (o < -2147483000.0f) o = -2147483000.0f;
+                if (pa_f_wild(o)) {
+                    if (pa_f_nonfinite(o)) { dc_x1 = dc_y1 = 0.0f; tone_y1 = 0.0f; o = 0.0f; }                      /* NaN / infinity: the sample AND the filters it would poison */
+                    else o = o > 0.0f ? 2147483000.0f : -2147483000.0f;                                              /* a huge finite value: saturate, as before */
+                }
                 buf[i] = (int32_t)o;
             }
             s->tone_y1 = tone_y1;

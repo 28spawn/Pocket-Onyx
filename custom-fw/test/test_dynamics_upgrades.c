@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* test/test_dynamics_upgrades.c — Test suite for dynamics processor upgrades:
  * 1. Smooth Peak/RMS Hybrid Detector (transient capture & low-frequency ripple elimination)
  * 2. Expander Range Limit (configurable floor / downward expansion)

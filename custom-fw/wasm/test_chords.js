@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 The Onyx Authors (@28spawn)
 /* The chord combos in the headless harness: press BOTH buttons at once, as
  * the workbench does, and check that the combo fires exactly once. */
 const fs = require('fs');

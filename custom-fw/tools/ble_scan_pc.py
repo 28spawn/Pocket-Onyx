@@ -44,3 +44,6 @@ if __name__ == "__main__":
     ap.add_argument("--name", default="Pocket")
     a = ap.parse_args()
     raise SystemExit(asyncio.run(main(a.seconds, a.name)))
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

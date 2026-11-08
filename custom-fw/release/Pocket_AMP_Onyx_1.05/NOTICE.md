@@ -1,6 +1,6 @@
 # NOTICE — scope, third-party materials, and legal
 
-> **NOT AFFILIATED WITH M-VAVE OR DONNER.** This is an independent, unofficial interoperability project. It contains no M-VAVE/Donner firmware, amp models, cabinet impulse responses or preset banks, and it does not redistribute any such data. Ownership of a device does not by itself grant redistribution rights over its contents; the vendor's EULA/terms may restrict reverse engineering or use of extracted data. Check them (and consult counsel) before any public release.
+> **NOT AFFILIATED WITH M-VAVE OR DONNER.** This is an independent, unofficial interoperability project. It contains no vendor application firmware, amp models, cab IRs or proprietary preset banks; the only vendor-derived data is the Apache-2.0 RF start-up table described below. Ownership of a device does not by itself grant redistribution rights over its contents; the vendor's EULA/terms may restrict reverse engineering or use of extracted data. Check them (and consult counsel) before any public release.
 
 ## What this repo is
 Original open-source custom firmware and DSP project authored for interoperability and
@@ -57,7 +57,7 @@ The BLE-MIDI stack for the AC791N / WL82 radio in `custom-fw/third_party/optimis
 `custom-fw/tools/pack.sh` and `custom-fw/README.md`.
 
 ## License
-This project's original source code, firmware application layer, and tools are distributed under the terms of the **GNU General Public License v3.0 only** (`SPDX-License-Identifier: GPL-3.0-only`), with file-level `MPL-2.0` components (`custom-fw/third_party/pendel_loader/`, `custom-fw/loader/onyx_loader.c`, `custom-fw/src/sys/pa_ota_session.c`) and `GPL-3.0-only OR MPL-2.0` components (`custom-fw/third_party/optimist_ble/`) keeping their respective upstream headers. See the root [LICENSE](LICENSE) file for the full GPL-3.0 license text.
+This project's original source code, firmware application layer, and tools are distributed under the terms of the **GNU General Public License v3.0 only** (`SPDX-License-Identifier: GPL-3.0-only`), with file-level `MPL-2.0` components (`custom-fw/third_party/pendel_loader/`, `custom-fw/loader/onyx_loader.c`, `custom-fw/src/sys/pa_ota_session.c`) and `GPL-3.0-only OR MPL-2.0` components (`custom-fw/third_party/optimist_ble/`) keeping their respective upstream headers. See the root [LICENSES/LICENSE](LICENSES/LICENSE) file for the full GPL-3.0 license text.
 
 ## Disclaimer
 Provided as-is, for research and interoperability. Flashing custom firmware is at your own risk and may
@@ -74,3 +74,19 @@ GPL-3.0-only, (C) 2026 Leo Kuroshita (@kurogedelic), Hugelton Instruments), whic
 - **JieLi SDK files** (`uboot.boot`, `cfg_tool.bin`, `cfg/eq_cfg_hw.bin`), **Apache-2.0**, Zhuhai Jieli Technology: fetched by `custom-fw/tools/get_sdk_files.py` from the SDK commit named above and checked against the SHA-256 recorded in
   that tool; **not stored in this repository**. The licence text is in `custom-fw/LICENSES/Apache-2.0.txt` and ships with every release.
 - User device backups and local packages remain local on the user's machine and are not part of any release.
+
+## Corresponding Source and Installation
+
+In accordance with GNU GPLv3 Section 6:
+- **Corresponding Source Repository:** <https://github.com/28spawn/pocket-amp-onyx-clean>
+- **Release Tag / Commit:** `v1.0.5`
+- **Building from Source:**
+  From the repository root, run:
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File "custom-fw/build.ps1"
+  ```
+  The build script compiles the firmware with the JieLi toolchain and packages the release `.bin` and `.fwsc` containers.
+- **Flashing and Recovery Instructions:**
+  - One-click Web MIDI flashing: `custom-fw/web/Onyx_Web_Editor.html`
+  - Emergency hardware un-bricking and recovery runbook: see `RECOVERY.md` in the source repository.
+

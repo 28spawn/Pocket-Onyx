@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """The pack number and the unique build code (build.ps1 -> include/pa_build_id.h): PA_BUILD_CODE is "<pack>-<build id>", the build id is the yyMMddHHmm stamp the firmware already writes to SRAM, the code
 is shown on the unit's SYSTEM screen and sent to the editor (names kind 255), and the OTA ID block the vendor updater reads (product name / V103) does not carry it.
 

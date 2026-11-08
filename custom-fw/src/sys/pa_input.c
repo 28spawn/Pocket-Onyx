@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* src/sys/pa_input.c - the portable front-panel input layer (see pa_input.h). */
 #include <string.h>
 #include "../../include/pa_input.h"

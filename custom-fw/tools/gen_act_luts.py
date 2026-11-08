@@ -26,4 +26,6 @@ def generate_tables():
             f.write(struct.pack("<i", int(val * (1 << 21))))
 
 if __name__ == "__main__":
-    generate_tables()
+    generate_tables()
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

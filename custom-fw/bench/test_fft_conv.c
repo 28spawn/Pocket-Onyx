@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * custom-fw/bench/test_fft_conv.c - host checks for the FFT convolution prototype.
  *

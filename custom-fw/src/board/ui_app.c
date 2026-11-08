@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/board/ui_app.c — Pocket Amp 240x240 RGB565 Onyx Design System Renderer
  *
  * Implements the authentic "Onyx" 240x240 theme for the M-VAVE Pocket Amp:
@@ -186,7 +188,10 @@ static uint8_t get_slot_model_count(const pa_ui_ctx_t *ui, uint8_t slot) {
 
 /* A deleted capture or cabinet leaves a hole in the type numbering (presets name them by it). The screen counts the models that exist: "cur" is the 1-based position of the type among them, "total" how many there are. */
 /* The first cabinet type that is a stored one: 20 stock + the cabinets linked into the image. */
-static uint8_t cab_first_user(void) { return (uint8_t)(pa_cab_total_count() - pa_user_cab_span()); }
+static uint8_t cab_first_user(void) {
+    uint8_t f = (uint8_t)(pa_cab_total_count() - pa_user_cab_span());
+    return f < PA_STOCK_CAB_COUNT ? (uint8_t)PA_STOCK_CAB_COUNT : f;
+}
 static int model_exists(uint8_t slot, uint8_t idx) {
     if (slot == PA_SLOT_AMP) return idx < PA_STOCK_AMP_COUNT || pa_user_nam_is_active((uint8_t)(idx - PA_STOCK_AMP_COUNT));
     if (slot == PA_SLOT_CAB) { const uint8_t f = cab_first_user(); return idx < f || pa_user_cab_is_active((uint8_t)(idx - f)); }
@@ -205,11 +210,11 @@ static const char *get_slot_model_name(const pa_ui_ctx_t *ui, uint8_t slot, uint
     static const char * const dyn_models[5] = { "GATE", "BOOST+GATE", "COMP+GATE", "AI GATE MS", "COMP" };
     static const char * const drv_models[6] = { "TS-808", "KLON", "OCD", "RAT", "BIG MUFF", "FUZZ FACE" };
     static const char * const eq_models[3]  = { "5-BAND", "LOW/HIGH CUT", "PARAMETRIC-3" };
-    static const char * const mod_models[7] = { "CHORUS", "PHASER", "FLANGER", "TREMOLO", "VIBRATO", "UNIVIBE", "AUTO FILTER" };
+    static const char * const mod_models[7] = { "CHORUS", "PHASER", "FLANGER", "TREMOLO", "VIBRATO", "WAH", "AUTO WAH" };
     static const char * const dly_models[9] = { "ANALOG", "DUCKING", "TAPE", "DUAL", "LO-FI",
                                                 "DIGITAL", "PING PONG", "REVERSE", "SLAPBACK" };
-    static const char * const rev_models[8] = { "ROOM", "HALL", "SWELL", "SPRING", "SHIMMER", "CLOUD",
-                                                "PLATE", "AMBIENCE" };
+    static const char * const rev_models[7] = { "ROOM", "HALL", "SWELL", "SPRING", "SHIMMER", "CLOUD",
+                                                "PLATE" };
 
     switch (slot) {
         case PA_SLOT_DYNAMICS: return dyn_models[idx % 5u];
@@ -227,7 +232,7 @@ static const char *get_slot_model_name(const pa_ui_ctx_t *ui, uint8_t slot, uint
         case PA_SLOT_EQ:       return eq_models[idx % 3u];
         case PA_SLOT_MOD:      return mod_models[idx % 7u];
         case PA_SLOT_DELAY:    return dly_models[idx % 9u];
-        case PA_SLOT_REVERB:   return rev_models[idx % 8u];
+        case PA_SLOT_REVERB:   return rev_models[idx % 7u];
         default: return "STANDARD";
     }
 }
@@ -294,8 +299,8 @@ static const char *get_slot_param_label(const pa_ui_ctx_t *ui, uint8_t slot, uin
         { "RATE", "DEPTH", "MIX", "FDBK" },   /* FLANGER */
         { "RATE", "DEPTH", "---", "---"  },   /* TREMOLO */
         { "RATE", "DEPTH", "---", "---"  },   /* VIBRATO */
-        { "RATE", "DEPTH", "MIX", "FDBK" },   /* UNIVIBE */
-        { "RATE", "RANGE", "MIX", "RESO" },   /* AUTO FILTER: DEPTH = sweep range, FDBK = resonance */
+        { "RATE", "RANGE", "MIX", "RESO" },   /* WAH: RATE = rocking speed, DEPTH = how far it travels, FDBK = resonance */
+        { "FALL", "SENS", "MIX", "RESO" },    /* AUTO WAH: RATE = how fast it closes, DEPTH = sensitivity to the playing, FDBK = resonance */
     };
     /* DELAY: the 4th knob is a different control per type (fx_delay.c) */
     static const char * const dly_aux[9] = { "MOD", "RELEASE", "GRIT", "RATIO", "GRIT",
@@ -317,8 +322,7 @@ static const char *get_slot_param_label(const pa_ui_ctx_t *ui, uint8_t slot, uin
         case PA_SLOT_MOD:      return (p < 4) ? mod_params[ui ? (ui->slot_type[PA_SLOT_MOD] % 7u) : 0][p] : "";
         case PA_SLOT_DELAY:    return (p == 3) ? dly_aux[ui ? (ui->slot_type[PA_SLOT_DELAY] % 9u) : 0]
                                               : (p < 3) ? dly_params[p] : "";
-        case PA_SLOT_REVERB:   /* AMBIENCE's first knob is the room SIZE, not a decay */
-            if (p == 0 && ui && (ui->slot_type[PA_SLOT_REVERB] % 8u) == 7u) return "SIZE";
+        case PA_SLOT_REVERB:
             return (p < 4) ? rev_params[p] : "";
         default: return "";
     }
@@ -1610,8 +1614,7 @@ static void render_settings_menu(const pa_ui_ctx_t *ui) {
         if (idx == 0) val = ">";
         /* Bluetooth: OFF / BLE / BLE+A2DP. OFF stops the radio's advertising (and drops a link); BLE is the BLE-MIDI radio the unit starts at power-on. A2DP (audio) is not implemented in this
          * firmware: BLE+A2DP selects the same radio as BLE. The icon shows the radio's real state, not this setting. */
-        else if (idx == 1) { static const char * const k_bt[3] = { "OFF", "BLE", "BLE+A2DP" };
-                             val = k_bt[ui->bt_mode > 2u ? 1u : ui->bt_mode]; }
+        else if (idx == 1) val = (ui->bt_mode == 0u) ? "OFF" : "BLE";
         else if (idx == 2) val = ">";
         else if (idx == 3) val = (ui->play_mode == 1) ? "STOMP" : "PRESET";
         else if (idx == 4) { static const char * const k_fz[4] = { "OFF", "LOW", "MED", "HIGH" };
@@ -2263,6 +2266,16 @@ void pa_ui_apply_io_settings(pa_ui_ctx_t *ui, pa_fx_chain_t *chain) {
  *                         strobe the bypass)
  *   editor_cursor == -1   the model / type row
  *   editor_cursor >= 0    a parameter knob (or an EQ band) */
+static void pa_ui_dirty_throttled(pa_ui_ctx_t *ui) {
+    if (!ui) return;
+    static uint32_t s_param_dirty_ms;
+    const uint32_t now = plat_ms();
+    if (s_param_dirty_ms == 0u || (uint32_t)(now - s_param_dirty_ms) >= 50u) {
+        s_param_dirty_ms = now;
+        ui->dirty = 1;
+    }
+}
+
 static int block_editor_adjust(pa_ui_ctx_t *ui, pa_fx_chain_t *chain,
                                 uint8_t slot, int delta) {
     if (!ui || delta == 0) return 0;
@@ -2551,7 +2564,9 @@ uint32_t pa_ui_name_list(uint8_t kind, uint8_t start, uint8_t *out, uint32_t cap
         return 5u + l;
     }
     out[0] = kind; out[1] = (uint8_t)total; out[2] = start;
-    out[4] = (kind == 0u) ? (uint8_t)PA_STOCK_AMP_COUNT : (uint8_t)(total ? pa_cab_total_count() - pa_user_cab_span() : 0u);
+    const uint8_t f_user = (kind == 0u) ? (uint8_t)PA_STOCK_AMP_COUNT : cab_first_user();
+    const uint8_t min_stock = (kind == 0u) ? (uint8_t)PA_STOCK_AMP_COUNT : (uint8_t)PA_STOCK_CAB_COUNT;
+    out[4] = f_user < min_stock ? min_stock : f_user;
     for (uint32_t i = start; i < total && (5u + (n + 1u) * 16u) <= cap && n < 15u; i++, n++) {
         const char *nm = (kind == 0u) ? (i < PA_STOCK_AMP_COUNT ? pa_stock_get_amp_name((uint8_t)i) : (pa_user_nam_is_active((uint8_t)(i - PA_STOCK_AMP_COUNT)) ? pa_user_nam_get_name((uint8_t)(i - PA_STOCK_AMP_COUNT)) : ""))
                                       : (i < out[4] ? pa_cab_name((uint8_t)i) : (pa_user_cab_is_active((uint8_t)(i - out[4])) ? pa_user_cab_name((uint8_t)(i - out[4])) : ""));
@@ -2908,10 +2923,10 @@ void pa_ui_handle_inputs(pa_ui_ctx_t *ui, pa_fx_chain_t *chain,
              * buttons alone. The PARA encoder moves to the next setting,
              * and so does VOL+ (VOL- is the universal Back). */
             if (buttons_pressed & PA_BTN_LEFT) {
-                if (block_editor_adjust(ui, chain, slot, -1)) ui->dirty = 1;
+                if (block_editor_adjust(ui, chain, slot, -1)) pa_ui_dirty_throttled(ui);
             }
             if (buttons_pressed & PA_BTN_RIGHT) {
-                if (block_editor_adjust(ui, chain, slot, +1)) ui->dirty = 1;
+                if (block_editor_adjust(ui, chain, slot, +1)) pa_ui_dirty_throttled(ui);
             }
             if (buttons_pressed & PA_BTN_VOL_PLUS) {
                 int cur = (int)ui->editor_cursor + 1;
@@ -2956,7 +2971,7 @@ void pa_ui_handle_inputs(pa_ui_ctx_t *ui, pa_fx_chain_t *chain,
             if (buttons_pressed & PA_BTN_LEFT)  d--;
             if (buttons_pressed & PA_BTN_RIGHT) d++;
             if (d != 0) {
-                if (block_editor_adjust(ui, chain, slot, d)) ui->dirty = 1;
+                if (block_editor_adjust(ui, chain, slot, d)) pa_ui_dirty_throttled(ui);
             }
             /* PARA click: exit edit mode, resume < > navigation */
             if (buttons_pressed & PA_BTN_PARA_CLICK) {
@@ -3163,7 +3178,7 @@ void pa_ui_handle_inputs(pa_ui_ctx_t *ui, pa_fx_chain_t *chain,
                 ui->sub_cursor = 0;
             } else if (ui->settings_cursor == 1) {
                 /* Bluetooth: OFF -> BLE -> BLE+A2DP -> OFF. The radio follows (pa_board_bt_mode_changed); the icon follows the radio. */
-                ui->bt_mode = (uint8_t)((ui->bt_mode + 1u) % 3u);
+                ui->bt_mode = (uint8_t)(ui->bt_mode ? 0u : 1u);
                 pa_board_bt_mode_changed(ui->bt_mode);
                 pa_ui_mark_settings_dirty(ui);
                 ui->dirty = 1;
@@ -3539,13 +3554,30 @@ void pa_ui_render(pa_ui_ctx_t *ui, const pa_fx_chain_t *chain,
     }
 #endif
     s_rend_ui = ui; s_rend_chain = chain; s_rend_meter = meter;
+#if !(defined(PA_EMU_DLL) || defined(PA_HOST_SIM) || defined(__wasm__) || defined(__EMSCRIPTEN__))
+    {   /* A preset / model change is waiting for the audio thread (the fade-out, then a swap that stalls this loop for ~50 ms). A frame drawn now shows the OLD chain, or is cut in two by the
+         * swap: the screen flickered through two drawings for every change. Hold the redraw (and drop a frame that is half out) until the swap has been applied: the swap's own redraw
+         * request (pa_audio_core.c, 7b) then draws the new chain once. At most 400 ms, so a swap that never comes cannot freeze the screen. */
+        extern int pa_audio_core_swap_pending(void);
+        static uint32_t s_hold_t0;
+        if (pa_audio_core_swap_pending()) {
+            const uint32_t t = plat_ms() | 1u;
+            if (!s_hold_t0) s_hold_t0 = t;
+            if ((uint32_t)(t - s_hold_t0) < 400u) {
+                if (s_frame_open) { st7735s_present_abort(); s_frame_open = 0; }
+                ui->dirty = 1;
+                return;
+            }
+        } else s_hold_t0 = 0u;
+    }
+#endif
     if (!s_frame_open) {
         if (!ui->dirty) return;
         ui->dirty = 0;
         s_frame_open = 1;
         { static uint8_t s_prev_view = 0xFFu; s_view_boost = (s_prev_view != (uint8_t)ui->view); s_prev_view = (uint8_t)ui->view; }
 #if !(defined(PA_EMU_DLL) || defined(PA_HOST_SIM) || defined(__wasm__) || defined(__EMSCRIPTEN__))
-        if (s_view_boost && plat_ms() > 3000u && !s_bl_dipped) {    /* a full-screen write takes ~21 ms and the panel scans in 16.7 ms with no tearing-sync line: the new screen would be seen arriving. Dip the light (not at boot, which fades it in) */
+        if (!PA_BACKLIGHT_FIXED && s_view_boost && plat_ms() > 3000u && !s_bl_dipped) {    /* a full-screen write takes ~21 ms and the panel scans in 16.7 ms with no tearing-sync line: the new screen would be seen arriving. Dip the light (not at boot, which fades it in) */
             extern void plat_backlight_duty10(uint8_t d);
             plat_backlight_duty10(1u); s_bl_dipped = 1u;
         }

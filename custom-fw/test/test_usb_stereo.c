@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* test/test_usb_stereo.c - the USB audio is stereo end to end: what the host plays comes back on its own channel (the playback ring keeps L and R apart,
  * and mixes into the two output channels), and the capture sent to the host carries the left and right outputs on the two channels of each frame
  * (44.1 kHz and 48 kHz). With the stereo cabinet on, the host therefore records the same two channels the headphones get. */

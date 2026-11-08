@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """The web editor page (web/Onyx_Web_Editor.html), its protocol core run in Node against the firmware's own parser (the emulator DLL):
 the JS frames are byte-identical to tools/mvave_device.py's, the JS packets work over USB and BLE-MIDI, the JS state decoder reads the unit's record,
 the NAM strip and the cab check do what the notes say, and the tables in the page are the firmware's.

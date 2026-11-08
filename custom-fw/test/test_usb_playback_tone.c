@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* test/test_usb_playback_tone.c - the host's audio (playback, host -> unit) reaches the unit's output as a clean copy, and neither direction clicks when its ring runs dry.
  *
  * PLAYBACK: a 1 kHz sine (0.25 of full scale) is sent as the host sends it, 1 ms OUT packets of 44 or 45 frames at 44.1 kHz (pa_usb_audio_ep3_out_rx), and the audio interrupt takes it in

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/test/test_drum_codecs.c - the drum kit's decoders and synthesisers (src/dsp/drum_codec.h)
  *
  *   [1] G.711 mu-law: every code decodes to the standard value, and a round trip stays within the format's step

@@ -47,3 +47,6 @@ assert "00005000!" in out and "000000EB!" in out
 bad = "\n".join(j.fp_decode(w, bytes(64), bytes(64)))
 assert "NO" in bad and "YES" not in bad.split("windows")[0]
 print("test_flash_probe: ok")
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* pa_plat.h — Pocket Amp hardware abstraction seam (roadmap QW-1).
  * Pattern adapted from charlesvestal/fm1-x0x (firmware/src/app/plat.h).
  * Portable code in src/dsp, src/nam, src/cab, src/fx, src/sys NEVER touches MMIO directly. */
@@ -51,6 +53,8 @@ static inline uint32_t pa_ms_clock_tick(pa_ms_clock_t *c, uint32_t now_ticks,
 /* 2. Pool / Heap Allocator */
 void    *pa_alloc(uint32_t bytes);
 void     pa_free(void *ptr);
+uint32_t pa_pool_alloc_fail_count(void);        /* requests pa_alloc refused (pool full or too fragmented), since boot */
+uint32_t pa_pool_alloc_fail_last_bytes(void);   /* the size of the last refused request */
 uint32_t pa_heap_used(void);
 uint32_t pa_heap_peak(void);
 

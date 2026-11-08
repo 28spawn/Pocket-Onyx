@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * custom-fw/bench/bench_main.c - A2-Lite WaveNet cycle benchmark, run from RAM in the
  * JieLi ROM download mode. It never touches the flash.

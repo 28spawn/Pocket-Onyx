@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/board/usb_dev.c - the Pocket Amp's USB device driver (full speed, class-compliant MIDI).
  *
  * Written from register-level facts proven on this chip family by the open FM-1 firmware (the FM-1 is
@@ -69,7 +71,7 @@ static struct {
 /* ---- the descriptors ----------------------------------------------------------------------------- */
 /* The device and configuration descriptors are in include/pa_usb_desc.h (shared with the host test that checks them): an audio function (interfaces 0..2) and the MIDI function (3..4). */
 static const uint8_t STR0[4] = { 4, 3, 0x09, 0x04 };
-static const uint8_t STR1[] = { 34, 3, 'P',0,'o',0,'c',0,'k',0,'e',0,'t',0,' ',0,'A',0,'m',0,'p',0,' ',0,'b',0,'e',0,'n',0,'c',0,'h',0 };
+static const uint8_t STR1[] = { 10, 3, 'O',0,'n',0,'y',0,'x',0 };
 static const uint8_t STR2[] = { 26, 3, 'C',0,'u',0,'s',0,'t',0,'o',0,'m',0,' ',0,'M',0,'I',0,'D',0,'I',0,' ',0 };
 
 /* ---- the SIE indirect port ----------------------------------------------------------------------- */

@@ -137,3 +137,6 @@ if __name__ == "__main__":
         check_ufw_flash(ufw_file)
     else:
         print(f"[-] Not found: {ufw_file}")
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

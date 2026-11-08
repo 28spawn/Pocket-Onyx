@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* test/test_reverb_modes.c - every reverb type at high decay / high mix, measured.
  *
  * Field reports (2026-10-22): Shimmer stops working after a few seconds; Room, Hall and

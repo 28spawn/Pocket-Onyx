@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/test/test_cab.c — Cabinet IR Convolver verification suite.
  * Tests partitioned FIR vs scalar reference, pre-delay stripper with pre-roll,
  * half-Hann tail windowing, L2-norm matching, and DF2T biquad post-filters.

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/app.ld — Pocket Amp memory map (QW-3, adapted from fm1-x0x/firmware/app.ld).
  *
  * The sizes are the DEVICE's, not the stock app's: the app partition in the flash is

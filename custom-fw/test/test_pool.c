@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* test/test_pool.c - the DSP pool's real high-water mark with every effect on.
  *
  * The pool (src/sys/pa_pool.c) is a fixed static array; the effects ask it for
@@ -129,6 +131,18 @@ int main(void) {
         extern void *pa_alloc(uint32_t);
         extern void  pa_free(void *);
         uint32_t big = (uint32_t)PA_DSP_POOL_BYTES - 64u;
+        {   /* refused requests are counted and the size of the last one is kept (pa_plat.h), for a diagnostic or a host tool */
+            extern uint32_t pa_pool_alloc_fail_count(void), pa_pool_alloc_fail_last_bytes(void);
+            const uint32_t f0 = pa_pool_alloc_fail_count();
+            uint8_t *hold = (uint8_t *)pa_alloc(big);
+            uint8_t *no = (uint8_t *)pa_alloc(8192u);                              /* the pool is full: refused */
+            CHECK(hold != 0 && no == 0 && pa_pool_alloc_fail_count() == f0 + 1u && pa_pool_alloc_fail_last_bytes() == 8192u, "a request the full pool refuses is counted (%u -> %u) with its size (%u)",
+                  (unsigned)f0, (unsigned)pa_pool_alloc_fail_count(), (unsigned)pa_pool_alloc_fail_last_bytes());
+            uint8_t *huge = (uint8_t *)pa_alloc((uint32_t)PA_DSP_POOL_BYTES + 100u);   /* bigger than the whole pool: refused and counted too */
+            CHECK(huge == 0 && pa_pool_alloc_fail_count() == f0 + 2u && pa_pool_alloc_fail_last_bytes() == (uint32_t)PA_DSP_POOL_BYTES + 100u, "a request bigger than the pool is counted as well");
+            CHECK(pa_alloc(0u) == 0 && pa_pool_alloc_fail_count() == f0 + 2u, "a request for 0 bytes is not a failure");
+            if (hold) pa_free(hold);
+        }
         uint8_t *junk = (uint8_t *)pa_alloc(big);
         CHECK(junk != 0, "could not take the whole pool");
         if (junk) { memset(junk, 0xFF, big); pa_free(junk); }

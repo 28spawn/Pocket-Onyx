@@ -1,4 +1,6 @@
-/* custom-fw/src/board/main.c — M-VAVE Pocket Amp Custom Firmware Main Integration Loop
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* custom-fw/src/board/main.c — Onyx Custom Firmware Main Integration Loop
  *
  * Unifies all Quick Wins (QW-1..8), Big Rocks (BR-1..5), and Secondary Priorities (SP-1..4):
  *   - QW-2/3: Watchdog, P33 PMIC boost, 24 MHz TIMER4 cycle counter, 10 kHz TIMER5 tick
@@ -1384,10 +1386,11 @@ void pa_main_loop(void) {
             const uint32_t ev_t0 = plat_ticks24();
             {   /* the Bluetooth icon shows the radio's real state; the OFF setting (not saved yet: it is applied from the first second of the run) is acted on once */
                 static uint8_t s_bt_boot_applied;
+                { static uint8_t s_mirrored; if (!s_mirrored && plat_ms() > 4000u) { s_mirrored = 1u; pa_ble_radio_mirror_trims(); } }
                 if (!s_bt_boot_applied && plat_ms() > 1000u) { s_bt_boot_applied = 1u; if (g_ui.bt_mode == 0u) pa_ble_radio_set_enabled(0); }
                 g_ui.usb_connected = (uint8_t)pa_usb_dev_connected();
                 const int lk = pa_ble_radio_link();
-                if (lk >= 0) g_ui.bt_state = (uint8_t)lk;
+                g_ui.bt_state = (uint8_t)(lk >= 0 ? lk : 0);
             }
 #if defined(PA_HAS_MASTER_POT) && PA_HAS_MASTER_POT
             uint16_t pots[4] = { plat_pot_q12(0), plat_pot_q12(1), plat_pot_q12(2), plat_pot_q12(3) };

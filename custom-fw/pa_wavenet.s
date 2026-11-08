@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 	.text
 	.file	"src/nam/pa_wavenet.c"
 	.globl	pa_wavenet_reset

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* test/test_usb_capture_tone.c - what the host records over USB is a clean copy of what the amp outputs, for as long as it runs.
  *
  * A 1 kHz sine from the codec side (64-frame blocks at 44,118 Hz, as the amp's audio interrupt produces them) goes through pa_usb_audio_push_capture_stereo / pa_usb_audio_ep3_in_fill

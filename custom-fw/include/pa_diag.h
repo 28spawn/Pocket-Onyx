@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/include/pa_diag.h - a private diagnostic channel
  *
  * A manufacturer SysEx (0x7D, the "educational/non-commercial" ID) used for host

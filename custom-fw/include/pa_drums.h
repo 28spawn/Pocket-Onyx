@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/include/pa_drums.h — Groove Station drum machine
  *
  * The 49 styles (40 grooves + 9 metronome patterns) are the project's own rhythm library,

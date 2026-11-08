@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/test/test_mix_limiter.c - the limiter on the guitar + drums sum
  *
  * The real drum engine (drums_synth.c) and the real limiter (src/sys/pa_mix_limiter.h),

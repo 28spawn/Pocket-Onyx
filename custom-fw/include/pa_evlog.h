@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * include/pa_evlog.h - the event log: what the unit did and how it answered, in a ring in SRAM.
  *

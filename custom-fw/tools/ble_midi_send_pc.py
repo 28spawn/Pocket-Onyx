@@ -65,3 +65,6 @@ if __name__ == "__main__":
     ap.add_argument("--scan", type=float, default=10.0)
     ap.add_argument("--timeout", type=float, default=20.0)
     raise SystemExit(asyncio.run(main(ap.parse_args())))
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

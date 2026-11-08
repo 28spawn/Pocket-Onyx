@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 The Onyx Authors (@28spawn)
 /* PARA and HOME have BOTH a click and a hold. A real button cannot do both:
  * the click is what happens when you let go quickly, the hold is what happens
  * when you keep holding. These checks make sure the firmware does that.

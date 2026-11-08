@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * src/sys/preset.c — Pocket Amp 80-Preset Manager & Torn-Write-Safe A/B Store (QW-4)
  */
@@ -368,6 +370,25 @@ int pa_preset_save(uint8_t idx, const pa_preset_t *in) {
     uint32_t next_bank = (g_active_bank_addr == PA_FLASH_STORE_BANK_A_ADDR)
                          ? PA_FLASH_STORE_BANK_B_ADDR
                          : PA_FLASH_STORE_BANK_A_ADDR;
+    if (commit_bank_to_flash(next_bank, g_current_bank_seq + 1u, g_presets) != 0) {
+        g_presets[idx] = backup;
+        return -1;
+    }
+    g_current_bank_seq++;
+    g_active_bank_addr = next_bank;
+    return 0;
+}
+
+/* A backup restore: the record goes in exactly as it was read (seq and the EMPTY flag included), so restoring a backup of an untouched factory slot or an empty user slot leaves it
+ * untouched and empty instead of turning it into a "saved" preset. The record must carry its magic and a matching CRC. Same torn-write-safe bank flip as pa_preset_save. */
+int pa_preset_restore(uint8_t idx, const pa_preset_t *in) {
+    if (!in || idx >= PA_PRESET_COUNT) return -1;
+    if (in->magic != PA_PRESET_MAGIC || in->crc32 != pa_crc32(in, (uint32_t)sizeof(*in) - sizeof(uint32_t))) return -2;
+    if (!g_presets_initialized) pa_preset_init();
+
+    pa_preset_t backup = g_presets[idx];
+    g_presets[idx] = *in;
+    uint32_t next_bank = (g_active_bank_addr == PA_FLASH_STORE_BANK_A_ADDR) ? PA_FLASH_STORE_BANK_B_ADDR : PA_FLASH_STORE_BANK_A_ADDR;
     if (commit_bank_to_flash(next_bank, g_current_bank_seq + 1u, g_presets) != 0) {
         g_presets[idx] = backup;
         return -1;

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """The Onyx release package (tools/onyx_pkg_make.py) is built from scratch and carries no M-VAVE material:
 
     python custom-fw/test/test_onyx_package.py [package.fwsc app.bin]       (default: the newest custom-fw/release/*/*.fwsc and custom-fw/build_app.bin)

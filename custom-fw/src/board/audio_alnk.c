@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 #include "../../include/pa_config.h"
 /*
  * audio_alnk.c — Pocket Amp Full-Duplex ALNK0 I2S Driver & Ping-Pong ISR (Big Rock 1)

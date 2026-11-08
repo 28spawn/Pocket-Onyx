@@ -131,7 +131,7 @@ progress { width:100%; height:8px; }
 </main>
 <script>
 /*TABLES-BEGIN (tools/gen_editor_tables.py: do not edit)*/
-const TABLES = {"models":{"DYN":["GATE","BOOST+GATE","COMP+GATE","AI GATE MS","COMP"],"DRIVE":["TS-808","KLON","OCD","RAT","BIG MUFF","FUZZ FACE"],"EQ":["5-BAND","LOW/HIGH CUT","PARAMETRIC-3"],"MOD":["CHORUS","PHASER","FLANGER","TREMOLO","VIBRATO","UNIVIBE","AUTO FILTER"],"DLY":["ANALOG","DUCKING","TAPE","DUAL","LO-FI","DIGITAL","PING PONG","REVERSE","SLAPBACK"],"REV":["ROOM","HALL","SWELL","SPRING","SHIMMER","CLOUD","PLATE","AMBIENCE"]},"params":{"DYN":[["THRESH","RELEASE","ATTACK","LEVEL"],["THRESH","RELEASE","---","BOOST"],["THRESH","RATIO","ATTACK","LEVEL"],["THRESH","RELEASE","ATTACK","LEVEL"],["THRESH","RATIO","ATTACK","LEVEL"]],"DRIVE":["DRIVE","TONE","LEVEL"],"AMP":["GAIN","BASS","MID","TREBLE","PRES","MASTER"],"CAB":["LEVEL","LOWCUT","HICUT"],"EQ":[["100","400","1k","3k","8k"],["LOWCUT","HICUT","LEVEL"],["LOW","MID","FREQ","HIGH"]],"MOD":[["RATE","DEPTH","MIX","---"],["RATE","DEPTH","MIX","FDBK"],["RATE","DEPTH","MIX","FDBK"],["RATE","DEPTH","---","---"],["RATE","DEPTH","---","---"],["RATE","DEPTH","MIX","FDBK"],["RATE","RANGE","MIX","RESO"]],"DLY":[["TIME","FDBK","MIX"],["MOD","RELEASE","GRIT","RATIO","GRIT","TONE","TONE","TONE","TONE"]],"REV":["DECAY","LOWCUT","TONE","MIX"]},"counts":{"DYN":4,"DRIVE":3,"AMP":6,"CAB":3,"MOD":4,"DLY":4,"REV":4,"EQ":[5,3,4]}};
+const TABLES = {"models":{"DYN":["GATE","BOOST+GATE","COMP+GATE","AI GATE MS","COMP"],"DRIVE":["TS-808","KLON","OCD","RAT","BIG MUFF","FUZZ FACE"],"EQ":["5-BAND","LOW/HIGH CUT","PARAMETRIC-3"],"MOD":["CHORUS","PHASER","FLANGER","TREMOLO","VIBRATO","WAH","AUTO WAH"],"DLY":["ANALOG","DUCKING","TAPE","DUAL","LO-FI","DIGITAL","PING PONG","REVERSE","SLAPBACK"],"REV":["ROOM","HALL","SWELL","SPRING","SHIMMER","CLOUD","PLATE"]},"params":{"DYN":[["THRESH","RELEASE","ATTACK","LEVEL"],["THRESH","RELEASE","---","BOOST"],["THRESH","RATIO","ATTACK","LEVEL"],["THRESH","RELEASE","ATTACK","LEVEL"],["THRESH","RATIO","ATTACK","LEVEL"]],"DRIVE":["DRIVE","TONE","LEVEL"],"AMP":["GAIN","BASS","MID","TREBLE","PRES","MASTER"],"CAB":["LEVEL","LOWCUT","HICUT"],"EQ":[["100","400","1k","3k","8k"],["LOWCUT","HICUT","LEVEL"],["LOW","MID","FREQ","HIGH"]],"MOD":[["RATE","DEPTH","MIX","---"],["RATE","DEPTH","MIX","FDBK"],["RATE","DEPTH","MIX","FDBK"],["RATE","DEPTH","---","---"],["RATE","DEPTH","---","---"],["RATE","RANGE","MIX","RESO"],["FALL","SENS","MIX","RESO"]],"DLY":[["TIME","FDBK","MIX"],["MOD","RELEASE","GRIT","RATIO","GRIT","TONE","TONE","TONE","TONE"]],"REV":["DECAY","LOWCUT","TONE","MIX"]},"counts":{"DYN":4,"DRIVE":3,"AMP":6,"CAB":3,"MOD":4,"DLY":4,"REV":4,"EQ":[5,3,4]}};
 /*TABLES-END*/
 //CORE-BEGIN
 // ---- the unit's SysEx framing: F0 <8->7 bit packed inner frame> F7, inner = 00 59 cmd len:u24le payload chk (tools/mvave_device.py) ----
@@ -245,7 +245,7 @@ function stripNam(f, filename) {
 // Same rules as emu/nam_loader.py: a ToneHunt A2 SlimmableContainer is read for its LITE submodel (1870 / 1871 weights, 7,504 bytes: the Full one, 12,146 weights, is 48 KB and does not fit the unit),
 // the head scale is appended when the weights are 1870, the name comes from the metadata, a capture whose name says CAB (and not "cab free" / "no cab") is flagged as having its cabinet, and a
 // recorded input level calibrates the input trim against the unit's ADC reference (4 dBu). ----
-const NAM_ADC_REF_DBU = 4.0;
+const NAM_ADC_REF_DBU = 13.0;
 function namHasBakedCab(gear, name, file) {
   const names = [name.toLowerCase(), file.toLowerCase()];
   if (names.some((n) => /cab[ _\-]*free|no[ _\-]*cab|without[ _\-]*cab|w\/o[ _\-]*cab|cabless|cab[ _\-]*less|amp[ _\-]*only/.test(n))) return false;
@@ -272,7 +272,7 @@ function namJson(f, filename) {
   if (weights.some((x) => !Number.isFinite(x))) return { error: "the weights contain a value that is not a number" };
   const meta = m.metadata || data.metadata || {}, name = String(meta.name || meta.gear_model || filename || "NAM");
   const gear = String(meta.gear_type || "").toLowerCase(), cab = namHasBakedCab(gear, name, filename || "");
-  const lvl = namInputLevel(meta, data), trim = lvl === null ? 1.0 : Number((Math.pow(10, (NAM_ADC_REF_DBU - lvl) / 20)).toFixed(4));
+  const lvl = namInputLevel(meta, data), trim = lvl === null ? 1.0 : Number((Math.max(0.60, Math.min(1.80, Math.pow(10, (NAM_ADC_REF_DBU - lvl) / 20)))).toFixed(4));
   const out = new Uint8Array(20 + weights.length * 4), dv = new DataView(out.buffer);
   out.set([0x57, 0x41, 0x56, 0x45], 0); dv.setUint32(4, weights.length, true); dv.setFloat32(8, head, true); dv.setUint32(12, cab ? 1 : 0, true); dv.setFloat32(16, trim, true);
   weights.forEach((w, i) => dv.setFloat32(20 + i * 4, w, true));
@@ -505,7 +505,7 @@ const hex = (a) => Array.from(a, (b) => b.toString(16).padStart(2, "0")).join(" 
 // ---- transports ----
 const MIDI_SVC = "03b80e5a-ede8-4b33-a751-6ce34ec4c700", MIDI_CHR = "7772e5db-3868-4112-a1a9-f2669d106bf3";
 let link = null, rx = [], waiter = null, state = null, names = { amp: [], cab: [], firstAmp: 20, firstCab: 20, rev: 0 }, busy = false;
-function onFrame(fr) { if (diagWait) { const d = diagParse(fr); if (d) { diagWait(d); return; } } const r = parseReply(fr); if (!r) return; if (waiter && waiter.type === r.type) { const w = waiter; waiter = null; w.res(r.data); } }
+function onFrame(fr) { if (diagWait) { const d = diagParse(fr); if (d) { diagWait(d); return; } } const r = parseReply(fr); if (!r) return; if (waiter && waiter.type === r.type && (!waiter.match || waiter.match(r.data))) { const w = waiter; waiter = null; w.res(r.data); } }
 async function openMidi() {
   if (!navigator.requestMIDIAccess) throw new Error("Web MIDI is not available in this browser (use Chrome or Edge)");
   const acc = await navigator.requestMIDIAccess({ sysex: true });
@@ -535,8 +535,8 @@ async function sendShort(bytes) {       // channel messages, three bytes each (a
   if (!link) return;
   for (let i = 0; i < bytes.length; i += 3) { await link.send(bytes.slice(i, i + 3)); if (link.ble) await sleep(4); }
 }
-async function request(cmd, payload, type, ms) {
-  const p = new Promise((res, rej) => { waiter = { type, res }; setTimeout(() => { if (waiter && waiter.res === res) { waiter = null; rej(new Error("no reply to command " + cmd)); } }, ms || (link && link.ble ? 8000 : 1500)); });      // a long reply over Bluetooth is dozens of notifications, a few per connection event
+async function request(cmd, payload, type, ms, match) {
+  const p = new Promise((res, rej) => { waiter = { type, match, res }; setTimeout(() => { if (waiter && waiter.res === res) { waiter = null; rej(new Error("no reply to command " + cmd)); } }, ms || (link && link.ble ? 8000 : 1500)); });      // a long reply over Bluetooth is dozens of notifications, a few per connection event
   await link.sendFrame(buildFrame(cmd, payload));
   return p;
 }
@@ -697,8 +697,8 @@ buildChain();
 async function readNames(kind) {
   const out = []; let first = 20;
   for (let start = 0, total = 1; start < total; ) {
-    const d = await request(81, [kind, start], 0x61); total = d[1]; const n = d[3]; first = d[4];
-    for (let i = 0; i < n; i++) out.push(String.fromCharCode(...d.slice(5 + i * 16, 21 + i * 16).filter((x) => x)));       // "" = a deleted slot: its number stays, presets use it
+    const d = await request(81, [kind, start], 0x61, undefined, (data) => data[0] === kind && data[2] === start); total = d[1]; const n = d[3]; first = Math.max(20, d[4]);
+    for (let i = 0; i < n; i++) out[start + i] = String.fromCharCode(...d.slice(5 + i * 16, 21 + i * 16).filter((x) => x));       // "" = a deleted slot: its number stays, presets use it
     if (!n) break; start += n;
   }
   if (kind === 0) { names.amp = out; names.firstAmp = first; } else { names.cab = out; names.firstCab = first; }
@@ -728,7 +728,7 @@ setInterval(() => { if ($("live").checked && !dragging) refresh(); }, 1500);
 const KINDS = [{ n: "capture", max: 10, table: "namTable", count: "namCount", first: () => names.firstAmp, list: () => names.amp, free: () => state.namFree, have: () => state.namCount, cap: 23 },
                { n: "cabinet", max: 15, table: "cabTable", count: "cabCount", first: () => names.firstCab, list: () => names.cab, free: () => state.cabFree, have: () => state.cabCount, cap: 15 }];
 let buildCode = "", replaceTarget = null, namBytes = null, cabBytes = null, namFileName = "", cabFileName = "";
-function storedRows(kind) { const K = KINDS[kind], l = K.list(), first = K.first(), rows = []; for (let t = first; t < l.length; t++) if (l[t]) rows.push({ type: t, idx: t - first, name: l[t] }); return rows; }
+function storedRows(kind) { const K = KINDS[kind], l = K.list(), first = Math.max(20, K.first()), rows = []; for (let t = first; t < Math.min(first + K.max, l.length); t++) if (l[t]) rows.push({ type: t, idx: t - first, name: l[t] }); return rows; }
 function renderStore() {
   if (!state) return;
   KINDS.forEach((K, kind) => {
@@ -749,7 +749,7 @@ function renderStore() {
 }
 async function userOp(op, kind, idx, name) {
   const nm = name ? Array.from(name, (c) => c.charCodeAt(0) & 0x7F) : [];
-  const d = await request(82, [op, kind, idx, ...nm], 0x62, op === 2 ? 15000 : undefined); return d[3] === 0 ? 0 : d[3] - 256;
+  const d = await request(82, [op, kind, idx, ...nm], 0x62, op === 2 ? 15000 : undefined, (data) => data[0] === op && data[1] === kind); return d[3] === 0 ? 0 : d[3] - 256;
 }
 async function deleteItem(kind, r) {
   const K = KINDS[kind];

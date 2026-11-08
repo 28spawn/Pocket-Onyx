@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """Every IR in the emulator's cabinet bank must load.
 
 Python's `wave` module only understands PCM (format tag 1). Half of the bank

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* src/board/ota_hw.c - the device side of the vendor MIDI update session (src/sys/pa_ota_session.c): USB-MIDI in and out, the flash (the five staging sectors only), the screen and the reset into the staged loader.
  * Device only: the host builds use the refusing stubs in pa_ota_session.c. */
 #include <stdint.h>
