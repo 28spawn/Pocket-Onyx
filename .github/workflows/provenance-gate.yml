@@ -33,5 +33,5 @@ jobs:
       - name: Verify Onyx release package integrity
         run: |
           python custom-fw/test/test_onyx_package.py \
-            custom-fw/release/Pocket_AMP_Onyx_1.05/Pocket_AMP_Onyx_1.05.fwsc \
-            custom-fw/release/Pocket_AMP_Onyx_1.05/Pocket_AMP_Onyx_1.05.bin
+            custom-fw/release/Onyx_1.18/Onyx_1.18.fwsc \
+            custom-fw/release/Onyx_1.18/Onyx_1.18.bin
