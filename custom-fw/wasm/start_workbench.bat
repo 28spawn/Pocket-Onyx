@@ -29,17 +29,17 @@ python serve.py %SERVE_ARGS%
 goto :eof
 
 :build
-if "%ZIG%"=="" (
-  echo   [ERROR] zig was not found.
-  echo.
-  echo   Install it with:   npm i -g @ziglang/cli
-  echo   or download from:  https://ziglang.org/download
-  echo   then re-run this script.
-  goto :eof
-)
 echo.
 echo   Building the firmware for WebAssembly ...
-python build_wasm.py --zig "%ZIG%"
-if errorlevel 1 goto :eof
+rem build_wasm.py looks for zig in more places than this file does (winget, scoop, a plain unzip) and says how to install it when there is none
+if "%ZIG%"=="" (
+  python build_wasm.py
+) else (
+  python build_wasm.py --zig "%ZIG%"
+)
+if errorlevel 1 (
+  pause
+  goto :eof
+)
 echo.
 goto serve

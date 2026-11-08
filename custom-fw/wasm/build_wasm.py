@@ -11,6 +11,7 @@ the same DSP - rather than a re-implementation.
 Requires: zig (its `zig cc` is a clang with the wasm32 target).
 Usage:   python wasm/build_wasm.py [--zig <path to zig.exe>]
 """
+import glob
 import os, subprocess, sys, glob, shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -75,6 +76,12 @@ def find_zig(arg=None):
     w = shutil.which("zig.exe") or shutil.which("zig")
     if w:                         cands.append(w)
     # the standard install locations
+    # winget (`winget install -e --id zig.zig`) and scoop: found by folder, so an already-open terminal does not need a PATH refresh
+    for pat in (os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "WinGet", "Packages", "zig.zig*"),
+                os.path.join(os.path.expanduser("~"), "scoop", "apps", "zig", "current")):
+        for d in glob.glob(pat):
+            for dp, dn, fn in os.walk(d):
+                if "zig.exe" in fn: cands.append(os.path.join(dp, "zig.exe"))
     for base in (os.path.join(os.path.expanduser("~"), "tools", "zig"),
                  os.path.join(os.path.expanduser("~"), ".zig"),
                  r"C:\zig", r"C:\Program Files\zig",
@@ -86,9 +93,10 @@ def find_zig(arg=None):
         if _zig_works(c):
             return c
     sys.exit("zig not found (or not working).\n"
-             "  install it with:  npm i -g @ziglang/cli\n"
-             "  or download from: https://ziglang.org/download\n"
-             "  then re-run, or pass it explicitly:  --zig <path to zig.exe>")
+             "  install it with:  winget install -e --id zig.zig      (then run this again: it is found by its folder)\n"
+             "  or download the zip from https://ziglang.org/download and unzip it anywhere under  %USERPROFILE%\\tools\\zig\n"
+             "  (not the npm package @ziglang/cli: its wrapper often fails to install)\n"
+             "  or pass it explicitly:  --zig <path to zig.exe>")
 
 def inline(wasm_path, html_path, out_path):
     """Bake the wasm into the page so it works straight from the disk.

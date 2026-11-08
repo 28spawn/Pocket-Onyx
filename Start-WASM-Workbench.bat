@@ -32,6 +32,6 @@ if /I "%~1"=="--rebuild" (
 
 if errorlevel 1 (
   echo.
-  echo [ERROR] the workbench stopped with an error (see above).
+  echo [ERROR] the workbench stopped with an error - see the messages above.
   pause
 )

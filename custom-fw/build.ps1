@@ -77,11 +77,9 @@ if (Test-Path $BuildDir) { Remove-Item -Recurse -Force $BuildDir }
 New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
 
 # 1. Locate Host Clang (LLVM-MinGW)
-$clangExe = Get-Command clang.exe -ErrorAction SilentlyContinue
-if (-not $clangExe) {
-    $clangDir = (Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\MartinStorsjo.LLVM-MinGW.UCRT*" -Recurse -Filter "clang.exe" | Select-Object -First 1).DirectoryName
-    $env:PATH = "$clangDir;$env:PATH"
-}
+# a clang that can really include the C library (stdlib.h ...); installs llvm-mingw when the PC has none (custom-fw\tools\Find-Clang.ps1)
+. (Join-Path $PSScriptRoot "tools\Find-Clang.ps1")
+$null = Resolve-HostClang
 
 Write-Host "=== [1/5] Running Host Verification Suites ===" -ForegroundColor Cyan
 

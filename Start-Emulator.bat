@@ -53,6 +53,6 @@ goto done
 :done
 if errorlevel 1 (
   echo.
-  echo [ERROR] the emulator stopped with an error (see above).
+  echo [ERROR] the emulator stopped with an error - see the messages above.
   pause
 )
