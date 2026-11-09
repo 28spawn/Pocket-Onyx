@@ -1,5 +1,5 @@
-# SPDX-License-Identifier: GPL-3.0-only
-# Copyright (C) 2026 The Onyx Authors (@28spawn)
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 # tools/build_onyx_loader.ps1 - build the Onyx update loader (loader/onyx_loader.c + third_party/pendel_loader, MPL-2.0) into build_pi32/onyx_loader/loader.bin
 # (the raw RAM image the SPL loads at 0x01C0A800). Called by build.ps1; can be run alone. The loader writes the app area only: see loader/onyx_loader.c.
 param([string]$Out = "")
@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 $FW = Split-Path -Parent $PSScriptRoot
 if (-not $Out) { $Out = Join-Path $FW "build_pi32\onyx_loader" }
 New-Item -ItemType Directory -Force $Out | Out-Null
-$cands = @($(if ($env:USERPROFILE) { Join-Path $env:USERPROFILE "tools\jieli\C`$\JL\pi32" }), "C:\JL\pi32", "C:\jieli\pi32")
+$cands = @($env:PI32_ROOT, $(if ($env:USERPROFILE) { Join-Path $env:USERPROFILE "tools\jieli\C`$\JL\pi32" }), "C:\JL\pi32", "C:\jieli\pi32")
 $root = $cands | Where-Object { $_ -and (Test-Path "$_\bin\clang.exe") } | Select-Object -First 1
 if (-not $root) { throw "the JieLi pi32 toolchain was not found (see build.ps1)" }
 $bin = "$root\bin"; $tp = Join-Path $FW "third_party\pendel_loader"

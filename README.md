@@ -128,7 +128,11 @@ Onyx features a fully reproducible, clean-room build pipeline that compiles the 
 
 Official release containers (`Onyx_1.18.fwsc` / `Onyx_1.18.bin`) ship with the radio completely disabled and unpowered (`PA_BLE=0`) for regulatory compliance and hardware safety. All official builds are strictly USB-only.
 
-If you want wireless BLE-MIDI connectivity, you are required to build the firmware from source yourself:
+If you want wireless BLE-MIDI connectivity, you are required to build the firmware from source yourself.
+
+**The one-step way:** double-click [`Build-Onyx-BLE.bat`](Build-Onyx-BLE.bat). It checks what the build needs (Python, the JieLi pi32v2 compiler, llvm-mingw), asks before it installs anything that is missing, runs the full checked build with the radio enabled, and puts the result in the folder `Onyx-BLE-build`. Nothing is flashed: you install the package yourself in the Onyx Web Editor. The file also works alone: saved into an empty folder, it downloads the script and the latest source from GitHub (git is not needed). The JieLi compiler is downloaded from JieLi's own server (SHA-256 checked) and unpacked into `%USERPROFILE%\tools\jieli` without running its installer. The firmware you build is for your own unit: please do not pass the built files on.
+
+**By hand**, with the prerequisites above installed:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File "custom-fw/build.ps1" -Ble
