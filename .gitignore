@@ -151,3 +151,6 @@ custom-fw/ble_matrix.csv
 
 # the portable llvm-mingw custom-fw/tools/Find-Clang.ps1 may download for a PC that has no compiler
 custom-fw/tools/toolchain/
+# Build-Onyx-BLE.ps1: its output (a firmware with the radio on is not published) and the source it downloads when run outside the repository
+Onyx-BLE-build/
+Pocket-Onyx/
