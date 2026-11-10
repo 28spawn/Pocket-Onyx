@@ -8,8 +8,28 @@
 
 /* Audio core — the NAM/amp DSP is 44.1 kHz native.
  * 48 kHz is possible on the I/O path via SRC, model stays 44.1k. */
+/* PA_SAMPLE_RATE_HZ: the rate the DSP is written for. 44100 (the default) or 48000, set only by build.ps1 -Rate48k (EXPERIMENTAL: the codec's 48 kHz clock is
+ * found by a probe at boot, audio_alnk.c). PA_CODEC_RATE_HZ is what the converter really runs at: 44,118 Hz at the 44.1 kHz setting (the 24 MHz crystal / 544). */
+#ifndef PA_SAMPLE_RATE_HZ
 #define PA_SAMPLE_RATE_HZ      44100
+#endif
+#if PA_SAMPLE_RATE_HZ == 44100
+#define PA_CODEC_RATE_HZ       44118u
+#define PA_BLOCK_US            1451u   /* one 64-sample block, us */
+#define PA_BLOCK_TICKS         34800u  /* the same in TIMER4 ticks (24 MHz) */
+#elif PA_SAMPLE_RATE_HZ == 48000
+#define PA_CODEC_RATE_HZ       48000u
+#define PA_BLOCK_US            1333u
+#define PA_BLOCK_TICKS         32000u
+#else
+#error "PA_SAMPLE_RATE_HZ must be 44100 or 48000"
+#endif
 #define PA_SAMPLE_RATE         PA_SAMPLE_RATE_HZ
+#define PA_SAMPLE_RATE_F       ((float)PA_SAMPLE_RATE_HZ)
+/* A time budget written for the 1451 us block, scaled to this rate's block (exactly x at 44.1 kHz). */
+#define PA_US_SCALE(x)         ((uint32_t)(((uint32_t)(x) * PA_BLOCK_US + 725u) / 1451u))
+/* The drum sequencer's step: 1/12 of a beat, PA_DRUM_STEP_NUM / BPM samples (220500 at 44.1 kHz). */
+#define PA_DRUM_STEP_NUM       ((uint32_t)PA_SAMPLE_RATE_HZ * 5u)
 /* Core clock ASSUMPTION - the single source of truth for every CPU load figure
  * in the firmware and the tools. 360 MHz is what main.c's cycle conversion
  * assumes (Timer4 runs at 24 MHz, ratio x15). It is NOT measured: the AC791N

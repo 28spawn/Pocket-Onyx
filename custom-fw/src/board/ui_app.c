@@ -1826,7 +1826,7 @@ static void render_display_settings(const pa_ui_ctx_t *ui) {
 /* Render Performance Telemetry Screen */
 #if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM) && !defined(PA_EMU_DLL) && !defined(__wasm__)
 extern volatile uint32_t g_pa_isr_peak_us;
-static uint32_t perf_peak_permille(void) { return (g_pa_isr_peak_us * 1000u) / 1451u; }
+static uint32_t perf_peak_permille(void) { return (g_pa_isr_peak_us * 1000u) / PA_BLOCK_US; }
 static uint32_t perf_slot_us(unsigned slot) { return ((volatile uint32_t *)(uintptr_t)0x01C7C500u)[4u * slot + 3u]; }   /* last run, us * 24 (fx_graph.c) */
 #define PA_PERF_MEASURED 1
 #else

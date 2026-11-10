@@ -1037,7 +1037,7 @@ extern volatile uint32_t g_pa_isr_avg_us;
 extern uint32_t pa_smp_cpu1_load_permille(void);
 static uint32_t pa_perf_permille(uint32_t modelled) {
     if (g_pa_isr_avg_us == 0u) return modelled;
-    uint32_t c0 = (g_pa_isr_avg_us * 1000u) / 1451u;
+    uint32_t c0 = (g_pa_isr_avg_us * 1000u) / PA_BLOCK_US;
     uint32_t c1 = pa_smp_cpu1_load_permille();
     uint32_t m = c0 > c1 ? c0 : c1;
     return m > 999u ? 999u : m;

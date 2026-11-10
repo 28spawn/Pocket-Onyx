@@ -27,7 +27,7 @@
 #include <string.h>
 
 #define EQ_NUM_BANDS 5
-#define EQ_FS        44100.0f
+#define EQ_FS        PA_SAMPLE_RATE_F
 
 enum { EQ_TYPE_5BAND = 0, EQ_TYPE_CUT = 1, EQ_TYPE_PARAM3 = 2, EQ_TYPE_COUNT = 3 };
 

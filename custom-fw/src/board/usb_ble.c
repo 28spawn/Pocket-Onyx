@@ -576,7 +576,7 @@ void pa_usb_audio_ep3_missed(pa_usb_ble_ctx_t *ctx, uint32_t frames) {
     (void)ctx;
     if (!s_cap_primed || !frames) return;
     if (frames > 4u) frames = 4u;
-    const uint32_t adv = (uint32_t)(((uint64_t)44118u * 65536u * frames) / 1000u) + s_cap_rd_f;
+    const uint32_t adv = (uint32_t)(((uint64_t)PA_CODEC_RATE_HZ * 65536u * frames) / 1000u) + s_cap_rd_f;
     const int32_t fill_after = (int32_t)(s_cap_wr - (s_cap_rd_i + (adv >> 16)));
     if (fill_after < (int32_t)PA_CAP_TARGET - 64) return;
     s_cap_rd_i += adv >> 16; s_cap_rd_f = adv & 0xFFFFu;
@@ -618,7 +618,7 @@ uint32_t pa_usb_audio_ep3_in_fill(pa_usb_ble_ctx_t *ctx, uint8_t *pkt, uint32_t 
         s_cap_last_l = 0; s_cap_last_r = 0;
         return n * 6u;
     }
-    uint32_t step_q16 = (uint32_t)(((uint64_t)44118u << 16) / s_cap_rate);
+    uint32_t step_q16 = (uint32_t)(((uint64_t)PA_CODEC_RATE_HZ << 16) / s_cap_rate);
     {   /* gentle P-control near the target; beyond the dead band (sustained drift, e.g. after missed packets) a stronger one, clamped to +-0.3 % (5 cents) */
         const int32_t err = fill - (int32_t)PA_CAP_TARGET;
         int32_t corr = (err * (int32_t)PA_CAP_GAIN_X8) >> 3;
@@ -693,7 +693,7 @@ void pa_usb_audio_mix_playback_stereo(pa_usb_ble_ctx_t *ctx, int32_t *L, int32_t
         s_pb_concealing = 0u;
     }
     /* step = host rate / codec rate (read fewer host frames than codec frames, since 44,100 < 44,118), steered by the fill */
-    uint32_t step_q16 = (uint32_t)(((uint64_t)s_pb_rate << 16) / 44118u);
+    uint32_t step_q16 = (uint32_t)(((uint64_t)s_pb_rate << 16) / PA_CODEC_RATE_HZ);
     {
         int32_t corr = ((fill - (int32_t)PA_PB_TARGET) * (int32_t)PA_CAP_GAIN_X8) >> 3;
         if (corr > 200) corr = 200;
