@@ -116,7 +116,7 @@ typedef struct {
      * counts samples in 16.16 and the step advances when it reaches the step length, so
      * a loop is exactly as long as it should be. */
     uint32_t step_pos_q16;
-    uint32_t step_len_q16;         /* 220500 / BPM samples, in 16.16 */
+    uint32_t step_len_q16;         /* PA_DRUM_STEP_NUM / BPM samples, in 16.16 */
     uint32_t samples_per_step;     /* the same, rounded down (for the UI and the tests) */
     uint16_t current_step;         /* 0..k_groove_len[style]-1 */
     uint8_t  armed;                /* 1 from a restart (style change, play) until step 0 is triggered: no step is sounding yet */

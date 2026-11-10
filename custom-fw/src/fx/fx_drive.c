@@ -36,7 +36,7 @@
 #include "../dsp/pa_oversample.h"
 #include "pa_prof.h"
 
-#define DRV_FS 44100.0f
+#define DRV_FS PA_SAMPLE_RATE_F
 
 /* 1 = run the clipper at 2x instead of 4x (set by the load governor in audio_alnk.c when the audio interrupt runs too long). */
 volatile uint8_t g_pa_drive_os2 = 0;

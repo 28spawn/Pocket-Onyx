@@ -26,7 +26,7 @@
 #define TUNER_NEED     (TUNER_WIN + TUNER_TAU_MAX)
 #define TUNER_SLICE    12u
 #define TUNER_GATE_Q21 500        /* a raw block peak under this (-72 dBFS) is "no signal" */
-#define TUNER_HOLD_BLOCKS 2756u   /* 4 s of 64-sample blocks at 44.1 kHz */
+#define TUNER_HOLD_BLOCKS ((4u * (uint32_t)PA_SAMPLE_RATE_HZ + 32u) / 64u)   /* 4 s of 64-sample blocks (2756 at 44.1 kHz) */
 #define TUNER_YIN_THRESH 0.15f
 
 static const float k_log2_to_semi = 12.0f;
@@ -173,7 +173,7 @@ static float tuner_det_finish(pa_tuner_state_t *t) {
         if (off < -1.0f) off = -1.0f;
         tau_f += off;
     }
-    return (44100.0f / (float)TUNER_DEC) / tau_f;
+    return (PA_SAMPLE_RATE_F / (float)TUNER_DEC) / tau_f;
 }
 
 static void tuner_det_slice(pa_tuner_state_t *t) {

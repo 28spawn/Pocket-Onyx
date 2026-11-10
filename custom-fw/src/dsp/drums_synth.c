@@ -114,8 +114,8 @@ void pa_drums_set_bpm(pa_drums_t *d, uint16_t bpm) {
      * (44100 * 60) / (12 * bpm) = 220500 / bpm samples.  The length is kept in 16.16, so
      * a step is exact to 1/65536 of a sample: a four-bar loop is four bars of wall-clock
      * time at any tempo, and the groove cannot drift. */
-    d->step_len_q16 = (uint32_t)(((uint64_t)220500u << 16) / (uint64_t)bpm);
-    d->samples_per_step = 220500u / (uint32_t)bpm;
+    d->step_len_q16 = (uint32_t)(((uint64_t)PA_DRUM_STEP_NUM << 16) / (uint64_t)bpm);
+    d->samples_per_step = PA_DRUM_STEP_NUM / (uint32_t)bpm;
 }
 
 static inline void trigger_voice(pa_drums_t *d, uint32_t v, int32_t vel_q15) {

@@ -119,7 +119,7 @@ typedef struct {
     float      c_gain;           /* gain applied at the end of the last step (incl. makeup) */
 } dyn_state_t;
 
-#define GATE_FS          44100.0f
+#define GATE_FS          PA_SAMPLE_RATE_F
 #define GATE_HOLD_S      0.050f      /* hold after the detector drops below the close threshold */
 #define GATE_CLOSE_RATIO 0.5f        /* close 6 dB under open */
 #define GATE_DET_REL_S   0.025f      /* detector release */
