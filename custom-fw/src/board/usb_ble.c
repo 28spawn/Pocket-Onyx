@@ -545,9 +545,11 @@ void pa_usb_audio_push_capture_stereo(pa_usb_ble_ctx_t *ctx, const int32_t *L, c
 }
 
 static inline void put24(uint8_t *p, int32_t q21) {
-    int32_t s24 = q21 << 2;                        /* Q21 1.0 -> 2^23 */
-    if (s24 >  8388607) s24 =  8388607;
-    if (s24 < -8388608) s24 = -8388608;
+    /* Clamp first, then scale (Q21 1.0 -> 2^23). Shifted first, a sample of 2^29 or more wrapped to the other sign before the clamp saw it (a full-scale click where it should clip),
+     * and a left shift of a negative value is undefined in C. */
+    if (q21 >  2097151) q21 =  2097151;
+    if (q21 < -2097152) q21 = -2097152;
+    const int32_t s24 = q21 * 4;
     p[0] = (uint8_t)s24; p[1] = (uint8_t)(s24 >> 8); p[2] = (uint8_t)(s24 >> 16);
 }
 
@@ -646,8 +648,8 @@ void pa_usb_audio_ep3_out_rx(pa_usb_ble_ctx_t *ctx, const uint8_t *pkt, uint32_t
     if (!s_pb_on) pa_usb_audio_playback_start(ctx);                    /* tests and a host that never sent alt 1 first: the first packet opens it */
     g_pa_pb_packets++;
     for (uint32_t off = 0; off + 6u <= len; off += 6u) {
-        int32_t l = (int32_t)((uint32_t)pkt[off] | ((uint32_t)pkt[off + 1] << 8) | ((uint32_t)pkt[off + 2] << 16)) << 8 >> 8;
-        int32_t r = (int32_t)((uint32_t)pkt[off + 3] | ((uint32_t)pkt[off + 4] << 8) | ((uint32_t)pkt[off + 5] << 16)) << 8 >> 8;
+        int32_t l = (int32_t)(((uint32_t)pkt[off] | ((uint32_t)pkt[off + 1] << 8) | ((uint32_t)pkt[off + 2] << 16)) << 8) >> 8;      /* the shift up is unsigned: shifting a signed value into the sign bit is undefined */
+        int32_t r = (int32_t)(((uint32_t)pkt[off + 3] | ((uint32_t)pkt[off + 4] << 8) | ((uint32_t)pkt[off + 5] << 16)) << 8) >> 8;
         { const int32_t a = l < 0 ? -l : l, b = r < 0 ? -r : r, m = a > b ? a : b; if (m > s_pb_peak) s_pb_peak = m; }
         s_pb_L[s_pb_wr & (PB_RING - 1u)] = l >> 2;                     /* 24-bit -> Q21 */
         s_pb_R[s_pb_wr & (PB_RING - 1u)] = r >> 2;

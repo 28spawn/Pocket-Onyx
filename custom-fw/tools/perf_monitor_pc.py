@@ -17,7 +17,7 @@ average block time and the amp core's job time on which effects were on (needs -
 
 The selected preset keeps whatever effects the run left on: --restore-preset (or the last preset the event log saw) is sent as a Program Change at the end to bring the saved sound back.
 """
-import argparse, random, struct, sys, time
+import argparse, os, random, shutil, struct, sys, time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ble_matrix_pc as m
