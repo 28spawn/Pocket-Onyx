@@ -68,8 +68,9 @@ static void check(int ok, const char *msg) {
 static int check_reply(const uint8_t *raw, uint32_t n, uint8_t *type, uint32_t *length,
                        const uint8_t **data) {
     if (n < 12u || raw[0] != 0xF0u || raw[n - 1u] != 0xF7u) return 0;
-    /* the inner frame is packed 8-to-7-bit */
-    uint8_t inner[512];
+    /* the inner frame is packed 8-to-7-bit. static: *data points into it after this returns. As a local it was a dangling pointer, and with some compilers (the
+     * llvm-mingw clang the BLE build installs) the caller's text[] reused that stack and the device-info record read as empty. */
+    static uint8_t inner[512];
     uint32_t bits = 0, nbits = 0, k = 0;
     for (uint32_t i = 1; i + 1u < n; i++) {
         bits |= (uint32_t)(raw[i] & 0x7Fu) << nbits;

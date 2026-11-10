@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 #include "../../include/pa_config.h"
 /*
  * nam_engine.c — Pocket Amp NAM A2 16-Unit Q21 GRU Engine (Big Rock 2)
@@ -445,9 +445,9 @@ static uint32_t hw_rows_probe(int32_t *W, int32_t *Wn, int32_t *o) {
 }
 
 static uint8_t nam_hw_selftest(void) {
-    /* One row more than the 16 the model has: the control words of the z and n jobs carry a row count of 10 (PA_HW_CTRL_GRU_9x17_B, PA_HW_CTRL_GRU_9x16), and the second pass starts
-     * at row 7, so the engine reads rows 7..16. With 16 rows that last one was whatever lay behind the array. (Only the first 9 results of a job are compared.) */
-    enum { ST_ROWS = PA_NAM_HIDDEN + 1 };
+    /* The control words of the z and n jobs carry a row count of 10 (PA_HW_CTRL_GRU_9x17_B, PA_HW_CTRL_GRU_9x16): a second pass of those starting at row 7 read rows 7..16, one row
+     * past these 16-row matrices. Their second pass starts at row 6 instead, so the job ends on row 15. (Growing the arrays by a row cost 132 bytes the Bluetooth build does not have.) */
+    enum { ST_ROWS = PA_NAM_HIDDEN };
     static int32_t W[ST_ROWS * PA_NAM_INPUT_EXT], Wn[ST_ROWS * PA_NAM_HIDDEN], v[PA_NAM_INPUT_EXT];
     static int32_t o[1024] __attribute__((aligned(8)));            /* big, so a stray write stays inside it */
     uint32_t seed = 0x1234567u, errs = 0, jobs = 0, ticks = 0;
@@ -461,7 +461,8 @@ static uint8_t nam_hw_selftest(void) {
             const int cols = (g == 2) ? PA_NAM_HIDDEN : PA_NAM_INPUT_EXT;
             const int32_t *mat = (g == 2) ? Wn : W;
             for (int part = 0; part < 2; part++) {
-                const int off = part ? 7 : 0;
+                const int job_rows = (int)((ctrl >> 12) & 0xFu);                              /* 9 or 10: how many rows the engine reads */
+                const int off = part ? ST_ROWS - job_rows : 0;                                  /* 7 for a 9-row job, 6 for a 10-row one: always inside the matrix */
                 for (int i = 0; i < 200; i++) o[i] = 0x7FEEDBAC;
 #if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM)
                 const uint32_t t0 = plat_ticks24();
