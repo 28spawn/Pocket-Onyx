@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * pa_flash_map.h - the Pocket Amp's SPI NOR flash, as it really is: ONE MEGABYTE (JEDEC ID 0x856014).
  *
@@ -38,7 +38,12 @@
 
 #include <stdint.h>
 
-#define PA_FLASH_SIZE               0x00100000u  /* 1 MB: the whole chip */
+/* This is the Pocket AMP's layout. Another board keeps its own data in other sectors, so it needs its own map before anything here may be used for it. */
+#if defined(BOARD_BLACKBOX)
+#error "pa_flash_map.h is the Pocket AMP's flash layout: BOARD_BLACKBOX has none yet"
+#endif
+
+#define PA_FLASH_SIZE              0x00100000u  /* 1 MB: the whole chip */
 #define PA_FLASH_SECTOR_SIZE        4096u        /* 4 KB sector erase (0x20) */
 #define PA_FLASH_PAGE_SIZE          256u         /* 256 B page program (0x02) */
 

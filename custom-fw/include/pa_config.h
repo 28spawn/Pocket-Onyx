@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* pa_config.h — build-time configuration knobs.
  * Pocket Amp custom firmware (JieLi AC791N / wl82). Change these to push limits;
  * see ROADMAP.md for the rationale/costs of each. */
@@ -21,12 +21,8 @@
 #define PA_CPU_HZ              360000000u
 #define PA_BLOCK_N             64      /* samples/channel per DAC block (64..128) */
 
-/* Board identification. Defaults to Onyx if not specified */
-#ifndef BOARD_POCKET_AMP
-#if !defined(BOARD_BLACKBOX)
-#define BOARD_POCKET_AMP       1
-#endif
-#endif
+/* The board: pins, ADC channels, panel orientation and the device name come from include/boards/board_<name>.h (pa_board.h picks it; the Pocket AMP when none is given). */
+#include "pa_board.h"
 
 /* The firmware version the editor and the updater compare against;
  * the device-info record and the OTA ID block both carry this number.
@@ -41,20 +37,7 @@
 #ifndef PA_FW_VERSION
 #define PA_FW_VERSION          118u   /* shown as 1.18; the OTA ID block says V118 */
 #endif
-#ifndef PA_DEVICE_NAME
-#if defined(BOARD_BLACKBOX)
-#define PA_DEVICE_NAME         "BlackBox"
-#else
-#define PA_DEVICE_NAME         "Onyx"
-#endif
-#endif
-#ifndef PA_DEVICE_MODEL
-#if defined(BOARD_BLACKBOX)
-#define PA_DEVICE_MODEL        "BlackBox"
-#else
-#define PA_DEVICE_MODEL        "Onyx"
-#endif
-#endif
+/* PA_DEVICE_NAME / PA_DEVICE_MODEL: the board header (pa_board.h). */
 
 /* The C7 DSP pool (src/sys/pa_pool.c holds the array; every effect allocates its
  * state from it). 81,920 -> 147,456 B funds the 24,576-sample reverb tank

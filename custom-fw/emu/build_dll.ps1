@@ -1,5 +1,5 @@
-# SPDX-License-Identifier: GPL-3.0-only
-# Copyright (C) 2026 The Onyx Authors (@28spawn)
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 [CmdletBinding()]
 param(
     [string]$Board = "pocket_amp",
@@ -10,7 +10,10 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $RepoRoot
 
-$BoardDef = if ($Board -eq "blackbox") { "-DBOARD_BLACKBOX=1" } else { "-DBOARD_POCKET_AMP=1" }
+if ($Board -ne "pocket_amp") {
+    throw "-Board '$Board': only pocket_amp can be built (blackbox is not ported yet, see custom-fw/include/boards/board_blackbox.h)."
+}
+$BoardDef = "-DBOARD_POCKET_AMP=1"
 $BleDef = if ($Ble) { "-DPA_BLE=1" } else { "-DPA_BLE=0" }
 
 # a clang that can really include the C library (stdlib.h ...); installs llvm-mingw when the PC has none (custom-fw\tools\Find-Clang.ps1)

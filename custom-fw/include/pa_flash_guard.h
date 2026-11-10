@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* include/pa_flash_guard.h - the two pieces of the flash driver that decide whether an operation may run, written as pure inline functions so that a host test can check them exhaustively
  * (test/test_flash_guard.c) and the SRAM driver (src/board/flash_ram.c, which cannot call anything) still compiles them in place (always_inline: no call, no table).
  *
@@ -11,6 +11,11 @@
 #ifndef PA_FLASH_GUARD_H
 #define PA_FLASH_GUARD_H
 #include <stdint.h>
+
+/* The windows below are the Pocket AMP's (pa_flash_map.h). */
+#if defined(BOARD_BLACKBOX)
+#error "pa_flash_guard.h holds the Pocket AMP's write windows: BOARD_BLACKBOX has none yet"
+#endif
 
 #define PA_FLD_WIN_OK(o, l) ((((o) >= 0x00086000u) && ((o) < 0x000B4000u) && ((l) <= 0x000B4000u - (o))) || (((o) >= 0x000B8000u) && ((o) < 0x000BD000u) && ((l) <= 0x000BD000u - (o))))
 #define PA_FLD_SRAM_LO 0x01C00000u

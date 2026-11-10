@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * src/board/st7735s.c — Pocket Amp ST7789 240x240 RGB565 SPI1 DMA Display Driver (QW-6 / BR-4)
  *
@@ -26,7 +26,8 @@ static const st7789_init_cmd_t k_st7789_init_table[] = {
     { 0x28,  0, {0} },                                                                     /* Display OFF */
     { 0x11,  0, {0} },                                                                     /* Sleep OUT (+ 120 ms delay) */
     { 0x2A,  4, {0x00, 0x00, 0x00, 0xEF} },                                                /* CASET: 0..239 */
-    { 0x2B,  4, {0x00, 0x28, 0x01, 0x17} },                                                /* RASET: 40..279 */
+    { 0x2B,  4, {(uint8_t)(PA_BOARD_LCD_ROW_FIRST >> 8), (uint8_t)(PA_BOARD_LCD_ROW_FIRST & 0xFFu),
+                 (uint8_t)(PA_BOARD_LCD_ROW_LAST >> 8),  (uint8_t)(PA_BOARD_LCD_ROW_LAST & 0xFFu)} }, /* RASET: the visible rows (Pocket AMP: 40..279) */
     { 0xB2,  5, {0x0C, 0x0C, 0x0C, 0x00, 0x33} },                                          /* Porch Setting */
     { 0x20,  0, {0} },                                                                     /* Inversion OFF */
     { 0xB7,  1, {0x56} },                                                                  /* Gate Control */
@@ -39,7 +40,7 @@ static const st7789_init_cmd_t k_st7789_init_table[] = {
     { 0xD0,  2, {0xA6, 0xA1} },                                                            /* Power Control 1 */
     { 0xE0, 14, {0xD0,0x0D,0x14,0x0B,0x0B,0x07,0x3A,0x44,0x50,0x08,0x13,0x13,0x2D,0x32} }, /* PVGAMCTRL */
     { 0xE1, 14, {0xD0,0x0D,0x14,0x0B,0x0B,0x07,0x3A,0x44,0x50,0x08,0x13,0x13,0x2D,0x32} }, /* NVGAMCTRL */
-    { 0x36,  1, {0x60} },                                                                  /* MADCTL: MV|MX landscape */
+    { 0x36,  1, {PA_BOARD_LCD_MADCTL} },                                                   /* MADCTL: the panel's orientation (Pocket AMP: 0x60, MV|MX landscape) */
     { 0x3A,  1, {0x55} },                                                                  /* COLMOD: 16-bit RGB565 */
     { 0xE7,  1, {0x00} },
     { 0x51,  1, {0xFF} },                                                                  /* Brightness 100% */

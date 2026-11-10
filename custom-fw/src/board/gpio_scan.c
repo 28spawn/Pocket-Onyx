@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * src/board/gpio_scan.c — Pocket Amp Buttons, Rotary Encoder & SARADC Scanner (QW-6 / BR-4)
  *
@@ -305,9 +305,7 @@ __attribute__((weak)) uint16_t pa_hal_saradc_read(uint8_t ch) {
 #ifndef PA_POT_SARADC
 #define PA_POT_SARADC 1
 #endif
-#ifndef PA_POT_CH
-#define PA_POT_CH 2
-#endif
+/* PA_POT_CH: the board header (include/boards/) */
 extern uint32_t g_boot_buttons;
 void plat_pot_poll(void) {
 #if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM) && PA_POT_SARADC
@@ -331,7 +329,7 @@ void plat_pot_poll(void) {
  * pa_battery_pct_from_adc. The first reading is a quick one (the stock's boot path), so the icon is right on the first frame; then one sample every 25 ms, and every 150th
  * sample the average replaces the reading. The charging state is PMU status register 0x16A10, bit 16 (active low: 0 = USB power). The old reader (the bandgap, PMU channel 3
  * assumed to be VBAT / 4) read 4.5 V on a charged cell and is gone, with its P33 register writes. */
-#define PA_VBAT_CH            9u
+/* PA_VBAT_CH: the board header (include/boards/) */
 #define PA_BATT_AVG_N         150u
 #define PA_BATT_SAMPLE_MS     25u
 #define PA_BATT_MV_X10        66u        /* about 6.6 mV per count (full cell: 4.2 V ≈ 635 counts) */

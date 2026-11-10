@@ -8,11 +8,11 @@
 BOARD ?= pocket_amp
 BLE   ?= 0
 
-ifeq ($(BOARD),blackbox)
-  BOARD_DEF = -DBOARD_BLACKBOX=1
-else
-  BOARD_DEF = -DBOARD_POCKET_AMP=1
+# Only a ported board can be built (include/boards/). blackbox is not: built today it would be the Pocket AMP's firmware, wrong pins and wrong flash sectors on a BlackBox.
+ifneq ($(BOARD),pocket_amp)
+  $(error BOARD=$(BOARD) cannot be built: only pocket_amp is ported (blackbox is not yet, see include/boards/board_blackbox.h))
 endif
+BOARD_DEF = -DBOARD_POCKET_AMP=1
 BLE_DEF = -DPA_BLE=$(BLE)
 
 HOST_CC   ?= cc

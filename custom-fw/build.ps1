@@ -30,8 +30,17 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
 
-$BoardDef = if ($Board -eq "blackbox") { "-DBOARD_BLACKBOX=1" } else { "-DBOARD_POCKET_AMP=1" }
-$BleDef   = if ($Ble) { "-DPA_BLE=1" } else { "-DPA_BLE=0" }
+# The boards this build can make. A board is in this list only when its own pins, flash layout and update package exist (custom-fw/include/boards/).
+# "blackbox" is known but not ported: built today it would be the Pocket AMP's firmware under another name, which drives the wrong pins on a BlackBox and writes
+# flash sectors that hold the BlackBox's own data. So it stops here, before anything is compiled or written.
+if ($Board -eq "blackbox") {
+    throw "-Board blackbox is not ported yet (custom-fw/include/boards/board_blackbox.h): nothing was built. A Pocket AMP image must never be flashed to a BlackBox."
+}
+if ($Board -ne "pocket_amp") {
+    throw "-Board '$Board' is not a board this build knows. Use: pocket_amp"
+}
+$BoardDef = "-DBOARD_POCKET_AMP=1"
+$BleDef  = if ($Ble) { "-DPA_BLE=1" } else { "-DPA_BLE=0" }
 
 if ($Ble) {
     Write-Host ">>> Builder Item [BLE]: ENABLED (-Ble, PA_BLE=1) - Bluetooth LE radio active" -ForegroundColor Green
