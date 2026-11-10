@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 #include "../../include/pa_config.h"
 /*
  * audio_alnk.c — Pocket Amp Full-Duplex ALNK0 I2S Driver & Ping-Pong ISR (Big Rock 1)
@@ -84,6 +84,35 @@ uint32_t pa_alnk_isr_max_us(void)  { return PA_BENCH_STATS->isr_max_cyc / 24u; }
  * next block is late and the DMA replays the buffer it holds - the tail of the fade-out, an audible click when the amp or the cabinet is switched. Zeros replay silently. */
 void pa_alnk_silence_tx(void) {
     for (uint32_t i = 0; i < PA_ALNK_DMA_NOMINAL; i++) g_alnk_tx_dma[i] = 0;
+}
+
+/* ---- the output-stage enable (the pop at power-on) -------------------------------------------------------------------------------------------------------------------------------------------
+ * The Pocket AMP's converter has no control bus: it starts when the I2S clocks start, and its output then jumps from nothing to its resting level. With the output stage on, that jump is the
+ * "cable being plugged in" noise in the headphones. PA2 is the board's enable (or mute) of the output stage or the converter: the sequence the board is known to run with is PA2 low while the
+ * link starts and high after it (third_party/pendel_loader/boards/pocketamp/pa_audio.h, verified on a unit 2026-11-01). This firmware never drove PA2, so the stage was in whatever state the
+ * bootloader left it while the clocks came up.
+ * Now PA2 is low from the first lines of the boot (main.c), stays low while the link starts and for PA_AUDIO_EN_SETTLE_BLOCKS blocks of digital silence after it, and only then goes high. The
+ * silence lasts longer than that (PA_BOOT_QUIET_BLOCKS, pa_audio_core.c), so the stage is switched on over a silent, settled converter and the sound then fades in.
+ * PA_AUDIO_EN_GATE=0 leaves PA2 alone (the old behaviour), for a unit where this turns out wrong. The pin belongs in the board header (include/boards/) once that split has landed. */
+#ifndef PA_AUDIO_EN_GATE
+#define PA_AUDIO_EN_GATE 1
+#endif
+#ifndef PA_AUDIO_EN_PORTA_BIT
+#define PA_AUDIO_EN_PORTA_BIT (1u << 2)            /* PA2: low = output stage off, high = on */
+#endif
+#define PA_AUDIO_EN_SETTLE_BLOCKS 138u             /* 138 x 1.451 ms = 200 ms of running link before the stage is switched on */
+static volatile uint32_t s_en_wait;                /* blocks left until PA2 goes high; 0 = not waiting */
+static volatile uint8_t  s_en_on;                  /* 1 = the stage is meant to be on: the audio interrupt keeps PA2 high (see pa_alnk0_isr_body) */
+
+void pa_audio_output_enable(int on) {
+#if PA_AUDIO_EN_GATE
+    PA_WRITE32(JL_PORTA_DIE, PA_READ32(JL_PORTA_DIE) | PA_AUDIO_EN_PORTA_BIT);
+    if (on) PA_WRITE32(JL_PORTA_OUT, PA_READ32(JL_PORTA_OUT) | PA_AUDIO_EN_PORTA_BIT);
+    else    PA_WRITE32(JL_PORTA_OUT, PA_READ32(JL_PORTA_OUT) & ~PA_AUDIO_EN_PORTA_BIT);
+    PA_WRITE32(JL_PORTA_DIR, PA_READ32(JL_PORTA_DIR) & ~PA_AUDIO_EN_PORTA_BIT);
+#else
+    (void)on;
+#endif
 }
 
 static void pa_alnk0_isr_body(void);
@@ -246,6 +275,11 @@ static void pa_alnk0_isr_body(void) {
     PA_ISR_CP(0x03);
     pa_audio_process_half(rx_half, tx_half);
     PA_ISR_CP(0x04);
+    if (s_en_wait && --s_en_wait == 0u) s_en_on = 1u;                  /* the link has run its settle time on silence: the output stage on (see PA_AUDIO_EN_GATE) */
+#if PA_AUDIO_EN_GATE
+    /* Checked every block, not set once: the main loop also read-modify-writes PORTA_OUT (the backlight), and a write of its that this interrupt landed inside would put PA2 back low for good. */
+    if (s_en_on && !(PA_READ32(JL_PORTA_OUT) & PA_AUDIO_EN_PORTA_BIT)) pa_audio_output_enable(1);
+#endif
 
     uint8_t post_pnd = (uint8_t)(PA_READ8(JL_ALNK0_CON2) >> 4);
     if (post_pnd) {
@@ -271,10 +305,13 @@ static void pa_alnk0_register_irq(void) {
     val = (val & ~(0xFu << shift)) | (nibble << shift);
     PA_WRITE32(reg_addr, val);
 }
+#else
+void pa_audio_output_enable(int on) { (void)on; }      /* the host has no output stage */
 #endif /* !PA_HOST_BUILD && !PA_HOST_SIM */
 
 void pa_audio_init(pa_audio_block_cb_t cb) {
     uint16_t mvol  = g_pa_audio.master_vol_q15;
+    uint16_t mcur  = g_pa_audio.master_vol_cur_q15;     /* what pa_audio_core_init_jack set: 0 on the device (the power-on mute) */
     uint16_t igain = g_pa_audio.input_gain_q15 ? g_pa_audio.input_gain_q15 : 0x8000u;
 #if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM)
     {   volatile pa_bench_stats_t *st = PA_BENCH_STATS;
@@ -284,20 +321,24 @@ void pa_audio_init(pa_audio_block_cb_t cb) {
     for (uint32_t i = 0; i < 8u; i++) ((volatile uint32_t *)(uintptr_t)0x01C7C660u)[i] = 0u;    /* GRU step profile, see nam_engine.c */
 #endif
     for (uint32_t i = 0; i < PA_ALNK_DMA_NOMINAL * PA_ALNK_DMA_SLACK; i++) {
-        int32_t v = (i < PA_ALNK_DMA_NOMINAL) ? 0 : (int32_t)PA_ALNK_CANARY;
-        g_alnk_tx_dma[i] = v;
-        g_alnk_rx_dma[i] = v;
+        g_alnk_tx_dma[i] = 0;                             /* all of it silence: the canary is for what the DMA WRITES (the RX buffer); in the TX buffer it would be played if the DMA ever read past the nominal size */
+        g_alnk_rx_dma[i] = (i < PA_ALNK_DMA_NOMINAL) ? 0 : (int32_t)PA_ALNK_CANARY;
     }
     memset(&g_pa_audio, 0, sizeof(g_pa_audio));
 
     g_pa_audio.input_gain_q15 = igain;
     g_pa_audio.master_vol_q15 = mvol;
-    g_pa_audio.master_vol_cur_q15 = mvol;
+    /* The CURRENT level is kept as it was handed over, not set to the target. Setting it to the target undid the power-on mute: the first block went out at the saved master level and faded
+     * to 0 within the block, an audible burst of the converter's start-up input through the amp at every power-on. */
+    g_pa_audio.master_vol_cur_q15 = mcur;
     /* the core runs the same jack path, so the custom callback has to
      * be registered there too */
     pa_audio_core_set_block_cb(cb);
 
 #if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM)
+    pa_audio_output_enable(0);                 /* the output stage off while the clocks start (it has been since the first lines of the boot; this is for a restart of the link) */
+    s_en_wait = 0u; s_en_on = 0u;
+    plat_delay_ms(5u);
     PA_WRITE16(JL_ALNK0_CON0, 0);
     PA_WRITE16(JL_ALNK0_CON1, 0);
     PA_WRITE8(JL_ALNK0_CON2,  0);
@@ -337,6 +378,7 @@ void pa_audio_init(pa_audio_block_cb_t cb) {
     PA_WRITE16(JL_ALNK0_CON1, PA_ALNK_CON1_FULL_DUPLEX);
 
     pa_alnk0_register_irq();
+    s_en_wait = PA_AUDIO_EN_SETTLE_BLOCKS;     /* the audio interrupt switches the output stage on after this many blocks of silence */
     PA_WRITE16(JL_ALNK0_CON0, PA_READ16(JL_ALNK0_CON0) | PA_ALNK_CON0_EN);
 #endif
 
@@ -347,8 +389,25 @@ void pa_audio_alnk_init(void) {
     pa_audio_init(0);
 }
 
+/* Before a restart the firmware itself starts (the update's reboot): fade the output to silence (the master hold: a one-block slew), wait for the fade (3 blocks, bounded to 20 ms), switch
+ * the output stage off. The link keeps running on silence; the reset stops it. Main loop only. A power-off is not such a restart: the switch cuts the supply and no code runs (see main.c). */
+void pa_audio_quiet_for_reset(void) {
+#if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM)
+    extern volatile uint8_t g_pa_master_hold;
+    g_pa_master_hold = 1u;
+    if (g_pa_audio.running) {
+        const uint32_t c0 = g_pa_audio.irq_count, t0 = plat_ticks24();
+        while ((uint32_t)(g_pa_audio.irq_count - c0) < 3u && (uint32_t)(plat_ticks24() - t0) < 20u * 24000u) { }
+    }
+    s_en_wait = 0u; s_en_on = 0u;
+    pa_audio_output_enable(0);
+#endif
+}
+
 void pa_audio_stop(void) {
 #if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM)
+    s_en_wait = 0u; s_en_on = 0u;
+    pa_audio_output_enable(0);                 /* the output stage off before the clocks stop */
     PA_WRITE16(JL_ALNK0_CON0, 0);
     PA_WRITE16(JL_ALNK0_CON1, 0);
 #endif

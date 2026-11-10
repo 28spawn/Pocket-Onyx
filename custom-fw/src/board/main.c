@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/board/main.c — Onyx Custom Firmware Main Integration Loop
  *
  * Unifies all Quick Wins (QW-1..8), Big Rocks (BR-1..5), and Secondary Priorities (SP-1..4):
@@ -64,6 +64,7 @@ static pa_cpu_meter_t  g_cpu_meter;
  * file needs it too (the calibration tools link main.c), and with the guard it
  * was simply missing there, so the host build did not compile at all. */
 extern uint32_t pa_pool_used_bytes(void); /* allocator lives in src/sys/pa_pool.c */
+extern uint32_t pa_alnk_isr_entries(void); /* audio_alnk.c. At file scope: it was declared inside two blocks and also called from a third, where no declaration was in scope */
 #include "pa_build_id.h"
 volatile uint32_t g_main_iters;           /* main-loop pass counter (test state, and the overlay when it is on) */
 
@@ -276,7 +277,6 @@ static void debug_overlay_draw(void) {
     PA_CP(0x33);
     {   /* audio DMA: bytes the RX DMA really writes, interrupts/s, processed halves/s, xruns */
         extern uint32_t pa_alnk_dma_extent_bytes(void);
-        extern uint32_t pa_alnk_isr_entries(void);
         static uint32_t s_t0, s_isr0, s_blk0, s_isr_ps, s_blk_ps;
         uint32_t now = plat_ms(), isr = pa_alnk_isr_entries(), blk = g_pa_audio.irq_count;
         if ((uint32_t)(now - s_t0) >= 1000u) {
@@ -608,7 +608,7 @@ static uint32_t dg_spin(uint32_t mode, uint32_t until_ticks) {
             switch (mode) {
             case 1: x = x * 1664525u + 1013904223u; x ^= x >> 7; acc += x; break;                                  /* ALU only */
             case 2: acc += sram[(pos++) & 4095u]; break;                                                          /* SRAM reads */
-            case 3: sram[(pos++) & 4095u] = acc + pos; break;                                                     /* SRAM writes */
+            case 3: sram[pos & 4095u] = acc + pos; pos++; break;                                                   /* SRAM writes */
             case 4: acc += xip[(pos += 8u) & 0x1FFFFu]; break;                                                    /* flash reads, 32 B apart over 512 KB */
             case 5: acc += *tmr; break;                                                                           /* peripheral reads */
             default: break;
@@ -914,6 +914,12 @@ void pa_firmware_init(void) {
      * power-up noise for as long as the light is on and the LCD has not been initialised yet. */
     PA_WRITE32(JL_PORTA_OUT, PA_READ32(JL_PORTA_OUT) | PA_LCD_BL_PORTA_BIT);
     PA_WRITE32(JL_PORTA_DIR, PA_READ32(JL_PORTA_DIR) & ~PA_LCD_BL_PORTA_BIT);
+    /* The audio output stage off at once too, and it stays off until the I2S link has run on silence (audio_alnk.c, PA_AUDIO_EN_GATE): the converter starts with the
+     * link's clocks, and with the stage on that start is a pop in the headphones.
+     * POWER-OFF is the other pop and the firmware cannot do the same there: the unit's power switch cuts the supply, no pin or interrupt tells the firmware first (there is
+     * no power key among the six buttons and nothing here latches the supply), so no code runs between the switch and the rail falling. Only a restart the firmware starts
+     * itself is muted (pa_audio_quiet_for_reset). */
+    pa_audio_output_enable(0);
     timer4_init_24mhz();
     g_boot_start_ticks = plat_ticks24();
     {   /* STACK WATERMARK: paint the unused part of the user stack (the main loop AND the audio interrupt run on it) with a pattern; the
@@ -1163,7 +1169,6 @@ void pa_board_bt_mode_changed(uint8_t mode) { pa_ble_radio_set_enabled(mode != 0
  *   [11] reserved */
 #define PA_TEST_STATE ((volatile uint32_t *)0x01C7C390u)
 static void pa_test_state_update(void) {
-    extern uint32_t pa_alnk_isr_entries(void);
     volatile uint32_t *t = PA_TEST_STATE;
     t[1]  = g_main_iters;
     t[2]  = (plat_ticks24() - g_boot_start_ticks) / 24000000u;
@@ -1271,6 +1276,7 @@ void pa_main_loop(void) {
             /* Flush any pending settings to flash before rebooting into DFU */
             extern void pa_audio_core_flush_settings(pa_ui_ctx_t *ui);
             pa_audio_core_flush_settings(&g_ui);
+            pa_audio_quiet_for_reset();            /* fade out and switch the output stage off: the reset stops the I2S clocks under it */
             (void)plat_reset_to_downloader();
         }
 

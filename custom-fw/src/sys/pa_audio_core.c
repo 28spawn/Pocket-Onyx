@@ -927,7 +927,7 @@ static void pa_audio_core_apply_model(pa_fx_chain_t *chain, pa_ui_ctx_t *ui,
                 effective_type = 0;
                 if (ui) ui->slot_type[PA_SLOT_AMP] = 0;
             } else {
-                pa_user_nam_get_amp_defaults(u_idx, ui->slot_params[PA_SLOT_AMP]);
+                if (ui) pa_user_nam_get_amp_defaults(u_idx, ui->slot_params[PA_SLOT_AMP]);      /* ui is the module's s_ui: null until the UI context is registered */
                 if (g_wn_model.is_amp_cab) {
                     /* Baked-in cabinet: bypass the CAB slot so audio is not filtered twice */
                     pa_fx_chain_set_slot_enabled_now(chain, PA_SLOT_CAB, 0);
@@ -935,7 +935,7 @@ static void pa_audio_core_apply_model(pa_fx_chain_t *chain, pa_ui_ctx_t *ui,
             }
         }
         pa_amp_set_model_profile(effective_type);
-        for (int k = 0; k < 6; k++)
+        for (int k = 0; ui && k < 6; k++)
             pa_fx_chain_set_param(chain, PA_SLOT_AMP, k, ui->slot_params[PA_SLOT_AMP][k]);
         if (g_active_amp_engine == 0 && chain->slots[PA_SLOT_AMP] && chain->slots[PA_SLOT_AMP]->state) {
             pa_nam_prewarm((const pa_nam_model_t *)chain->slots[PA_SLOT_AMP]->state);
@@ -1153,13 +1153,33 @@ void pa_audio_core_set_block_cb(pa_audio_block_cb_t cb) { s_block_cb = cb; }
  * starts, the emulator and the WebAssembly build start from a zeroed struct,
  * so without this the first block would be silent (a zero input gain) and the
  * volume slew would ramp up from nothing. */
+/* ---- the power-on mute (the pop at power-on) ------------------------------------------------------------------------------------------------------------------------------------------------
+ * Two things made a noise when the link started. (1) The first block went out at the saved master level: the ALNK driver put the level back after this function had set it to 0, so block 1 was
+ * whatever the converter's input delivers while it starts, through the amp, fading from full level to 0 in 64 samples. (2) When the knob had been read the level went from 0 to its value in ONE
+ * block (1.45 ms), on top of an input stage that is still settling: a step, not a fade.
+ * Now: after the link starts the output is digital silence for s_boot_quiet blocks whatever the hold says (the board keeps its output stage off for the first part of that, audio_alnk.c), and
+ * the first rise from that silence is limited to PA_BOOT_RAMP_STEP_Q15 a block. Armed on the device only (pa_audio_core_init_jack); the emulator and the browser start at their level as before. */
+#define PA_BOOT_QUIET_BLOCKS  207u                 /* 207 x 1.451 ms = 300 ms of silence after the link starts */
+#define PA_BOOT_RAMP_STEP_Q15 512                  /* a block: 0 to full level in 64 blocks = 93 ms */
+static uint16_t s_boot_quiet;                      /* blocks of forced silence still to go */
+static uint8_t  s_boot_ramp;                       /* 1 = the first rise from silence has not finished: rate-limited */
+
+void pa_audio_core_boot_mute_arm(uint32_t quiet_blocks) {
+    s_boot_quiet = (uint16_t)(quiet_blocks > 0xFFFFu ? 0xFFFFu : quiet_blocks);
+    s_boot_ramp = 1u;
+    g_pa_audio.master_vol_cur_q15 = 0;
+}
+int pa_audio_core_boot_muted(void) { return s_boot_quiet != 0u; }
+
 void pa_audio_core_init_jack(pa_ui_ctx_t *ui) {
     g_pa_audio.input_gain_q15 = 0x8000u;               /* unity (1.0) */
     if (ui) g_pa_audio.master_vol_q15 = pa_audio_core_master_q15(ui->out_level_pct);
     g_pa_audio.master_vol_cur_q15 = g_pa_audio.master_vol_q15; /* no ramp from silence */
-#if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM) && !defined(PA_EMU_DLL) && !defined(__wasm__) && defined(PA_HAS_MASTER_POT) && PA_HAS_MASTER_POT
+#if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM) && !defined(PA_EMU_DLL) && !defined(__wasm__)
+    pa_audio_core_boot_mute_arm(PA_BOOT_QUIET_BLOCKS); /* the device: silence while the converter and the output stage start, then a fade-in */
+#if defined(PA_HAS_MASTER_POT) && PA_HAS_MASTER_POT
     g_pa_master_hold = 1;                              /* the device: silent until the knob is read */
-    g_pa_audio.master_vol_cur_q15 = 0;
+#endif
 #endif
     g_pa_audio.bypass = 0;
 }
@@ -1177,7 +1197,7 @@ static int32_t s_r_q21[PA_AUDIO_BLOCK_FRAMES];
 static pa_spread_t s_spread;            /* the stereo spread (src/dsp/pa_stereo_spread.h) */
 
 /* Sign-extend a 24-bit I2S slot [23:0] to a 32-bit signed int. */
-static inline int32_t s24_sign_extend(int32_t raw) { return (raw << 8) >> 8; }
+static inline int32_t s24_sign_extend(int32_t raw) { return (int32_t)((uint32_t)raw << 8) >> 8; }   /* the shift up is unsigned: a signed shift into the sign bit is undefined */
 /* Saturate to the 24-bit signed range [-8388608, +8388607]. */
 static inline int32_t s24_saturate(int32_t x) {
     if (x >  0x007FFFFF) return  0x007FFFFF;
@@ -1191,6 +1211,14 @@ PA_HOT void pa_audio_core_process_half(const int32_t *rx_half, int32_t *tx_half)
     int32_t out_peak = 0;
     uint32_t in_gain = g_pa_audio.input_gain_q15;
     uint32_t out_vol = g_pa_master_hold ? 0u : g_pa_audio.master_vol_q15;     /* silent until the MASTER knob has been read (see g_pa_master_hold) */
+    if (s_boot_quiet) {                                                       /* the power-on mute: silence while the link and the output stage start (the chain runs, so it is warm) */
+        s_boot_quiet--;
+        out_vol = 0u;
+    } else if (s_boot_ramp) {                                                 /* ... then the first rise is a fade, not a one-block step */
+        const uint32_t lim = (uint32_t)g_pa_audio.master_vol_cur_q15 + (uint32_t)PA_BOOT_RAMP_STEP_Q15;
+        if (out_vol > lim) out_vol = lim;
+        else if (!g_pa_master_hold) s_boot_ramp = 0u;                         /* the level is reached: from here the knob's own one-block slew */
+    }
 
     /* 1. Unpack 64 stereo frames from the RX half-buffer. The guitar input is
      *    on the Left slot (rx_half[2*i]). */
@@ -1340,7 +1368,7 @@ PA_HOT void pa_audio_core_process_block(pa_fx_chain_t *chain, pa_ui_ctx_t *ui,
     /* 2. Run the full 8-slot chain in stereo (respects the custom slot order,
      *    true stereo MOD/DLY/REV) */
     PA_ISR_CP(0x23);
-    PT_VAR(pt0); PT_VAR(pt1); PT_VAR(pt2); PT_VAR(pt3); PT_VAR(pt4); PT_VAR(pt5);
+    PT_VAR(pt0); uint32_t pt1 = pt0, pt2 = pt0, pt3 = pt0, pt4 = pt0, pt5 = pt0;      /* one read of the timer, not six (each one is set again where its stage ends) */
     /* The tuner is open and the output is not muted: the stock plays the dry guitar at the tuner's bypass volume, no effects. The whole chain (up to 1.2 ms of the
      * 1.45 ms block with the heavy presets) would run for nothing and leave the screen almost no CPU - the tuner needle was choppy exactly then. */
     /* The USB audio mode: in INTERFACE modes the recording is the dry guitar as it came in, taken before the chain touches the block. */
@@ -1428,10 +1456,7 @@ PA_HOT void pa_audio_core_process_block(pa_fx_chain_t *chain, pa_ui_ctx_t *ui,
 
     /* 4. The soft-knee guard: a safety net now (the sum limiter keeps the drums under its
      *    knee); USB playback still relies on it. */
-    for (int i = 0; i < n; i++) {
-        buf_L[i] = pa_soft_ceiling_q21(buf_L[i]);
-        if (buf_R && buf_R != buf_L) buf_R[i] = pa_soft_ceiling_q21(buf_R[i]);
-    }
+    /*    (It runs in the same loop as the DC blocker below, sample by sample in the same order: one pass over the block instead of two, the same numbers.) */
 
     /* 5. The output DC blocker - the LAST thing before the DAC.
      *
@@ -1454,20 +1479,23 @@ PA_HOT void pa_audio_core_process_block(pa_fx_chain_t *chain, pa_ui_ctx_t *ui,
      * note a guitar or bass can play, so it costs nothing audible. */
     {
         const int32_t dc_r = 2086663;
+        const int stereo = (buf_R && buf_R != buf_L);
+        int32_t x1 = s_out_dc_x1, y1 = s_out_dc_y1, x1r = s_out_dc_x1r, y1r = s_out_dc_y1r;      /* the filter state in registers for the block (it was four memory accesses a sample) */
         for (int i = 0; i < n; i++) {
-            int32_t x = buf_L[i];
-            int32_t y = x - s_out_dc_x1 + q21_mul(dc_r, s_out_dc_y1);
-            s_out_dc_x1 = x;
-            s_out_dc_y1 = y;
+            const int32_t x = pa_soft_ceiling_q21(buf_L[i]);              /* step 4, the soft-knee guard */
+            const int32_t y = x - x1 + q21_mul(dc_r, y1);
+            x1 = x;
+            y1 = y;
             buf_L[i] = y;
-            if (buf_R && buf_R != buf_L) {
-                int32_t xr = buf_R[i];
-                int32_t yr = xr - s_out_dc_x1r + q21_mul(dc_r, s_out_dc_y1r);
-                s_out_dc_x1r = xr;
-                s_out_dc_y1r = yr;
+            if (stereo) {
+                const int32_t xr = pa_soft_ceiling_q21(buf_R[i]);
+                const int32_t yr = xr - x1r + q21_mul(dc_r, y1r);
+                x1r = xr;
+                y1r = yr;
                 buf_R[i] = yr;
             }
         }
+        s_out_dc_x1 = x1; s_out_dc_y1 = y1; s_out_dc_x1r = x1r; s_out_dc_y1r = y1r;
     }
 
     pa_audio_core_route_block(buf_L, buf_R, n);       /* routing and balance: the very last thing before the DAC */

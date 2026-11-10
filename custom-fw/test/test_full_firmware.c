@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/test/test_full_firmware.c — End-to-End Host Verification Suite for All Big Rocks
  *
  * Compiles and tests all Pocket Amp Custom Firmware subsystems natively on PC:
@@ -25,24 +25,27 @@
 #include "pa_cpu_meter.h"
 #include "pa_wavenet.h"
 #include "pa_audio.h"
+#include "pa_audio_core.h"
+#include <string.h>
 
 /* Tracking heap allocator for verifying C7 dynamic SRAM reclaim */
 static long g_sram_cur = 0;
 static long g_sram_peak = 0;
 
 void *pa_alloc(uint32_t n) {
-    long *p = (long *)calloc(1, n + sizeof(long));
+    /* a 16-byte header: one long is 4 bytes on Windows, which left every block misaligned for 8-byte types */
+    long long *p = (long long *)calloc(1, n + 2 * sizeof(long long));
     if (!p) return 0;
-    p[0] = (long)n;
+    p[0] = (long long)n;
     g_sram_cur += (long)n;
     if (g_sram_cur > g_sram_peak) g_sram_peak = g_sram_cur;
-    return p + 1;
+    return p + 2;
 }
 
 void pa_free(void *q) {
     if (!q) return;
-    long *p = (long *)q - 1;
-    g_sram_cur -= p[0];
+    long long *p = (long long *)q - 2;
+    g_sram_cur -= (long)p[0];
     free(p);
 }
 
@@ -234,6 +237,56 @@ int main(void) {
               "Non-finite weights and NaN scale are refused with -3 (NaN %d, Inf %d, NaN scale %d)",
               rc_nan, rc_inf, rc_scale);
         CHECK(g_wn_model.weights[100] == before, "Refused weight load left model weights untouched");
+    }
+
+    {   /* The power-on mute (pa_audio_core.c): a full-scale input from the first block on, the audio in bypass so the output is the input times the master level.
+         * (1) the quiet blocks are silence even with the master at 100 % and no hold; (2) the level then rises by at most the ramp step a block, so no sample-to-sample
+         * jump is larger than a fade allows; (3) it ends at the full level; (4) once there, the master follows the knob in one block again. */
+        extern volatile uint8_t g_pa_master_hold;
+        static int32_t rx[2 * PA_AUDIO_BLOCK_FRAMES], tx[2 * PA_AUDIO_BLOCK_FRAMES];
+        const int32_t in24 = 0x400000;                                   /* half of full scale, DC: the worst case for a step */
+        for (int i = 0; i < (int)PA_AUDIO_BLOCK_FRAMES; i++) { rx[2 * i] = in24; rx[2 * i + 1] = 0; }
+        memset(&g_pa_audio, 0, sizeof g_pa_audio);
+        g_pa_audio.input_gain_q15 = 0x8000u; g_pa_audio.master_vol_q15 = 0x8000u; g_pa_audio.master_vol_cur_q15 = 0x8000u;
+        g_pa_audio.bypass = 1; g_pa_master_hold = 0;
+        pa_audio_core_boot_mute_arm(10u);
+        int32_t quiet_peak = 0, max_jump = 0, prev = 0, last = 0; int blocks_to_full = -1, muted_ok = 1;
+        for (int b = 0; b < 200; b++) {
+            if (b < 10 && !pa_audio_core_boot_muted()) muted_ok = 0;
+            pa_audio_core_process_half(rx, tx);
+            for (int i = 0; i < (int)PA_AUDIO_BLOCK_FRAMES; i++) {
+                const int32_t v = (int32_t)((uint32_t)tx[2 * i] << 8) >> 8, a = v < 0 ? -v : v, j = v > prev ? v - prev : prev - v;
+                if (b < 10 && a > quiet_peak) quiet_peak = a;
+                if (j > max_jump) max_jump = j;
+                prev = v; last = v;
+            }
+            if (blocks_to_full < 0 && last >= in24 - 4) blocks_to_full = b - 10 + 1;
+        }
+        CHECK(muted_ok && !pa_audio_core_boot_muted(), "Power-on mute: reported for its 10 blocks, then over");
+        CHECK(quiet_peak <= 2, "Power-on mute: the quiet blocks are silence with the master at 100 %% (peak %d of 8388607)", (int)quiet_peak);
+        CHECK(blocks_to_full >= 60 && blocks_to_full <= 66, "Power-on mute: the fade-in takes 64 blocks, 93 ms (got %d)", blocks_to_full);
+        CHECK(max_jump <= in24 / (60 * 64) + 4, "Power-on mute: no step in the fade-in (largest sample-to-sample change %d, input %d)", (int)max_jump, (int)in24);
+        CHECK(last >= in24 - 4 && last <= in24 + 4, "Power-on mute: ends at the full level (%d of %d)", (int)last, (int)in24);
+        g_pa_audio.master_vol_q15 = 0x2000u;
+        pa_audio_core_process_half(rx, tx);
+        g_pa_audio.master_vol_q15 = 0x8000u;
+        pa_audio_core_process_half(rx, tx);
+        last = (int32_t)((uint32_t)tx[2 * (PA_AUDIO_BLOCK_FRAMES - 1)] << 8) >> 8;
+        CHECK(last >= in24 - 4, "Power-on mute: after the fade the master follows the knob within one block (%d of %d)", (int)last, (int)in24);
+        /* the hold: armed with the knob not read yet, nothing comes out however long it lasts, and the release is the same fade */
+        g_pa_master_hold = 1; g_pa_audio.master_vol_cur_q15 = 0x8000u;
+        pa_audio_core_boot_mute_arm(3u);
+        quiet_peak = 0;
+        for (int b = 0; b < 40; b++) {
+            pa_audio_core_process_half(rx, tx);
+            for (int i = 0; i < (int)PA_AUDIO_BLOCK_FRAMES; i++) { const int32_t v = (int32_t)((uint32_t)tx[2 * i] << 8) >> 8, a = v < 0 ? -v : v; if (a > quiet_peak) quiet_peak = a; }
+        }
+        CHECK(quiet_peak <= 2, "Power-on mute: silent for as long as the master hold lasts (peak %d)", (int)quiet_peak);
+        g_pa_master_hold = 0;
+        pa_audio_core_process_half(rx, tx);
+        last = (int32_t)((uint32_t)tx[2 * (PA_AUDIO_BLOCK_FRAMES - 1)] << 8) >> 8;
+        CHECK(last > 0 && last <= in24 / 64 + 4, "Power-on mute: the hold's release starts the fade, not a one-block step (first block ends at %d of %d)", (int)last, (int)in24);
+        g_pa_audio.bypass = 0;
     }
 
     if (fails == 0) {
