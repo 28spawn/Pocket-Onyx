@@ -183,8 +183,8 @@ static void tuner_det_slice(pa_tuner_state_t *t) {
     for (uint32_t n = 0; n < TUNER_SLICE && tau <= TUNER_TAU_MAX; n++, tau++) {
         uint32_t acc = 0u;
         for (uint32_t j = 0; j < TUNER_WIN; j++) {
-            const int32_t a = (ring_at(t, base + j) << lsh) >> rsh;
-            const int32_t b = (ring_at(t, base + j + tau) << lsh) >> rsh;
+            const int32_t a = (int32_t)((uint32_t)ring_at(t, base + j) << lsh) >> rsh;       /* the shift up is unsigned: shifting a negative value left is undefined */
+            const int32_t b = (int32_t)((uint32_t)ring_at(t, base + j + tau) << lsh) >> rsh;
             const int32_t d = a - b;
             acc += (uint32_t)(d * d);
         }

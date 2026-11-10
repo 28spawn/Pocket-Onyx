@@ -38,9 +38,22 @@ def has_baked_cab(gear_type: str, model_name: str, filename: str) -> bool:
     that merely have the word in their name - they need the CAB slot, so it must not be bypassed for them."""
     import re
     names = (model_name.lower(), filename.lower())
-    if any(re.search(r"cab[ _\-]*free|no[ _\-]*cab|without[ _\-]*cab|w/o[ _\-]*cab|cabless|cab[ _\-]*less|amp[ _\-]*only", n) for n in names):
+    if any(re.search(r"cab[ _\-]*free|no[ _\-]*cab|without[ _\-]*cab|w/o[ _\-]*cab|cabless|cab[ _\-]*less|\bamp[ _\-]*only\b|di[ _\-]*out|direct[ _\-]*out", n) for n in names):
         return False
-    return ("cab" in gear_type) or any("cab" in n for n in names)
+    # a full rig ("Full Rig", a leading "FR ") or the microphone that recorded the speaker names the cabinet too (many captures have no gear_type)
+    return ("cab" in gear_type) or any(re.search(r"cab|full[ _\-]*rig|^fr[ _\-]|\bsm ?5[78]\b|\bmd ?421\b|\be ?609\b|\br ?121\b|\bu ?87\b|\bmic(ed|'d)?\b", n) for n in names)
+
+
+# The output makeup that puts a capture at the stock amps' level (same rule as the editor, web/Onyx_Web_Editor.html namMakeupDb): fitted on 16 captures through the emulator with the
+# unit's own amps and cabinets, makeup = -15.5 - loudness, 4 dB less when the cabinet is baked in; 2.1 dB rms left (it was a 16 dB spread with no makeup). None: 0 dB.
+NAM_TARGET_DB, NAM_CAB_DB = -15.5, -4.0
+
+
+def nam_makeup_db(loud: Optional[float], is_amp_cab: bool) -> float:
+    if loud is None:
+        return 0.0
+    db = NAM_TARGET_DB - float(loud) + (NAM_CAB_DB if is_amp_cab else 0.0)
+    return round(max(-12.0, min(12.0, db)) * 4.0) / 4.0
 
 
 def recommend_amp_settings(meta: Dict[str, Any], voicing_id: int, is_amp_cab: bool) -> Dict[str, Any]:
@@ -61,8 +74,7 @@ def recommend_amp_settings(meta: Dict[str, Any], voicing_id: int, is_amp_cab: bo
         if isinstance(v, (int, float)):
             loud = float(v)
             break
-    # Bounded makeup gain so normal captures are not excessively attenuated
-    makeup_db = 0.0 if loud is None else max(-3.0, min(6.0, -16.0 - loud))
+    makeup_db = nam_makeup_db(loud, is_amp_cab)
     # Keep flat neutral 50% tone stack defaults to preserve exact captured frequency response
     if voicing_id == 4:                        # bass: a touch of low end back
         knobs[1] = 55
@@ -134,9 +146,11 @@ def pack_pa_nam_model_struct(
     return bytes(buf)
 
 
-def pack_wavenet_blob(weights: List[float], head_scale: float = 1.0, is_amp_cab: bool = False, input_trim: float = 1.0) -> bytes:
+def pack_wavenet_blob(weights: List[float], head_scale: float = 1.0, is_amp_cab: bool = False, input_trim: float = 1.0, makeup_db: Optional[float] = None) -> bytes:
     """Packs a 23-layer dilated WaveNet model (3-ch Lite or 8-ch Full) into the binary container parsed by Pocket Amp."""
     flags = 1 if is_amp_cab else 0
+    if makeup_db is not None:              # bit 1: a makeup is given, bits 8..15: it as a signed quarter-dB (the firmware's upload stores it, sysex.c)
+        flags |= 2 | ((int(round(makeup_db * 4.0)) & 0xFF) << 8)
     header = struct.pack("<4sIfIf", b"WAVE", len(weights), float(head_scale), flags, float(input_trim))
     weights_bytes = struct.pack(f"<{len(weights)}f", *weights)
     return header + weights_bytes
@@ -302,9 +316,9 @@ def parse_nam_file(raw_bytes: bytes, filename: str = "model.nam") -> Tuple[bytes
                 input_trim = round(max(0.60, min(1.80, raw_trim)), 4)
             else:
                 input_trim = 1.0
-            blob = pack_wavenet_blob(weights_list, head_scale, is_amp_cab, input_trim)
-            arch_label = f"ToneHunt WaveNet A2 ({ch}-Channel {'Lite' if ch == 3 else 'Full'}{' + Cab' if is_amp_cab else ''})"
             rec = recommend_amp_settings(meta, v_id, is_amp_cab)
+            arch_label = f"ToneHunt WaveNet A2 ({ch}-Channel {'Lite' if ch == 3 else 'Full'}{' + Cab' if is_amp_cab else ''})"
+            blob = pack_wavenet_blob(weights_list, head_scale, is_amp_cab, input_trim, rec["makeup_db"])
             return blob, {
                 **rec,
                 "name": model_name,
@@ -378,8 +392,8 @@ def parse_nam_file(raw_bytes: bytes, filename: str = "model.nam") -> Tuple[bytes
             input_trim = round(max(0.60, min(1.80, raw_trim)), 4)
         else:
             input_trim = 1.0
-        blob = pack_wavenet_blob(weights_list, head_scale, is_amp_cab, input_trim)
         rec = recommend_amp_settings(meta, v_id, is_amp_cab)
+        blob = pack_wavenet_blob(weights_list, head_scale, is_amp_cab, input_trim, rec["makeup_db"])
         return blob, {
             **rec,
             "name": model_name,

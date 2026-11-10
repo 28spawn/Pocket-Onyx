@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * pa_ble_trims.h - the radio calibration of THIS unit, read from the stock firmware's record log at boot.
  *
@@ -16,7 +16,11 @@
 
 #include <stdint.h>
 
-#define PA_BLE_TRIM_AREA  0x000B5000u
+#if defined(BOARD_BLACKBOX)
+#error "pa_ble_trims.h reads the Pocket AMP's stock record log: BOARD_BLACKBOX has no address for it yet"
+#endif
+
+#define PA_BLE_TRIM_AREA 0x000B5000u
 #define PA_BLE_TRIM_SIZE  0x1000u            /* the stock's log is one 4 KB sector */
 
 typedef struct {

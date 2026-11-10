@@ -132,7 +132,7 @@ int main(void) {
             check(strstr(text, "version=") != NULL,    "the record has version=");
             check(strstr(text, "Onyx") != NULL,
                   "the name is one the editor matches (\"Onyx\")");
-            check(strstr(text, "version=118") != NULL, "the version is 118 (PA_FW_VERSION: shown as 1.18, below the stock's 1.05)");
+            check(strstr(text, "version=119") != NULL, "the version is 119 (PA_FW_VERSION: shown as 1.19, below the stock's 1.05)");
         }
     }
 

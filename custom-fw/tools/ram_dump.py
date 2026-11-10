@@ -62,10 +62,6 @@ def auto_dump(a, out: Path) -> int:
         try:
             while addr < end:
                 k = min(a.step, end - addr)
-                if addr in skip:
-                    bad.append((addr, k))
-                    addr += k
-                    continue
                 try:
                     data[addr - a.start: addr - a.start + k] = rom.read(addr, k)
                 except Exception as e:

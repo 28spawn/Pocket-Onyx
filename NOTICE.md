@@ -64,7 +64,7 @@ Provided as-is, for research and interoperability. Flashing custom firmware is a
 void warranties or brick the device. All trademarks (including M-VAVE, Donner, JieLi, and TONE3000) belong to their respective owners; this project is an independent interoperability and research effort and is not affiliated with or endorsed by M-VAVE, Donner, JieLi, or TONE3000.
 
 ## The Onyx update loader and the release package - third-party code and files
-The release package (`custom-fw/release/Onyx_1.18/`, built by `custom-fw/build.ps1`) is built from scratch by `custom-fw/tools/onyx_pkg_make.py` and contains **no M-VAVE firmware**: only our own app, an update loader, and three files of
+The release package (`custom-fw/release/Onyx_1.19/`, built by `custom-fw/build.ps1`) is built from scratch by `custom-fw/tools/onyx_pkg_make.py` and contains **no M-VAVE firmware**: only our own app, an update loader, and three files of
 the public JieLi AC79 SDK. The package builder (`tools/onyx_pkg_make.py`, `tools/lz4blk.py`) and the layout of the package are taken from the **Pendel** project (<https://github.com/hugelton/Pendel>, `tools/pa_pkg_make.py`,
 GPL-3.0-only, (C) 2026 Leo Kuroshita (@kurogedelic), Hugelton Instruments), which builds its own Pocket AMP packages the same way; they stay GPL-3.0-only here, like the rest of this repository.
 - **The update loader and the firmware's side of the vendor's MIDI update.** `custom-fw/third_party/pendel_loader/` is the **pendel-bsp** hardware layer (<https://github.com/hugelton/pendel-bsp>), **MPL-2.0**, (C) 2026 Leo Kuroshita, Hugelton

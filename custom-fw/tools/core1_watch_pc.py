@@ -54,9 +54,7 @@ def main():
             if sw[0] == 0x44575053 and (sw[1] != swaps_seen or any((sw[4 + 6 * k] >> 24) & 1 and not (sw[4 + 6 * k] >> 25) & 7 for k in range(sp.NREC) if False)):
                 for line in sp.decode(sw)[1:]:
                     pass
-                print(f"t={t:6.1f}s  swap probe:
-" + "
-".join(sp.decode(sw)), flush=True)
+                print(f"t={t:6.1f}s  swap probe:\n" + "\n".join(sp.decode(sw)), flush=True)
                 swaps_seen = sw[1]
         except Exception:
             pass

@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* include/pa_ota_session.h - the firmware's half of the USB-MIDI update sequence (step 1) - USB-MIDI only.
  *
  * The host (the web editor's Firmware tab, or standard updater) sends the "upgrade" frame F0 22 24 35 7F F7. The running firmware then pulls parts of the
@@ -16,7 +16,11 @@
 #define PA_OTA_SESSION_H
 #include <stdint.h>
 
-#define PA_OTA_AREA        0x000B8000u        /* the staged loader: 5 x 4 KB */
+#if defined(BOARD_BLACKBOX)
+#error "pa_ota_session.h stages the update in the Pocket AMP's sectors: BOARD_BLACKBOX has no staging area yet"
+#endif
+
+#define PA_OTA_AREA       0x000B8000u        /* the staged loader: 5 x 4 KB */
 #define PA_OTA_AREA_LEN    0x00005000u
 #define PA_OTA_RES         (PA_OTA_AREA + PA_OTA_AREA_LEN - 0x100u)   /* the update record: 4 KB boundary - 256, where the SPL looks */
 #define PA_OTA_FRAME_MAX   640u               /* a 512-byte response is 605 wire bytes */

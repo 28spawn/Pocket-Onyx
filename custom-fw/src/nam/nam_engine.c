@@ -445,11 +445,14 @@ static uint32_t hw_rows_probe(int32_t *W, int32_t *Wn, int32_t *o) {
 }
 
 static uint8_t nam_hw_selftest(void) {
-    static int32_t W[PA_NAM_HIDDEN * PA_NAM_INPUT_EXT], Wn[PA_NAM_HIDDEN * PA_NAM_HIDDEN], v[PA_NAM_INPUT_EXT];
+    /* One row more than the 16 the model has: the control words of the z and n jobs carry a row count of 10 (PA_HW_CTRL_GRU_9x17_B, PA_HW_CTRL_GRU_9x16), and the second pass starts
+     * at row 7, so the engine reads rows 7..16. With 16 rows that last one was whatever lay behind the array. (Only the first 9 results of a job are compared.) */
+    enum { ST_ROWS = PA_NAM_HIDDEN + 1 };
+    static int32_t W[ST_ROWS * PA_NAM_INPUT_EXT], Wn[ST_ROWS * PA_NAM_HIDDEN], v[PA_NAM_INPUT_EXT];
     static int32_t o[1024] __attribute__((aligned(8)));            /* big, so a stray write stays inside it */
     uint32_t seed = 0x1234567u, errs = 0, jobs = 0, ticks = 0;
-    for (uint32_t i = 0; i < PA_NAM_HIDDEN * PA_NAM_INPUT_EXT; i++) { seed = seed * 1664525u + 1013904223u; W[i] = (int32_t)(seed >> 11) - (1 << 20); }
-    for (uint32_t i = 0; i < PA_NAM_HIDDEN * PA_NAM_HIDDEN; i++)    { seed = seed * 1664525u + 1013904223u; Wn[i] = (int32_t)(seed >> 11) - (1 << 20); }
+    for (uint32_t i = 0; i < ST_ROWS * PA_NAM_INPUT_EXT; i++) { seed = seed * 1664525u + 1013904223u; W[i] = (int32_t)(seed >> 11) - (1 << 20); }
+    for (uint32_t i = 0; i < ST_ROWS * PA_NAM_HIDDEN; i++)    { seed = seed * 1664525u + 1013904223u; Wn[i] = (int32_t)(seed >> 11) - (1 << 20); }
     for (int trial = 0; trial < 4; trial++) {
         for (int i = 0; i < PA_NAM_INPUT_EXT; i++) { seed = seed * 1664525u + 1013904223u; v[i] = (int32_t)(seed >> 11) - (1 << 20); }
         for (int g = 0; g < 3; g++) {
@@ -490,7 +493,7 @@ static uint8_t nam_hw_selftest(void) {
     {   /* identity decode: W = identity in the first 9 columns, v[c] = (c + 1) * 4096, so out[r] should be (r + 1) * 4096 and every
          * word the engine writes tells its row and column. The raw output goes to SRAM 0x01C7CD00 (40 words), the expected value
          * and the job's duration after it. */
-        for (int i = 0; i < PA_NAM_HIDDEN * PA_NAM_INPUT_EXT; i++) W[i] = 0;
+        for (int i = 0; i < ST_ROWS * PA_NAM_INPUT_EXT; i++) W[i] = 0;
         for (int r = 0; r < 16; r++) W[r * PA_NAM_INPUT_EXT + r] = (1 << 21);
         for (int i = 0; i < PA_NAM_INPUT_EXT; i++) v[i] = (i + 1) * 4096;
         for (int i = 0; i < 200; i++) o[i] = 0x7FEEDBAC;

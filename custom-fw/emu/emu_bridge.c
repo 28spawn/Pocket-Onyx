@@ -311,7 +311,7 @@ static int32_t s_emu_jack_out[PA_BLOCK_N * 2];
 static void update_input_dots(const int32_t *jack_in) {
     int32_t max_abs = 0;
     for (int i = 0; i < PA_BLOCK_N; i++) {
-        int32_t s24 = (jack_in[2 * i] << 8) >> 8;
+        int32_t s24 = (int32_t)((uint32_t)jack_in[2 * i] << 8) >> 8;
         int32_t a = s24 < 0 ? -s24 : s24;
         if (a > max_abs) max_abs = a;
     }
@@ -362,8 +362,8 @@ static void emu_run_block(const float *in_mono, float *out_L, float *out_R,
 
     /* the 24-bit jack output -> float */
     for (int i = 0; i < PA_BLOCK_N; i++) {
-        int32_t l24 = (s_emu_jack_out[2 * i + 0] << 8) >> 8;
-        int32_t r24 = (s_emu_jack_out[2 * i + 1] << 8) >> 8;
+        int32_t l24 = (int32_t)((uint32_t)s_emu_jack_out[2 * i + 0] << 8) >> 8;
+        int32_t r24 = (int32_t)((uint32_t)s_emu_jack_out[2 * i + 1] << 8) >> 8;
         float l = (float)l24 / 8388608.0f;
         float r = (float)r24 / 8388608.0f;
         if (l >  1.0f) l =  1.0f;

@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* pa_hw.h — hardware memory map & MMIO contract.
  * Hardware register definitions for JieLi AC791N SoC.
  * JieLi AC791N / pi32v2. XIP flash base 0x02000000, RAM from 0x01C00000. */
@@ -91,21 +91,7 @@
 #define JL_PORTH_PU            (JL_PORTH_BASE + 0x10u)
 #define JL_PORTH_PD            (JL_PORTH_BASE + 0x14u)
 
-/* Pocket Amp LCD Pin Masks */
-#define PA_LCD_CS_BIT          (1u << 1)    /* PB1 (gpio 17) */
-#define PA_LCD_DC_BIT          (1u << 5)    /* PB5 (gpio 21) */
-#define PA_LCD_SCK_BIT         (1u << 6)    /* PB6 (gpio 22, SPI1_CLK) */
-#define PA_LCD_SDA_BIT         (1u << 7)    /* PB7 (gpio 23, SPI1_DO) */
-#define PA_LCD_BL_PORTA_BIT    (1u << 9)    /* PA9 (gpio 9, active-low backlight) */
-
-/* Pocket Amp Button & Encoder Pin Masks */
-#define PA_ENC_PORTC_MASK      0x03u        /* PC0 (ENC_A) & PC1 (ENC_B) on JL_PORTC_IN */
-#define PA_BTN0_PORTH_BIT      (1u << 6)    /* PH6 -> button bit 0 */
-#define PA_BTN1_PORTH_BIT      (1u << 8)    /* PH8 -> button bit 1 */
-#define PA_BTN2_PORTH_BIT      (1u << 9)    /* PH9 -> button bit 2 */
-#define PA_BTN3_PORTA_BIT      (1u << 0)    /* PA0 -> button bit 3 */
-#define PA_BTN4_PORTA_BIT      (1u << 1)    /* PA1 -> button bit 4 */
-#define PA_BTN5_PORTA_BIT      (1u << 3)    /* PA3 -> button bit 5 */
+/* The LCD, button and encoder pin masks (PA_LCD_*_BIT, PA_BTNn_*_BIT, PA_ENC_PORTC_MASK) are per board: include/boards/board_<name>.h, which pa_config.h above brings in. */
 
 /* ---- audio engine control reg ---- */
 #define PA_AUDIO_CTRL_REG      0x00020000u  /* bit8 gates the engine during model swap */

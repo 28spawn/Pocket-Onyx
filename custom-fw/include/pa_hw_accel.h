@@ -24,8 +24,8 @@
 
 /* Control words (+0x10 in descriptor) */
 #define PA_HW_CTRL_GRU_9x17_A     0x15009011u  /* shift=21 (0x15), rows=9, cols=17 (0x11) */
-#define PA_HW_CTRL_GRU_9x17_B     0x1500A011u  /* shift=21 (0x15), rows=9, cols=17 (0x11) */
-#define PA_HW_CTRL_GRU_9x16       0x1500A010u  /* shift=21 (0x15), rows=9, cols=16 (0x10) */
+#define PA_HW_CTRL_GRU_9x17_B     0x1500A011u  /* shift=21 (0x15), row field 10 (0xA): the engine reads and writes 10 rows, 9 are used; cols=17 (0x11) */
+#define PA_HW_CTRL_GRU_9x16       0x1500A010u  /* shift=21 (0x15), row field 10 (0xA): the engine reads and writes 10 rows, 9 are used; cols=16 (0x10) */
 #define PA_HW_CTRL_FIR_Q18(n)     (0x12001000u | ((uint32_t)((n) + 1) & 0xFFFFu))
 
 /* Stride words (+0x14 in descriptor) */

@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* include/pa_audio_core.h - Portable audio core shared by the device firmware,
  * the host emulator and the WebAssembly build, so all three produce the same
  * audio.
@@ -64,6 +64,11 @@ void pa_audio_core_set_block_cb(pa_audio_block_cb_t cb);
 /* The jack's power-on state: unity input gain and the master level the UI
  * asks for. Every platform calls this before the first block. */
 void pa_audio_core_init_jack(pa_ui_ctx_t *ui);
+
+/* The power-on mute: the next quiet_blocks blocks go out as silence whatever the master level is, and the first rise after them is a fade (93 ms to full level)
+ * instead of a one-block step. pa_audio_core_init_jack arms it on the device; the host tests arm it themselves. pa_audio_core_boot_muted: 1 while the silence lasts. */
+void pa_audio_core_boot_mute_arm(uint32_t quiet_blocks);
+int  pa_audio_core_boot_muted(void);
 
 /* ---- shared block processing ----------------------------------------------- */
 

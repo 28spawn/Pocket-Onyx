@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * pa_wavenet.c — Pocket Amp Embedded 23-Layer Dilated WaveNet Inference Engine
  *
@@ -425,7 +425,11 @@ static inline float wavenet_dc_block_output(pa_wavenet_model_t *m, float y_raw) 
 /* ====================================================================== block engine, stock style */
 
 #define Q21F 2097152.0f
-static int32_t s_wn_hb;                                  /* the head bias, for the core 0 output stage (see wn_block_run) */
+/* One block in 256 is profiled (it was one in 32). The profile's timer reads make that block about 100 us longer on core 1, which has under 100 us to spare with this engine:
+ * core 0 then waits for it at the next hand-over, inside the audio interrupt. That is a hiccup of the measuring, not of the amp, and it now comes every 370 ms instead of every
+ * 46 ms; the readout (tools/jl_ram_read.py) still gets a fresh profile about three times a second. */
+#define WN_PROF_MASK 255u
+static int32_t s_wn_hb;                                 /* the head bias, for the core 0 output stage (see wn_block_run) */
 #ifndef PA_WN_LOWMEM
 #define PA_WN_LOWMEM 1                                    /* the matrices and job results in the low SRAM (see wn_lowmem_selftest) */
 #endif
@@ -740,7 +744,7 @@ static void wn_P(const int32_t *lw, const int32_t *zc, uint32_t r0c, int32_t *ha
 static void wn_block_run(pa_wavenet_model_t *m, const float *x_in_f, float *y_raw, uint32_t n) {
     const uint32_t t0 = plat_ticks24();
     uint32_t stall = 0, jobs = 0, t_p = 0, t_g = 0, tq, t_g1 = 0, t_p1 = 0;
-    const int prof = ((m->blk_n++ & 31u) == 0u);                     /* the timer reads cost about 100 us a block: profile one block in 32 */
+    const int prof = ((m->blk_n++ & WN_PROF_MASK) == 0u);            /* the timer reads cost about 100 us a block: profile one block in WN_PROF_MASK + 1 */
     int32_t *xq = m->blk_x, *H = m->head_q, *hacc = H + 3u * (PA_WN_HEAD_TAPS - 1u), *yq = m->blk_y;
 #if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM)
     int32_t *MA = WN_LOW_MA, *MB = WN_LOW_MB, *zA = WN_LOW_ZA, *zB = WN_LOW_ZB;          /* the matrices and the job results live in the low SRAM (blk_low) */
@@ -1024,7 +1028,10 @@ void pa_wavenet_process_block_q21(pa_wavenet_model_t *m, int32_t *samples_q21, i
          * every block and the hang detector (6 ms) switches core 1 off. A job over 1.458 ms (35,000 ticks) counts up, one under 1.40 ms (33,600) counts down; at 16
          * this engine is given up (blk_bad): the amp slot then runs the GRU loaded before and core 1 keeps its deadline. An engine that averages under budget never
          * trips it. */
-        if (m->blk_t[5] != 0u) {                                      /* (profiled blocks, one in 32, are not timed here: the timer reads inflate them) */
+        /* A profiled block is NOT judged: its timer reads add about 100 us, so it is always over 1.458 ms. The test here used to be "blk_t[5] != 0", which is true from the
+         * second block on, so every profiled block was judged and counted as a slow one. An engine whose normal blocks sit in the neutral band (1.40 - 1.458 ms: neither up
+         * nor down) then only ever counted up, one step per profiled block, and was given up after 16 of them (0.74 s at one in 32) although it never missed its block. */
+        if (((m->blk_n - 1u) & WN_PROF_MASK) != 0u) {                 /* blk_n was counted up by wn_block_run: this tests the block it just ran */
             const uint32_t tj = plat_ticks24() - t_start;
             m->blk_t[5] = tj;
             if (tj > 35000u) { if (++m->blk_slow >= 16u) { m->blk_bad = 1u; m->active = 0u; } }

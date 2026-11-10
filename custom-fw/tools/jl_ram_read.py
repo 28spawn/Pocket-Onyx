@@ -642,7 +642,7 @@ def show_wavenet(rom: Rom):
     ptot, tp, tg = w[19] / 24.0, w[17] / 24.0, w[18] / 24.0
     print(f"  engine: {'BLOCK, stock-style pipeline' if w[16] else 'not running'}; last normal block {total:.0f} us in {jobs} accelerator jobs; given up by the guard: {'YES' if w[14] else 'no'} (slow-block count {w[15]}; budget 1451 us, the guard counts blocks over 1458)")
     if w[16] and ptot:
-        print(f"  one block in 32 is profiled (its timer reads add about 100 us, so its total is {ptot:.0f} us): waiting inside the accelerator driver {stall:.0f} us, post-processing {tp:.0f} us, gather {tg:.0f} us, the rest {ptot - stall - tp - tg:.0f} us")
+        print(f"  one block in 256 is profiled (one in 32 up to Onyx 1.18) (its timer reads add about 100 us, so its total is {ptot:.0f} us): waiting inside the accelerator driver {stall:.0f} us, post-processing {tp:.0f} us, gather {tg:.0f} us, the rest {ptot - stall - tp - tg:.0f} us")
         print(f"  layer 1 chunk (32 rows) timed in the pipeline: gather {w[20] / 24.0:.1f} us, post-processing {w[22] / 24.0:.1f} us")
         print(f"  matrices and job results in the low SRAM: {'YES' if w[24] else 'no (self-test failed or off)'}")
         print(f"  CPU stage: {'the STOCK-STYLE assembly (self-test passed)' if w[24] & 2 else 'the C version (the assembly self-test FAILED or this is an older build)'}")
@@ -1257,6 +1257,6 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-# SPDX-License-Identifier: GPL-3.0-only
-# Copyright (C) 2026 The Onyx Authors (@28spawn)
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

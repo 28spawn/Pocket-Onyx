@@ -225,15 +225,22 @@ static void commit_upload_session(void) {
              * see it either - an uploaded NAM was invisible. */
             uint8_t type = 0;   /* 0 = the 3852 B Q21 GRU struct */
             float head_scale = 1.0f;
+            float makeup_db = 0.0f;
             if (g_upload.rx_bytes >= 12u &&
                 g_upload.buffer[0] == 'W' && g_upload.buffer[1] == 'A' &&
                 g_upload.buffer[2] == 'V' && g_upload.buffer[3] == 'E') {
                 type = 1;        /* 1 = a WaveNet float container */
                 memcpy(&head_scale, g_upload.buffer + 8, 4);
+                if (g_upload.rx_bytes >= 16u) {
+                    /* the container's flags word: bit 0 the cabinet is baked in (read at every load), bit 1 a makeup is given, bits 8..15 that makeup as a signed quarter-dB.
+                     * The editor works it out from the .nam file's "loudness" so a capture lands at the stock amps' level (web/Onyx_Web_Editor.html namMakeupDb). */
+                    uint32_t fl; memcpy(&fl, g_upload.buffer + 12, 4);
+                    if (fl & 2u) makeup_db = (float)(int8_t)(uint8_t)(fl >> 8) * 0.25f;
+                }
             }
             pa_user_nam_meta_t meta;
             meta.input_trim = 1.0f;
-            meta.makeup_db  = 0.0f;
+            meta.makeup_db  = makeup_db;           /* pa_user_nam_add clamps it to +-12 dB */
             for (int k = 0; k < 6; k++) meta.amp_knobs[k] = 50;
             meta.flags = 0;
             char nam_slot_name[16];

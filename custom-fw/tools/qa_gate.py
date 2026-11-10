@@ -97,6 +97,8 @@ IMPACT = [
     ("custom-fw/src/board/main.c",       "ALL"),
     ("custom-fw/src/board/spi_nor.c",    "ALL"),
     ("custom-fw/include/pa_hw.h",        "ALL"),
+    ("custom-fw/include/pa_board.h",     "ALL"),
+    ("custom-fw/include/boards/*",       "ALL"),
     ("custom-fw/include/pa_flash_map.h", "ALL"),
     ("custom-fw/include/pa_config.h",    "ALL"),
     ("custom-fw/src/board/audio_alnk.c", "HW-01 HW-02 HW-03 HW-04 HW-10 HW-12 HW-16"),

@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * pa_audio.h — Pocket Amp Full-Duplex ALNK0 I2S Audio Driver (Big Rock 1)
  *
@@ -65,6 +65,11 @@ void pa_audio_alnk_init(void);
 
 /* Stop ALNK0 DMA engine */
 void pa_audio_stop(void);
+
+/* The board's output-stage enable (PA2 on the Pocket AMP): 0 = off, 1 = on. The driver holds it off while the link starts and switches it on itself (audio_alnk.c). */
+void pa_audio_output_enable(int on);
+/* Fade to silence and switch the output stage off before a restart the firmware starts itself. Main loop only. */
+void pa_audio_quiet_for_reset(void);
 
 /* Pure C helper to process one 512-byte RX half-buffer into a 512-byte TX half-buffer.
  * Exposed for host-PC unit testing as well as the on-device ALNK0 ISR. */

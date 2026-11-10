@@ -28,7 +28,7 @@ uint32_t pa_ota_build_id_reply(uint8_t *out, uint32_t cap) { (void)out; (void)ca
 
 static int fails;
 #define CHECK(ok, ...) do { printf((ok) ? "  ok   " : "  FAIL "); printf(__VA_ARGS__); printf("\n"); if (!(ok)) fails++; } while (0)
-static int32_t s24(const uint8_t *p) { return (int32_t)((uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16)) << 8 >> 8; }
+static int32_t s24(const uint8_t *p) { return (int32_t)(((uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16)) << 8) >> 8; }
 
 #define SECS 12
 #define MAXS (SECS * 46000)

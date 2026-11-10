@@ -271,10 +271,25 @@ function stripNam(f, filename) {
 // the head scale is appended when the weights are 1870, the name comes from the metadata, a capture whose name says CAB (and not "cab free" / "no cab") is flagged as having its cabinet, and a
 // recorded input level calibrates the input trim against the unit's ADC reference (4 dBu). ----
 const NAM_ADC_REF_DBU = 4.0;
+// A capture names its cabinet: "CAB", a full rig ("Full Rig", a leading "FR "), or the microphone that recorded the speaker (SM57, MD421, R121 ...). Many captures carry no gear_type at all.
 function namHasBakedCab(gear, name, file) {
   const names = [name.toLowerCase(), file.toLowerCase()];
-  if (names.some((n) => /cab[ _\-]*free|no[ _\-]*cab|without[ _\-]*cab|w\/o[ _\-]*cab|cabless|cab[ _\-]*less|amp[ _\-]*only/.test(n))) return false;
-  return gear.includes("cab") || names.some((n) => n.includes("cab"));
+  if (names.some((n) => /cab[ _\-]*free|no[ _\-]*cab|without[ _\-]*cab|w\/o[ _\-]*cab|cabless|cab[ _\-]*less|amp[ _\-]*only|di[ _\-]*out|direct[ _\-]*out/.test(n))) return false;
+  return gear.includes("cab") || names.some((n) => /cab|full[ _\-]*rig|^fr[ _\-]|\bsm ?5[78]\b|\bmd ?421\b|\be ?609\b|\br ?121\b|\bu ?87\b|\bmic(ed|'d)?\b/.test(n));
+}
+// The output makeup that puts an imported capture at the stock amps' level. The NAM trainer stores the capture's output "loudness" (dB, on its standard input); a capture plays at
+// whatever level it was recorded at, and on the unit the spread was 16 dB (-10.6 .. +5.7 dB against the stock amps). Fitted on 16 captures through the emulator with the unit's own amps
+// and cabinets: makeup = -15.5 - loudness, 4 dB less when the cabinet is baked in (its own cabinet replaces the stock one, which lowers the level). What remains: 2.1 dB rms, 4.6 dB worst.
+// No loudness in the file: 0 dB, as before. Same rule as emu/nam_loader.py.
+const NAM_TARGET_DB = -15.5, NAM_CAB_DB = -4.0;
+function namLoudness(meta, data) {
+  for (const o of [meta, data.metadata, data]) if (o && typeof o === "object") for (const k of ["loudness", "output_loudness", "loudness_db"]) { const v = Number(o[k]); if (o[k] !== undefined && o[k] !== null && Number.isFinite(v)) return v; }
+  return null;
+}
+function namMakeupDb(loud, cab) {
+  if (loud === null || loud === undefined) return 0;
+  const db = NAM_TARGET_DB - loud + (cab ? NAM_CAB_DB : 0);
+  return Math.round(Math.max(-12, Math.min(12, db)) * 4) / 4;                    // quarter-dB: what the container carries
 }
 function namInputLevel(meta, data) {
   for (const o of [meta, data.metadata, data.config, data]) {
@@ -298,10 +313,13 @@ function namJson(f, filename) {
   const meta = m.metadata || data.metadata || {}, name = String(meta.name || meta.gear_model || filename || "NAM");
   const gear = String(meta.gear_type || "").toLowerCase(), cab = namHasBakedCab(gear, name, filename || "");
   const lvl = namInputLevel(meta, data), trim = lvl === null ? 1.0 : Number((Math.pow(10, (NAM_ADC_REF_DBU - lvl) / 20)).toFixed(4));
+  const loud = namLoudness(meta, data), mk = namMakeupDb(loud, cab);
   const out = new Uint8Array(20 + weights.length * 4), dv = new DataView(out.buffer);
-  out.set([0x57, 0x41, 0x56, 0x45], 0); dv.setUint32(4, weights.length, true); dv.setFloat32(8, head, true); dv.setUint32(12, cab ? 1 : 0, true); dv.setFloat32(16, trim, true);
+  // flags: bit 0 the cabinet is baked in, bit 1 a makeup is given, bits 8..15 the makeup as a signed quarter-dB (an older firmware reads bit 0 only)
+  const flags = (cab ? 1 : 0) | (loud !== null ? 2 | (((mk * 4) & 0xFF) << 8) : 0);
+  out.set([0x57, 0x41, 0x56, 0x45], 0); dv.setUint32(4, weights.length, true); dv.setFloat32(8, head, true); dv.setUint32(12, flags, true); dv.setFloat32(16, trim, true);
   weights.forEach((w, i) => dv.setFloat32(20 + i * 4, w, true));
-  return { bytes: out, name, how: "ToneHunt .nam converted: A2 Lite WaveNet, " + weights.length + " weights" + (cab ? ", cabinet baked in" : "") + (lvl !== null ? ", input trim " + trim : "") };
+  return { bytes: out, name, how: "ToneHunt .nam converted: A2 Lite WaveNet, " + weights.length + " weights" + (cab ? ", cabinet baked in" : "") + (lvl !== null ? ", input trim " + trim : "") + (loud !== null ? ", level matched to the stock amps (" + (mk >= 0 ? "+" : "") + mk + " dB)" : ", no loudness in the file: played at its recorded level"), makeup_db: mk, cab };
 }
 function checkCab(f) {
   if (f.length > 12 && String.fromCharCode(f[0], f[1], f[2], f[3]) === "RIFF") { const r = wavToCab(f); return r.error ? r : { bytes: r.bytes, taps: r.taps, peak: r.peak, how: r.how }; }

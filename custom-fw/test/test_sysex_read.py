@@ -83,7 +83,7 @@ if r:
         check(field in text, f"the record has {field!r}")
     check("Onyx" in text,
           "the name is one the editor matches (\"Onyx\")")
-    check("version=118" in text, "the version is 118 (PA_FW_VERSION: shown as 1.18, below the stock's 1.05)")
+    check("version=119" in text, "the version is 119 (PA_FW_VERSION: shown as 1.19, below the stock's 1.05)")
 
 print()
 print("=== the descriptor (cmd 18) ===")

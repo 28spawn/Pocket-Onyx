@@ -126,7 +126,7 @@ Onyx features a fully reproducible, clean-room build pipeline that compiles the 
 
 ### Enabling Bluetooth LE (User Build Required)
 
-Official release containers (`Onyx_1.18.fwsc` / `Onyx_1.18.bin`) ship with the radio completely disabled and unpowered (`PA_BLE=0`) for regulatory compliance and hardware safety. All official builds are strictly USB-only.
+Official release containers (`Onyx_1.19.fwsc` / `Onyx_1.19.bin`) ship with the radio completely disabled and unpowered (`PA_BLE=0`) for regulatory compliance and hardware safety. All official builds are strictly USB-only.
 
 If you want wireless BLE-MIDI connectivity, you are required to build the firmware from source yourself.
 

@@ -26,6 +26,7 @@ Nothing here writes to the unit's flash or RAM: it sends MIDI controls and reads
 from __future__ import annotations
 
 import argparse
+import os
 import random
 import struct
 import subprocess
