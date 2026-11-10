@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 #include "../../include/pa_config.h"
 /*
  * custom-fw/src/fx/fft_conv.c - float FFT convolution for the cabinet (see include/fft_conv.h).
@@ -233,14 +233,14 @@ PA_HOT void fc_block(fc_state_t *s, const float *in, float *out)
 
     /* Y = sum_p X[t-p] * H[p] */
     fc_cpx Y[FC_BINS];
-    memset(Y, 0, sizeof Y);
     int slot = s->head;
     const int np = fc_step_weights(s, (s->limit > 0 && s->limit < s->parts) ? s->limit : s->parts);
     int steady = 1;
     for (int p = 0; p < np; p++) if (s->pw[p] < 1.0f) { steady = 0; break; }
     if (steady) {
-        fc_mac(s, &s->H[0][0], np, Y);                            /* the usual case: every weight is 1 */
+        fc_mac(s, &s->H[0][0], np, Y);                            /* the usual case: every weight is 1. fc_mac writes every bin of Y, so Y is not cleared first (it was: 520 bytes a block for nothing) */
     } else {
+    memset(Y, 0, sizeof Y);                                       /* this loop accumulates into Y */
     for (int p = 0; p < np; p++) {
         const fc_cpx *x = s->X[slot], *h = s->H[p];
         const float w = s->pw[p];
@@ -280,17 +280,18 @@ PA_HOT void fc_block2(fc_state_t *s, const fc_cpx (*H2)[FC_BINS], int parts2, co
     rfft128(s->frame, s->X[s->head]);                            /* ONE forward transform for both channels */
 
     fc_cpx YL[FC_BINS], YR[FC_BINS];
-    memset(YL, 0, sizeof YL);
-    memset(YR, 0, sizeof YR);
     int slot = s->head;
     const int np = fc_step_weights(s, (s->limit > 0 && s->limit < s->parts) ? s->limit : s->parts);
     const int np2 = (np < parts2) ? np : parts2;
     int steady = 1;
     for (int p = 0; p < np; p++) if (s->pw[p] < 1.0f) { steady = 0; break; }
-    if (steady) {                                                /* the usual case: every weight is 1 */
+    if (steady) {                                                /* the usual case: every weight is 1; fc_mac writes every bin, so nothing is cleared first */
         fc_mac(s, &s->H[0][0], np, YL);
         fc_mac(s, &H2[0][0], np2, YR);
         slot = 0;
+    } else {                                                     /* the loop below accumulates */
+        memset(YL, 0, sizeof YL);
+        memset(YR, 0, sizeof YR);
     }
     for (int p = 0; !steady && p < np; p++) {
         const fc_cpx *x = s->X[slot], *h = s->H[p];

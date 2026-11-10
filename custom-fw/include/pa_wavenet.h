@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /*
  * pa_wavenet.h — Pocket Amp Embedded 23-Layer Dilated WaveNet Inference Engine
  *
@@ -96,7 +96,7 @@ typedef struct {
 
     /* Block engine state (blk_ok = 1 once the Q24 tables were built and every weight fitted; blk_bad = 1 once the run-time guard gave up on it) */
     uint8_t  blk_ok, blk_bad, blk_slow;
-    uint32_t blk_n;                                       /* blocks run: one in 32 is profiled */
+    uint32_t blk_n;                                       /* blocks run: one in 256 is profiled (WN_PROF_MASK, pa_wavenet.c) */
     int32_t  wq[PA_WN_WQ_WORDS];                          /* per layer: 3 conv vectors (3k words), mixin x3, bias x3 (Q24), 1x1 x9 (Q24), 1x1 bias x3 (Q21); then the head */
     float    rech[3];                                     /* the rechannel weights */
     int32_t  head_q[3u * PA_WN_BLK_HEAD_STEPS];           /* head history: 15 old steps, then the block's accumulated activations (3 words a step) */

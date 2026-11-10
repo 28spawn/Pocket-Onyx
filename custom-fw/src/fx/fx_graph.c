@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/fx/fx_graph.c — Customizable-Order 6+1 Effect Graph + Stereo/Tail/Limiter */
 
 #include "../../include/pa_hw.h"
@@ -750,19 +750,36 @@ static void pa_lvl_scalars(const pa_fx_chain_t *c) {
     D[24] = (uint32_t)c->output_limit_mode;
     D[31] = 0x4C564C53u;                      /* "LVLS" */
 }
-/* [7]/[15]: the largest |L - R| since boot / in the last block: 0 means the output is dual mono. */
-static void pa_lvl_width(const int32_t *l, const int32_t *r, int n) {
-    uint32_t m = 0;
-    for (int i = 0; i < n; i++) { const int32_t d = l[i] - r[i]; const uint32_t a = (uint32_t)(d < 0 ? -d : d); if (a > m) m = a; }
+/* [7]/[15]: the largest |L - R| since boot / in the last block: 0 means the output is dual mono (pa_lvl_out). */
+/* A level this core has already worked out (the runaway guard scans the same block): stored without a second pass over the samples. */
+static inline void pa_lvl_put(unsigned idx, uint32_t m) {
     volatile uint32_t *D = PA_LVL_BASE;
-    D[15] = m;
-    if (m > D[7]) D[7] = m;
+    D[8 + idx] = m;
+    if (m > D[idx]) D[idx] = m;
+}
+/* The three meters of the finished block ([5] left, [6] right, [7]/[15] the width) in ONE pass over it: they were three passes, each loading the same samples again. */
+static void pa_lvl_out(const int32_t *l, const int32_t *r, int n) {
+    if (!r) { pa_lvl(5, l, n); return; }
+    uint32_t ml = 0, mr = 0, mw = 0;
+    for (int i = 0; i < n; i++) {
+        const int32_t a = l[i], b = r[i], d = a - b;
+        const uint32_t ua = (uint32_t)(a < 0 ? -a : a), ub = (uint32_t)(b < 0 ? -b : b), ud = (uint32_t)(d < 0 ? -d : d);
+        if (ua > ml) ml = ua;
+        if (ub > mr) mr = ub;
+        if (ud > mw) mw = ud;
+    }
+    pa_lvl_put(5, ml); pa_lvl_put(6, mr);
+    volatile uint32_t *D = PA_LVL_BASE;
+    D[15] = mw;
+    if (mw > D[7]) D[7] = mw;
 }
 #define PA_LVL(i, b, n) pa_lvl((i), (b), (n))
+#define PA_LVL_PUT(i, m) pa_lvl_put((i), (m))
 #else
 #define PA_LVL(i, b, n) ((void)0)
+#define PA_LVL_PUT(i, m) ((void)(m))
 #define pa_lvl_scalars(c) ((void)0)
-#define pa_lvl_width(l, r, n) ((void)0)
+#define pa_lvl_out(l, r, n) ((void)0)
 #endif
 
 /* The input conditioning (runs first, on whichever core runs the front of the chain). */
@@ -892,13 +909,23 @@ void pa_fx_chain_run_stereo(pa_fx_chain_t *chain, int32_t *buf_L, int32_t *buf_R
 #endif
     if (cut > 0) {
         const int lo = choose_core1_lo(chain, cut);
+        /* Does core 1 need the right channel? Only a slot with a stereo entry point reads it, and the slots in front of the amp (the dynamics, the drive, the amp itself) have none:
+         * a mono slot runs on the left channel and then copies it to the right, and this core overwrites the right channel with the left after the hand-over anyway. So when every
+         * slot core 1 runs is mono-only, the right channel is not handed over at all: no copy of it here, no swap of it in the hand-over, no copy of it on core 1 (three passes over
+         * a block that changed nothing). The left channel, which is all that comes back, is the same bit for bit (test_smp_pipeline). */
+        int front_mono = 1;
+        for (int idx = lo; idx < cut; idx++) {
+            const uint8_t sl = chain->slot_order[idx];
+            if (sl < PA_SLOT_COUNT && chain->slots[sl] && chain->slots[sl]->run_stereo) { front_mono = 0; break; }
+        }
+        int32_t *const c1_R = front_mono ? (int32_t *)0 : buf_R;
         if (lo > 0) {                                                     /* what does not fit core 1 runs here first */
             int ss0 = 0;
             chain_condition(chain, buf_L, buf_R, n);
             run_slot_range(chain, buf_L, buf_R, n, 0, lo, &ss0, s_dry_L, s_dry_R, 0);
             s_pre_cond = 0;
         } else {                                                          /* the conditioning is done here too, so core 1 starts on the amp */
-            chain_condition(chain, buf_L, buf_R, n);
+            chain_condition(chain, buf_L, c1_R, n);
             s_pre_cond = 1;
         }
 #if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM)
@@ -907,7 +934,7 @@ void pa_fx_chain_run_stereo(pa_fx_chain_t *chain, int32_t *buf_L, int32_t *buf_R
         pa_amp_defer_post(1);
         s_fizz_core0 = 1u;
         pa_amp_pre_core0(buf_L, n);                                       /* the WaveNet's input conditioning, on this core */
-        s_post_handoff(chain, buf_L, buf_R, n, cut, lo);                  /* the amp is a mono block, so the stereo state after it is 0 */
+        s_post_handoff(chain, buf_L, c1_R, n, cut, lo);                   /* the amp is a mono block, so the stereo state after it is 0 */
         pa_amp_apply_post(buf_L, n);                                      /* the tone stack and the trim of the block that came back */
         {   /* the fizz filter, left to this core (see s_fizz_core0): only where the slot loop would have applied it, i.e. when the amp slot runs */
             const fx_node_t *amp = chain->slots[PA_SLOT_AMP];
@@ -934,12 +961,14 @@ void pa_fx_chain_run_stereo(pa_fx_chain_t *chain, int32_t *buf_L, int32_t *buf_R
 #endif
     {   /* runaway guard: a loop in the delay/reverb/cabinet that has saturated stays that way (the "stuck high pitch"). More than 48 times
          * full scale after the slots is never music: clear the effects after the amp and let this block be silent. */
-        uint32_t pk = 0;
+        uint32_t pk = 0, pk_l = 0;                                        /* pk_l: the left channel alone, which is level meter 4 (it was a second scan of the same block) */
         for (int i = 0; i < n; i++) {
-            int32_t v = buf_L[i]; uint32_t a = (uint32_t)(v < 0 ? -v : v); if (a > pk) pk = a;
+            int32_t v = buf_L[i]; uint32_t a = (uint32_t)(v < 0 ? -v : v); if (a > pk_l) pk_l = a;
             if (buf_R) { v = buf_R[i]; a = (uint32_t)(v < 0 ? -v : v); if (a > pk) pk = a; }
         }
+        if (pk_l > pk) pk = pk_l;
         if (pk > (48u << 21)) {
+            pk_l = 0;                                                     /* the block is cleared below: the meter shows what leaves this stage */
             const int from = cut > 0 ? cut : 0;
             for (int idx = from; idx < PA_SLOT_COUNT; idx++) {
                 fx_node_t *nd = chain->slots[chain->slot_order[idx]];
@@ -955,11 +984,10 @@ void pa_fx_chain_run_stereo(pa_fx_chain_t *chain, int32_t *buf_L, int32_t *buf_R
 #endif
             pa_evlog(PA_EV_RUNAWAY, pk / ((1u << 21) / 100u), which);
         }
+        PA_LVL_PUT(4, pk_l);
     }
-    PA_LVL(4, buf_L, n);
     chain_tail(chain, buf_L, buf_R, n);
-    PA_LVL(5, buf_L, n);
-    if (buf_R) { PA_LVL(6, buf_R, n); pa_lvl_width(buf_L, buf_R, n); }
+    pa_lvl_out(buf_L, buf_R, n);
     pa_lvl_scalars(chain);
 }
 
