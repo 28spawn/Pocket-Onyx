@@ -1034,8 +1034,8 @@ void pa_wavenet_process_block_q21(pa_wavenet_model_t *m, int32_t *samples_q21, i
         if (((m->blk_n - 1u) & WN_PROF_MASK) != 0u) {                 /* blk_n was counted up by wn_block_run: this tests the block it just ran */
             const uint32_t tj = plat_ticks24() - t_start;
             m->blk_t[5] = tj;
-            if (tj > 35000u) { if (++m->blk_slow >= 16u) { m->blk_bad = 1u; m->active = 0u; } }
-            else if (tj < 33600u && m->blk_slow) m->blk_slow--;
+            if (tj > PA_US_SCALE(35000u)) { if (++m->blk_slow >= 16u) { m->blk_bad = 1u; m->active = 0u; } }
+            else if (tj < PA_US_SCALE(33600u) && m->blk_slow) m->blk_slow--;
         }
         if (defer) { s_wn_post_makeup = makeup; s_wn_post_pending = 1u; }
         else {

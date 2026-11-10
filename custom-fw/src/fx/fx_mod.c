@@ -35,7 +35,7 @@
 #include "pa_config.h"
 #include "../dsp/fixedpoint.h"
 
-#define MOD_FS        44100.0f
+#define MOD_FS        PA_SAMPLE_RATE_F
 #define MOD_BUF_LEN   1024u            /* longest tap: chorus 720 + 224 = 944 samples */
 #define MOD_BUF_MASK  (MOD_BUF_LEN - 1u)
 #define MOD_AP_STAGES 4
@@ -79,10 +79,15 @@ extern void  pa_free(void *);
 static uint32_t mod_inc_from_knob(int32_t val) {
     if (val < 0) val = 0;
     if (val > PA_Q21_ONE) val = PA_Q21_ONE;
-    return 9739u + (uint32_t)(((uint64_t)(uint32_t)val * 779134u) >> 21);
+    const uint32_t inc = 9739u + (uint32_t)(((uint64_t)(uint32_t)val * 779134u) >> 21);     /* the phase step per sample at 44.1 kHz */
+#if PA_SAMPLE_RATE_HZ == 44100
+    return inc;
+#else
+    return (uint32_t)(((uint64_t)inc * 44100u) / PA_SAMPLE_RATE_HZ);                  /* the same rate in Hz at this sample rate */
+#endif
 }
 uint32_t pa_mod_rate_mhz(int32_t knob_q21) {
-    return (uint32_t)(((uint64_t)mod_inc_from_knob(knob_q21) * 44100000ull + (1ull << 31)) >> 32);
+    return (uint32_t)(((uint64_t)mod_inc_from_knob(knob_q21) * ((uint64_t)PA_SAMPLE_RATE_HZ * 1000ull) + (1ull << 31)) >> 32);
 }
 
 /* sine-shaped LFO from a 32-bit phase: a triangle bent by (3t - t^3) / 2, in -1..1 */
@@ -204,8 +209,8 @@ PA_HOT static void mod_run_stereo(fx_node_t *nd, int32_t *buf_L, int32_t *buf_R,
                         if (nrm < 0.0f) nrm = 0.0f;
                         if (nrm > 1.0f) nrm = 1.0f;
                         sweep = nrm;
-                        const float frac = (float)(s->lfo_inc - 9739u) * (1.0f / 779134.0f);
-                        s->rel = 1.0f / (44100.0f * (0.45f - 0.40f * (frac > 1.0f ? 1.0f : frac)));   /* RATE: 450 ms (slow) .. 50 ms (fast) */
+                        const float frac = (float)(s->lfo_inc - mod_inc_from_knob(0)) * (1.0f / (float)(mod_inc_from_knob(PA_Q21_ONE) - mod_inc_from_knob(0)));
+                        s->rel = 1.0f / (PA_SAMPLE_RATE_F * (0.45f - 0.40f * (frac > 1.0f ? 1.0f : frac)));   /* RATE: 450 ms (slow) .. 50 ms (fast) */
                     } else {
                         sweep = lu;                                               /* the foot rocking: RATE is the speed, DEPTH how far it travels */
                         s->rel = 0.000151f;

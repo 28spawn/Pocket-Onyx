@@ -419,12 +419,12 @@ static void reverb_run_float(fx_node_t *nd, reverb_state_t *s, int32_t *buf_L, i
     if (s->type == REV_TYPE_PLATE) {
         if (!s->pl_g_valid || s->pl_g_knob != s->pl_decay_knob) {        /* two powf calls: 128 of them a block when they sat here per sample */
             s->pl_g_knob = s->pl_decay_knob;
-            s->pl_g = powf(10.0f, -3.0f * PL_G_SPACING / (44100.0f * plate_rt60(s->pl_decay_knob)));
+            s->pl_g = powf(10.0f, -3.0f * PL_G_SPACING / (PA_SAMPLE_RATE_F * plate_rt60(s->pl_decay_knob)));
             s->pl_g_valid = 1u;
         }
     } else {
         if (!s->amb_valid || s->amb_knob_c != s->amb_size_knob) {        /* the tap positions follow the size knob: once per change */
-            const float size = amb_size_ms(s->amb_size_knob) * 44.1f;   /* samples */
+            const float size = amb_size_ms(s->amb_size_knob) * (PA_SAMPLE_RATE_F * 0.001f);   /* samples */
             for (int c = 0; c < 2; c++)
                 for (int k = 0; k < AMB_TAPS; k++) {
                     uint32_t back = (uint32_t)(size * k_amb_r[c][k]) + 1u;
@@ -934,7 +934,7 @@ static float rev_g_for(int type, float k) {
         const float g0 = 0.55f + 0.41f * k;
         return g0 > 0.96f ? 0.96f : g0;
     }
-    const float lg = rev_type_k(type) * 3.0f * (rev_comb_mean(type) / 44100.0f) / rev_rt_target(type, k);   /* |log10 g| */
+    const float lg = rev_type_k(type) * 3.0f * (rev_comb_mean(type) / PA_SAMPLE_RATE_F) / rev_rt_target(type, k);   /* |log10 g| */
     float g = powf(10.0f, -lg);
     if (g < 0.55f) g = 0.55f;
     if (g > 0.975f) g = 0.975f;
@@ -962,7 +962,7 @@ uint32_t pa_rev_decay_ms(int type, int32_t knob_q21) {
     if (type == REV_TYPE_AMBIENCE)                /* SIZE: the span of the reflections */
         return (uint32_t)(amb_size_ms(rev_knob01(knob_q21)) + 0.5f);
     const float g = rev_g_for(type, rev_knob01(knob_q21));
-    const float rt = rev_type_k(type) * 3.0f / __builtin_fabsf(log10f(g)) * (rev_comb_mean(type) / 44100.0f);
+    const float rt = rev_type_k(type) * 3.0f / __builtin_fabsf(log10f(g)) * (rev_comb_mean(type) / PA_SAMPLE_RATE_F);
     return (uint32_t)(rt * 1000.0f + 0.5f);
 }
 
