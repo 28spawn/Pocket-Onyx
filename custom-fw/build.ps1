@@ -246,10 +246,10 @@ $buildNum = [uint32]($buildStamp.ToString("yyMMddHHmm"))
 $buildTxt = $buildStamp.ToString("yyyy-MM-dd HH:mm")
 $gitRev = ""
 try { $gitRev = (& git rev-parse --short HEAD 2>$null) } catch { }
-# Firmware release naming & versioning: Pocket_AMP_Onyx_1.18
+# Firmware release naming & versioning: Onyx_1.19
 # Extracted from PA_FW_VERSION in custom-fw/include/pa_config.h (e.g. 105 -> "1.05")
 $cfgHdr = Get-Content (Join-Path $RepoRoot "custom-fw/include/pa_config.h") -Raw
-$fwVerNum = 118
+$fwVerNum = 119
 if ($cfgHdr -match '#define\s+PA_FW_VERSION\s+(\d+)u') {
     $fwVerNum = [int]$Matches[1]
 }

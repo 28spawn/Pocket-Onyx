@@ -35,7 +35,7 @@
 #endif
 
 #ifndef PA_FW_VERSION
-#define PA_FW_VERSION          118u   /* shown as 1.18; the OTA ID block says V118 */
+#define PA_FW_VERSION          119u   /* shown as 1.19; the OTA ID block says V119 */
 #endif
 /* PA_DEVICE_NAME / PA_DEVICE_MODEL: the board header (pa_board.h). */
 
