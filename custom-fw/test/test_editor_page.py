@@ -1,5 +1,5 @@
-# SPDX-License-Identifier: GPL-3.0-only
-# Copyright (C) 2026 The Onyx Authors (@28spawn)
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)
 """The web editor page (web/Onyx_Web_Editor.html), its protocol core run in Node against the firmware's own parser (the emulator DLL):
 the JS frames are byte-identical to tools/mvave_device.py's, the JS packets work over USB and BLE-MIDI, the JS state decoder reads the unit's record,
 the NAM strip and the cab check do what the notes say, and the tables in the page are the firmware's.
@@ -113,6 +113,63 @@ for kind in (0, 1):
     feed(js(["buildFrame", 81, [kind, 0]])[0])
     pn = js(["parseReply", reply()])[0]
     check(pn and pn["type"] == 0x61 and pn["data"][3] > 0, f"the name list kind {kind} parses ({pn['data'][1]} names)")
+
+print("=== who the unit is: the identity query, the installer's check, the advice when the editor gets no reply (issues #7, #8) ===")
+# The identity query is answered in the USB layer (pa_ota_session.c), which the emulator does not route: the firmware's own ID-block builder (pa_ota.c) is compiled here and its bytes go to the page.
+idsrc = os.path.join(tmp, "idreply.c")
+open(idsrc, "w").write('#include <stdio.h>\n#include <stdint.h>\n#include "pa_ota.h"\nint main(void){uint8_t b[64];uint32_t n=pa_ota_build_id_reply(b,sizeof b),i;'
+                       'for(i=0;i<n;i++)printf("%u ",b[i]);return n?0:1;}\n')
+idexe = os.path.join(tmp, "idreply.exe")
+try:
+    r = subprocess.run(["clang", "-O1", "-I" + os.path.join(ROOT, "include"), "-DPA_HOST_SIM=1", idsrc, os.path.join(ROOT, "src", "sys", "pa_ota.c"), "-o", idexe], capture_output=True, text=True)
+    fw_id = [int(x) for x in subprocess.run([idexe], capture_output=True, text=True).stdout.split()] if r.returncode == 0 else None
+except OSError:
+    fw_id = None
+if fw_id:
+    idj = js(["otaIdentity", fw_id])[0]
+    check(idj == {"text": "Pocket AMP_105", "ota": False}, f"the page reads the firmware's own answer to the identity query: {idj}")
+else:
+    print("  skip  (clang not found: the firmware's ID block was not built here)")
+
+
+def id_frame(text):                      # the ID block another unit would send, built the way pa_ota.c builds it: 00 59 11 | len24 = 27 | the identity zero-padded to 27 | ~sum of those 27
+    t = text.encode()[:27].ljust(27, b"\0")
+    return [0xF0] + list(M.pack_8to7(bytes([0, 0x59, 0x11, 27, 0, 0]) + t + bytes([(~sum(t)) & 0xFF]))) + [0xF7]
+
+
+if fw_id:
+    check(id_frame("Pocket AMP_105") == fw_id, "this test's ID-block builder makes the firmware's bytes exactly (so its Donner frame is what such a unit sends)")
+
+donner = js(["otaIdentity", id_frame("DONNER Pocket AMP_008")])[0]
+check(donner == {"text": "DONNER Pocket AMP_008", "ota": False}, f"a Donner unit's identity is read as it is: {donner}")
+ui = js(["unitIdentity", "DONNER Pocket AMP_008"], ["unitIdentity", "Pocket AMP_105"], ["unitIdentity", "ota-Pocket AMP_105"], ["unitIdentity", "ota-DONNER Pocket AMP_008"], ["unitIdentity", "Launchkey Mini"])
+check(ui[0]["pocketAmp"] and not ui[0]["mvave"] and ui[0]["brand"] == "DONNER" and ui[0]["build"] == "008", "\"DONNER Pocket AMP_008\" is a Pocket AMP, brand DONNER, build 008, not the M-VAVE unit")
+check(ui[1]["pocketAmp"] and ui[1]["mvave"] and not ui[1]["ota"], "\"Pocket AMP_105\" is the M-VAVE unit")
+check(ui[2]["mvave"] and ui[2]["ota"] and ui[3]["ota"] and not ui[3]["mvave"], "the update loaders (\"ota-...\") are told apart the same way")
+check(not ui[4]["pocketAmp"], "another device is not a Pocket AMP")
+ic = js(["installCheck", "Pocket AMP_105"], ["installCheck", "ota-Pocket AMP_105"], ["installCheck", "ota-Pocket AMP_900"],
+        ["installCheck", "DONNER Pocket AMP_008"], ["installCheck", "ota-DONNER Pocket AMP_008"], ["installCheck", "Launchkey Mini"])
+check(ic[0]["ok"] and ic[1]["ok"] and ic[2]["ok"], "the installer goes ahead for the M-VAVE unit and its loaders (ours and the Pendel one)")
+check(not ic[3]["ok"] and "DONNER Pocket AMP_008" in ic[3]["why"] and "not a Pocket AMP" not in ic[3]["why"] and "Nothing was written" in ic[3]["why"],
+      "issue #8: a Donner unit is named as a Donner-branded Pocket AMP (not \"it is not a Pocket AMP\") and not flashed: " + ic[3]["why"][:70])
+check(not ic[4]["ok"], "...nor when it is found already in its update mode (the step-2 loader is checked too)")
+check(not ic[5]["ok"] and "not a Pocket AMP" in ic[5]["why"], "another device is refused")
+na = js(["noReplyAdvice", "Pocket AMP_105", False, "Pocket AMP"], ["noReplyAdvice", None, False, "IAC Driver Bus 1"], ["noReplyAdvice", "DONNER Pocket AMP_008", False, "x"],
+        ["noReplyAdvice", "ota-Pocket AMP_105", False, "x"], ["noReplyAdvice", None, True, "x"], ["noReplyAdvice", "Launchkey Mini", False, "Launchkey"])
+check("original firmware" in na[0] and "Firmware tab" in na[0] and "command" not in na[0], "issue #7: a unit on its original firmware is told so, with the way to install Onyx: " + na[0][:60])
+check("IAC Driver Bus 1" in na[1] and "Choose the unit's port" in na[1], "no answer at all: the port is named and the user is told to choose the unit's port")
+check("DONNER" in na[2] and "does not support" in na[2], "a Donner unit: the controls need Onyx, which does not support it yet")
+check("update mode" in na[3], "a unit in update mode: finish the update")
+check("Bluetooth" in na[4], "over Bluetooth: the controls need Onyx, check over USB")
+check("not a Pocket AMP" in na[5], "a port that answers as another device: choose the unit's port")
+connect_src = page[page.index("async function connect(open)"):page.index("$(\"bUsb\").onclick")]
+check("identify(" in connect_src and "noReplyAdvice(" in connect_src, "connect asks the unit who it is when the editor's first command gets no reply, and says what that means")
+check("/^Pocket AMP/i.test(" not in page and page.count("installCheck(") >= 3, "the installer's old name test is gone; installCheck guards step 1 and step 2")
+req_src = page[page.index("async function request(cmd"):page.index("let toastTimer")]
+check("await turn" in req_src and "release()" in req_src and "clearTimeout(t)" in req_src,
+      "one request at a time: the live-sync timer can no longer take the reply slot of a request in flight (a connect then hung on \"connected\" for good)")
+check("!connecting" in page and "refreshing" in page[page.index("async function refresh()"):], "live sync waits while connecting and never queues a second read")
+check('p.state !== "disconnected"' in page and "onstatechange" in page, "a port left behind by an unplugged unit is not picked, and an unplug is reported")
 
 print("=== MIDI control built by the page changes the unit ===")
 def midi(msg):
