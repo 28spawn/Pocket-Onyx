@@ -402,6 +402,37 @@ const OTA_QUERY = [0xF0, 0x00, 0x32, 0x45, 0x00, 0x00, 0x00, 0x40, 0x7F, 0xF7], 
 const OTA_SOFTKEY = [0xF0, 0x22, 0x24, 0x35, 0x7D, 0xF7];                                                                          // 7D: into the chip's ROM download mode (the PC flasher's way in)
 const OFFICIAL_SHA256 = "9584e81da98215e8e70ddffc28311423ceaa1a5a8a12a478dc68f4679e10902b", OFFICIAL_SIZE = 767028, OFFICIAL_PRODUCT = "Pocket AMP_105";   // the unmodified M-VAVE Pocket AMP.fwsc (the same digest the Pendel installer pins)
 const OTA_VERIFY_DONE = 0xE0000000, OTA_FINISH = 0xF0000000, OTA_MAX_REQ = 512;
+// ---- who the unit says it is: the original firmware and Onyx both answer OTA_QUERY with the 34-byte ID block (00 59 11 | len24 | the identity, zero-padded | sum) ----
+function otaIdentity(fr) {                       // "Pocket AMP_105" or "ota-Pocket AMP_105"
+  const d = unpack7to8(fr.slice(1, -1)); if (d.length !== 34 || d[0] !== 0 || d[1] !== 0x59 || d[2] !== 0x11) return null;
+  const t = String.fromCharCode(...d.slice(6, 33)).replace(/\0+$/, ""); return { text: t, ota: /^ota-/i.test(t) };
+}
+// The identity text, read: "Pocket AMP_105" is the M-VAVE unit (its original firmware, or Onyx), "ota-" in front is its update loader, and a brand word may come before the model:
+// "DONNER Pocket AMP_008" is the Donner-branded unit (GitHub issue #8). Onyx is built for the M-VAVE board only (mvave), so only that one may be flashed by the installer.
+function unitIdentity(text) {
+  const t = String(text == null ? "" : text).trim(), m = /^(ota-)?(?:(\S+) )?Pocket AMP(?:_(\S*))?$/i.exec(t);
+  if (!m) return { text: t, pocketAmp: false, mvave: false, ota: /^ota-/i.test(t), brand: "", build: "" };
+  const brand = (m[2] || "").toUpperCase();
+  return { text: t, pocketAmp: true, mvave: brand === "", ota: !!m[1], brand, build: m[3] || "" };
+}
+// May the one-click installer (install or restore) write to the unit that answered with this identity? Nothing is sent to the unit when it may not.
+function installCheck(text) {
+  const u = unitIdentity(text);
+  if (!u.pocketAmp) return { ok: false, why: "this unit reports \"" + u.text + "\": it is not a Pocket AMP. Nothing was written." };
+  if (!u.mvave) return { ok: false, why: "this unit reports \"" + u.text + "\": a " + u.brand + "-branded Pocket AMP. Onyx is built and tested for the M-VAVE Pocket AMP (it reports \"Pocket AMP_105\") only. "
+    + "Whether this unit's board is the same one (pins, display, flash layout, radio calibration) is not known yet, so the installer does not flash it, and it does not put the M-VAVE original on it either. Nothing was written." };
+  return { ok: true, why: "" };
+}
+// The editor's first command got no reply: what to tell the user, from what the unit answered to the identity query (null: nothing came back). GitHub issue #7.
+function noReplyAdvice(idText, ble, portName) {
+  if (ble) return "the unit did not answer the editor over Bluetooth. The editor's controls need Onyx on the unit: a unit with its original firmware does not know them. Connect over USB to check, and install Onyx from the Firmware tab.";
+  if (idText == null) return "the unit did not answer on the MIDI port \"" + portName + "\". Choose the unit's port in the list next to the Connect buttons and connect again; use a USB data cable straight to the computer (no hub), and close other programs and tabs that use the port.";
+  const u = unitIdentity(idText);
+  if (!u.pocketAmp) return "the port \"" + portName + "\" answers as \"" + u.text + "\", which is not a Pocket AMP. Choose the unit's port in the list next to the Connect buttons and connect again.";
+  if (u.ota) return "the unit is in update mode (\"" + u.text + "\"): an update was cut off. Finish it on the Firmware tab (Install, or Restore the original); the button continues it.";
+  if (!u.mvave) return "this unit reports \"" + u.text + "\" (a " + u.brand + "-branded Pocket AMP) and runs its original firmware. The editor's controls need Onyx, and Onyx does not support this unit yet.";
+  return "this unit runs its original firmware (\"" + u.text + "\"): the editor's controls need Onyx. Install it from the Firmware tab first.";
+}
 function otaParseRequest(frame) {
   if (!frame || frame[0] !== 0xF0 || frame[frame.length - 1] !== 0xF7) return null;
   const u = unpack7to8(frame.slice(1, -1));
@@ -734,12 +765,15 @@ const hex = (a) => Array.from(a, (b) => b.toString(16).padStart(2, "0")).join(" 
 // ---- transports ----
 const MIDI_SVC = "03b80e5a-ede8-4b33-a751-6ce34ec4c700", MIDI_CHR = "7772e5db-3868-4112-a1a9-f2669d106bf3";
 let link = null, rx = [], waiter = null, state = null, names = { amp: [], cab: [], firstAmp: 20, firstCab: 20, rev: 0 }, busy = false;
-function onFrame(fr) { if (diagWait) { const d = diagParse(fr); if (d) { diagWait(d); return; } } const r = parseReply(fr); if (!r) return; if (waiter && waiter.type === r.type) { const w = waiter; waiter = null; w.res(r.data); } }
+let rawWait = null;                     // a one-off listener that sees every frame first (the identity query); returns true when the frame was its answer
+function onFrame(fr) { if (rawWait && rawWait(fr)) return; if (diagWait) { const d = diagParse(fr); if (d) { diagWait(d); return; } } const r = parseReply(fr); if (!r) return; if (waiter && waiter.type === r.type) { const w = waiter; waiter = null; w.res(r.data); } }
 async function openMidi() {
   if (!navigator.requestMIDIAccess) throw new Error("Web MIDI is not available in this browser (use Chrome or Edge)");
   const acc = await navigator.requestMIDIAccess({ sysex: true });
-  const ins = [...acc.inputs.values()], outs = [...acc.outputs.values()];
-  const pick = (l) => l.find((p) => /custom midi|pocket|donner/i.test(p.name)) || l[0];
+  const live = (p) => p.state !== "disconnected";                // a unit that was unplugged (or slept) stays in the lists as "disconnected": never pick that one
+  const ins = [...acc.inputs.values()].filter(live), outs = [...acc.outputs.values()].filter(live);
+  const want = $("port").hidden ? "" : $("port").value;          // the port chosen in the list (after a connect that got no answer): that one, not the guess again
+  const pick = (l) => (want && l.find((p) => p.name === want)) || l.find((p) => /custom midi|pocket|donner|onyx/i.test(p.name)) || l[0];
   const i = pick(ins), o = pick(outs);
   if (!i || !o) throw new Error("no MIDI port found: plug the unit in (USB) or pair it first");
   const sel = $("port"); sel.hidden = false; sel.innerHTML = ""; outs.forEach((p) => { const e = document.createElement("option"); e.textContent = p.name; e.value = p.name; sel.appendChild(e); }); sel.value = o.name;
@@ -747,7 +781,11 @@ async function openMidi() {
   const bind = () => { cur.i.onmidimessage = (e) => { if (e.data[0] === 0xF0) onFrame(Array.from(e.data)); }; };
   bind();
   sel.onchange = () => { cur.i.onmidimessage = null; cur = { i: ins.find((p) => p.name === sel.value) || i, o: outs.find((p) => p.name === sel.value) || o }; bind(); };
-  return { name: cur.o.name, chunk: 200, send: async (b) => cur.o.send(b), sendFrame: async (b) => cur.o.send(b) };
+  const me = { name: cur.o.name, chunk: 200, send: async (b) => cur.o.send(b), sendFrame: async (b) => cur.o.send(b), close: () => { cur.i.onmidimessage = null; } };
+  acc.onstatechange = (e) => {                                    // the unit left USB: say so, instead of a link that only times out
+    if (link === me && (e.port === cur.i || e.port === cur.o) && e.port.state === "disconnected") { me.close(); link = null; setStatus(false, "the unit left USB: plug it in and connect again"); log("USB MIDI port gone (" + e.port.name + ")"); }
+  };
+  return me;
 }
 async function openBle() {
   if (!navigator.bluetooth) throw new Error("Web Bluetooth is not available in this browser (use Chrome or Edge)");
@@ -764,10 +802,22 @@ async function sendShort(bytes) {       // channel messages, three bytes each (a
   if (!link) return;
   for (let i = 0; i < bytes.length; i += 3) { await link.send(bytes.slice(i, i + 3)); if (link.ble) await sleep(4); }
 }
+// One request at a time: there is one reply slot (waiter). Before, a second request (the live-sync timer, every 1.5 s) took the slot of the one in flight, whose timeout then never fired: that one
+// never settled, and a connect waiting on it hung on "connected" for good (with a unit that does not answer, every request in turn).
+let reqChain = Promise.resolve();
 async function request(cmd, payload, type, ms) {
-  const p = new Promise((res, rej) => { waiter = { type, res }; setTimeout(() => { if (waiter && waiter.res === res) { waiter = null; rej(new Error("no reply to command " + cmd)); } }, ms || (link && link.ble ? 8000 : 1500)); });      // a long reply over Bluetooth is dozens of notifications, a few per connection event
-  await link.sendFrame(buildFrame(cmd, payload));
-  return p;
+  const turn = reqChain; let release; reqChain = new Promise((r) => { release = r; });
+  await turn;
+  try {
+    if (!link) throw new Error("not connected");
+    const l = link;
+    return await new Promise((res, rej) => {
+      const ok = (d) => { clearTimeout(t); res(d); }, drop = (e) => { clearTimeout(t); if (waiter && waiter.res === ok) waiter = null; rej(e); };
+      const t = setTimeout(() => drop(new Error("no reply to command " + cmd)), ms || (l.ble ? 8000 : 1500));      // a long reply over Bluetooth is dozens of notifications, a few per connection event
+      waiter = { type, res: ok };
+      Promise.resolve().then(() => l.sendFrame(buildFrame(cmd, payload))).catch(drop);
+    });
+  } finally { release(); }
 }
 let toastTimer = null;
 function toast(t) { const e = $("toast"); e.textContent = t; e.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => e.classList.remove("on"), 3500); }
@@ -933,26 +983,48 @@ async function readNames(kind) {
   if (kind === 0) { names.amp = out; names.firstAmp = first; } else { names.cab = out; names.firstCab = first; }
   names.rev++;
 }
+let refreshing = false;                  // the live-sync timer does not queue a new read while one is still waiting (a unit that does not answer would pile them up)
 async function refresh() {
-  if (!link || busy) return;
+  if (!link || busy || refreshing) return;
+  refreshing = true;
   try { state = decodeState(await request(80, [], 0x60)); render(); renderStore(); } catch (e) { log("state: " + e.message); }
+  refreshing = false;
 }
+async function identify(ms) {           // the identity query on the editor's own port: the text the unit answers with, or null
+  if (!link || link.ble) return null;
+  let done; const p = new Promise((r) => { done = r; }), t = setTimeout(() => done(null), ms);
+  rawWait = (fr) => { const id = otaIdentity(fr); if (!id) return false; done(id.text); return true; };
+  try { await link.sendFrame(OTA_QUERY); return await p; } catch (_) { return null; } finally { clearTimeout(t); rawWait = null; }
+}
+let connecting = false;
 async function connect(open) {
+  if (connecting) return;
+  connecting = true; bk.seen = null;
+  if (link && link.close) { try { link.close(); } catch (_) { /* the old port may be gone already */ } }
+  link = null;
   try {
     link = await open(); link.ble = open === openBle;
     setStatus(true, "connected: " + link.name); log("connected to " + link.name);
-    await readNames(0); await readNames(1);
+    try { await readNames(0); } catch (e) {
+      if (!/^no reply/.test(e.message)) throw e;
+      // the port opened, but the editor's own command got no answer: the original firmware does not know it (issue #7), or this is not the unit's port. Ask who is there before saying so.
+      const idText = await identify(1500); const u = unitIdentity(idText); bk.seen = idText && u.pocketAmp && !u.ota ? idText : null;
+      if (idText) log("the unit answers the identity query as \"" + idText + "\"");
+      throw new Error(noReplyAdvice(idText, link.ble, link.name));
+    }
+    await readNames(1);
     try { const d = await request(81, [255, 0], 0x61); buildCode = String.fromCharCode(...d.slice(5, 5 + d[3])); log("firmware build " + buildCode); } catch (_) { buildCode = ""; }   // the pack-and-build code (own field: the OTA ID block the vendor updater reads is not touched)
     log(names.amp.filter((x) => x).length + " amp models, " + names.cab.filter((x) => x).length + " cabinets");
     await refresh();
     if (state) { const t = "P" + String(state.preset + 1).padStart(2, "0") + "  " + (state.name || "(empty)"); setStatus(true, "connected: " + link.name + (buildCode ? " (build " + buildCode + ")" : "") + "  |  " + t); toast("On the unit now: " + t); log("preset on the unit: " + t); }
-  } catch (e) { log("connect: " + e.message); setStatus(false, e.message); link = null; }
+  } catch (e) { log("connect: " + e.message); setStatus(false, e.message); if (link && link.close) link.close(); link = null; }
   try { await bkInit(); } catch (_) { /* the page works without it */ }
+  connecting = false;
   fwRefresh();
 }
 $("bUsb").onclick = () => connect(openMidi);
 $("bBle").onclick = () => connect(openBle);
-setInterval(() => { if ($("live").checked && !dragging) refresh(); }, 1500);
+setInterval(() => { if ($("live").checked && !dragging && !connecting) refresh(); }, 1500);
 
 // ---- stored captures and cabinets: the lists, delete, rename, replace, store ----
 const KINDS = [{ n: "capture", max: 10, table: "namTable", count: "namCount", first: () => names.firstAmp, list: () => names.amp, free: () => state.namFree, have: () => state.namCount, cap: 23 },
@@ -1145,7 +1217,7 @@ $("prWrite").onclick = async () => {
   busy = false; bar.hidden = true; prRefresh();
 };
 // ---- the backup of the critical regions: read through the running firmware (cmd 84, firmware 1.16; older ones through the diagnostic channel), saved as a file and remembered in this browser ----
-const bk = { status: "none", doc: null, ident: null, running: false };
+const bk = { status: "none", doc: null, ident: null, running: false, seen: null };   // seen: the identity of a unit that runs its original firmware (no backup through this page)
 const bkDb = (mode, fn) => new Promise((res) => {      // IndexedDB, never required: any failure is "nothing remembered"
   try {
     const q = indexedDB.open("pocket-amp-onyx", 1);
@@ -1179,6 +1251,7 @@ function bkShow() {
   if (bk.status === "ok") el.innerHTML = '<b style="color:#40c080">A backup of this unit is on record</b> (made ' + (bk.doc.created || "?").slice(0, 16).replace("T", " ") + ", build " + (bk.doc.build || "?") + ").";
   else if (bk.status === "other") el.innerHTML = '<span class="warn">The backup on record belongs to another unit.</span> Make a new one for this unit.';
   else if (bk.status === "none") el.innerHTML = '<span class="warn">No backup of this unit is on record.</span> Make one now, or load a saved one.';
+  else if (bk.seen) el.innerHTML = '<span class="warn">This unit runs its original firmware (' + bk.seen.replace(/[<>&"]/g, "") + "):</span> this page reads a backup only from a unit that runs Onyx (the original firmware has no read command). Install without one only if you accept the risk below.";
   else el.textContent = "connect over USB to check for a backup of this unit";
   const c = $("fwCalInfo"); if (!bk.cal) c.textContent = ""; else c.innerHTML = bk.cal === "present" ? "Radio calibration log (0xB5000): <b>present</b>." : bk.cal === "blank" ? '<span class="warn">Radio calibration log (0xB5000): BLANK.</span> Bluetooth then runs on the firmware\'s own copy of the calibration (firmware 1.16 keeps one). Restore the log with the PC flasher from a backup that has it.' : "Radio calibration log (0xB5000): unreadable here.";
   fwRefresh();
@@ -1283,10 +1356,6 @@ class OtaLink {                                  // one MIDI in / out pair with 
   async read(ms) { if (!this.q.length) { let t; await Promise.race([new Promise((r) => { this.w = r; }), new Promise((r) => { t = setTimeout(r, ms); })]); clearTimeout(t); this.w = null; } return this.q.shift() || null; }
   close() { this.i.onmidimessage = null; }
 }
-function otaIdentity(fr) {                       // the 34-byte ID block: "Pocket AMP_105" or "ota-Pocket AMP_105"
-  const d = unpack7to8(fr.slice(1, -1)); if (d.length !== 34 || d[0] !== 0 || d[1] !== 0x59 || d[2] !== 0x11) return null;
-  const t = String.fromCharCode(...d.slice(6, 33)).replace(/\0+$/, ""); return { text: t, ota: /^ota-/i.test(t) };
-}
 async function otaFind(acc, wantOta, ms) {       // a pair that answers the query with the wanted identity; only ports that look like the unit are asked
   const end = Date.now() + ms;
   while (Date.now() < end) {
@@ -1332,7 +1401,7 @@ async function oneClick(pkg, label, kind) {                // kind: "install" | 
     if (!unit && !ota) throw new Error("the unit did not answer (USB data cable, directly connected, no other program holding the MIDI port: close MIDIberry and other tabs)");
     if (unit) {
       say("found " + unit.id.text + ": step 1, the unit checks the package and stages the update loader...");
-      if (!/^Pocket AMP/i.test(unit.id.text)) { unit.l.close(); throw new Error("this unit reports " + unit.id.text + ": it is not a Pocket AMP"); }
+      const chk = installCheck(unit.id.text); if (!chk.ok) { unit.l.close(); throw new Error(chk.why); }
       unit.l.send(OTA_UPGRADE); await sleep(2000);
       const s1 = await otaServe(unit.l, srv, OTA_VERIFY_DONE, 8000, (r) => { bar.value = Math.min(20, Math.round(20 * r.addr / pkg.image.length)); }); unit.l.close();
       if (!s1.finished) throw new Error(s1.lost ? "the unit disconnected during step 1 (" + s1.served + " requests): nothing was written" : "the unit stopped asking during step 1 (" + s1.served + " requests): nothing was written. Is it running a firmware with the update session (this build or the original)?");
@@ -1340,6 +1409,7 @@ async function oneClick(pkg, label, kind) {                // kind: "install" | 
       ota = await otaFind(acc, true, 30000);
       if (!ota) throw new Error("the update loader did not appear. Replug the USB cable and press the button again: the unit stays in update mode until it is finished.");
     }
+    const chk2 = installCheck(ota.id.text); if (!chk2.ok) { ota.l.close(); throw new Error(chk2.why); }   // a unit found already in update mode was not checked in step 1: its loader names the model too
     say("update loader found (" + ota.id.text + "): step 2, writing. Do not unplug.");
     ota.l.send(OTA_UPGRADE); await sleep(2000);
     const s2 = await otaServe(ota.l, srv, OTA_FINISH, 180000, (r) => { bar.value = 20 + Math.min(79, Math.round(80 * (r.addr + r.len) / pkg.image.length)); }); ota.l.close();
@@ -1393,7 +1463,7 @@ async function fwCompare() {
 }
 $("fwVerify").onclick = fwCompare;
 }
-if (typeof module !== "undefined") module.exports = { PkgServer, unwrapFwsc, OTA_SOFTKEY, OFFICIAL_SHA256, OFFICIAL_SIZE, areaFromFile, namJson, scramble, rawFromDump, diagReadFrame, diagParse, dryRun, verifyOffsets, IMAGE_SIZE, otaRequestFrame, otaParseRequest, otaResponse, OTA_QUERY, OTA_UPGRADE, wavToCab, parseWav, chainMove, chainMoveMsg, isOrder, pack8to7, unpack7to8, buildFrame, parseReply, bleFrames, BleUnframer, nrpn, cc, pc, decodeState, stripNam, checkCab, uploadFrames, checkFirmware, SLOT_MODULE, crc32, presetToRecord, recordToPreset, recordOk, abkxConvert, presetsFromDoc, BACKUP_RANGES, backupDocBuild, backupDocVerify, backupDocIdentity, backupIdentityOf, calLogStatus, flashGate, flashReadFrame, flashReadParse };
+if (typeof module !== "undefined") module.exports = { PkgServer, otaIdentity, unitIdentity, installCheck, noReplyAdvice, unwrapFwsc, OTA_SOFTKEY, OFFICIAL_SHA256, OFFICIAL_SIZE, areaFromFile, namJson, scramble, rawFromDump, diagReadFrame, diagParse, dryRun, verifyOffsets, IMAGE_SIZE, otaRequestFrame, otaParseRequest, otaResponse, OTA_QUERY, OTA_UPGRADE, wavToCab, parseWav, chainMove, chainMoveMsg, isOrder, pack8to7, unpack7to8, buildFrame, parseReply, bleFrames, BleUnframer, nrpn, cc, pc, decodeState, stripNam, checkCab, uploadFrames, checkFirmware, SLOT_MODULE, crc32, presetToRecord, recordToPreset, recordOk, abkxConvert, presetsFromDoc, BACKUP_RANGES, backupDocBuild, backupDocVerify, backupDocIdentity, backupIdentityOf, calLogStatus, flashGate, flashReadFrame, flashReadParse };
 </script>
 </body>
 </html>
