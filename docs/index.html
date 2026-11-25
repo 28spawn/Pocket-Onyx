@@ -34,6 +34,16 @@ code{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding
 ul{padding-left:20px}
 footer{margin:56px 0 32px;color:var(--mute);font-size:.88rem;border-top:1px solid var(--line);padding-top:20px}
 #support{display:none}
+.wsteps{list-style:none;padding:0;margin:14px 0}
+.wsteps li{display:flex;gap:14px;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:8px 0}
+.wsteps li div{display:flex;flex-direction:column}.wsteps span{color:var(--mute);font-size:.88rem}
+.wsteps li.done{border-color:var(--acc)}.wsteps li.done b::after{content:" ¹3";color:var(--acc)}
+.wsteps .btn{margin:0;white-space:nowrap}.btn:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:560px){.wsteps li{flex-direction:column;align-items:stretch}}
+.bar{height:8px;background:var(--bg);border:1px solid var(--line);border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;width:0;background:var(--acc)}
+.msg{min-height:1.4em}pre#wLog{max-height:200px;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:.8rem;white-space:pre-wrap}
+button.btn{font:inherit;cursor:pointer;color:var(--text)}button.btn.pri{color:#111}
+
 </style>
 </head>
 <body>
@@ -65,19 +75,27 @@ footer{margin:56px 0 32px;color:var(--mute);font-size:.88rem;border-top:1px soli
 </div>
 
 <h2 id="install">Install from browser</h2>
-<div class="card">
+<div class="card" id="wiz">
   <p id="support" class="warn"><b>This browser can't do it.</b> Web MIDI with SysEx is needed: use desktop Chrome or Edge.</p>
-  <p class="warn"><b>Always back up first.</b> Installing writes to the unit's flash. Keep USB connected until it finishes.</p>
-  <ol class="steps">
-    <li><b>Connect</b> the amp over USB and close any program holding its MIDI port.</li>
-    <li><b>Backup:</b> open the Web Editor, Firmware tab, and back up the critical regions of your unit.</li>
-    <li><b>Install:</b> click <i>Use Onyx 1.19 (hosted on this site)</i>, then <i>Install this firmware</i>. The running firmware verifies the package, stages the loader, and the unit restarts.</li>
-    <li><b>Verify:</b> use <i>Verify Flash</i> for a byte-for-byte readback.</li>
+  <p class="warn"><b>Back up first, keep USB connected.</b> Installing rewrites the unit's app area. Close any program holding the unit's MIDI port.</p>
+  <p class="stat">Status: <b id="wStat">Not connected</b></p>
+  <ol class="wsteps">
+    <li data-s="1"><div><b>Connect</b><span>Plug the amp in over USB and allow the MIDI prompt.</span></div><button class="btn pri" id="w1">Connect</button></li>
+    <li data-s="2"><div><b>Backup</b><span>Reads the unit's critical regions twice and saves a file to your downloads.</span></div><button class="btn pri" id="w2" disabled>Back up</button></li>
+    <li data-s="3"><div><b>Write</b><span>Installs Onyx 1.19 straight from this site.</span></div><button class="btn pri" id="w3" disabled>Install Onyx 1.19</button></li>
+    <li data-s="4"><div><b>Confirm</b><span>Reconnect (power-cycle the unit if it stays dark), then compare the unit's flash with the release byte for byte.</span></div><button class="btn pri" id="w4" disabled>Verify</button></li>
   </ol>
-  <a class="btn pri" href="editor.html#firmware">Open installer</a>
-  <a class="btn" href="firmware/Onyx_1.19.fwsc" download>Download Onyx_1.19.fwsc</a>
-  <a class="btn" href="firmware/Onyx_1.19.bin" download>Download Onyx_1.19.bin</a>
-  <p style="color:var(--mute);font-size:.88rem">SHA-256 values are in <a href="firmware/SHA256SUMS">SHA256SUMS</a>. This is release 1.19, USB-only, with the radio disabled.</p>
+  <div class="bar" id="wBarW" hidden><i id="wBar"></i></div>
+  <p class="msg" id="wMsg"></p>
+  <details open><summary>Connection details</summary><pre id="wLog">No activity yet.</pre></details>
+  <p>
+    <a class="btn" href="#" id="wDl">Download backup</a>
+    <a class="btn" href="editor.html">Restore original, tone editor, more</a>
+    <a class="btn" href="firmware/Onyx_1.19.fwsc" download>Download .fwsc</a>
+    <a class="btn" href="firmware/Onyx_1.19.bin" download>Download .bin</a>
+  </p>
+  <p style="color:var(--mute);font-size:.88rem">SHA-256 values: <a href="firmware/SHA256SUMS">SHA256SUMS</a>. Release 1.19, USB-only, radio disabled. If the unit stays dark after "The unit restarts...", power-cycle it (unplug USB, plug it back in), then run step 4.</p>
+  <iframe id="ed" src="editor.html" title="installer engine" style="position:absolute;width:1px;height:1px;border:0;opacity:0;pointer-events:none" tabindex="-1" allow="midi"></iframe>
 </div>
 
 <h2>Before you plug in</h2>
@@ -93,6 +111,46 @@ footer{margin:56px 0 32px;color:var(--mute);font-size:.88rem;border-top:1px soli
   <p><a href="https://github.com/28spawn/Pocket-Onyx">Source</a> · <a href="https://github.com/28spawn/Pocket-Onyx/blob/main/LICENSING.md">Licensing</a> · <a href="firmware/NOTICE.md">Notices</a></p>
 </footer>
 </div>
-<script>if(!navigator.requestMIDIAccess)document.getElementById('support').style.display='block'</script>
+<script>if(!navigator.requestMIDIAccess)document.getElementById('support').style.display='block';
+(function(){
+  const ed=document.getElementById('ed'),$=id=>document.getElementById(id);
+  let E=false;const D=()=>ed.contentDocument,G=id=>D().getElementById(id);
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  const msg=(t,bad)=>{$('wMsg').textContent=t;$('wMsg').className='msg'+(bad?' warn':'')};
+  const done=n=>document.querySelector('[data-s="'+n+'"]').classList.add('done');
+  const connected=()=>{try{return /^connected/.test(G('status').textContent)}catch(_){return false}};
+  const bkOk=()=>{try{return G('fwAcceptRow').hidden}catch(_){return false}};      /* the editor hides this row once a backup is on record */
+  const pkgOk=()=>{try{return /^Onyx_1\.19\.fwsc/.test(G('fwInfo').textContent)&&!G('fwInfo').querySelector('.warn')}catch(_){return false}};
+  async function until(f,ms){const t=Date.now();while(Date.now()-t<ms){if(f())return true;await sleep(200)}return false}
+  async function ready(){return until(()=>{try{return G('bUsb')&&G('bUsb').onclick&&G('fwSite').onclick}catch(_){return false}},15000)}
+  ed.addEventListener('load',()=>{try{ed.contentWindow.confirm=m=>window.confirm(m)}catch(_){}});
+  try{ed.contentWindow.confirm=m=>window.confirm(m)}catch(_){}
+  setInterval(()=>{if(!E)return;try{
+    $('wStat').textContent=G('status').textContent;
+    const lg=G('log').textContent.trim();$('wLog').textContent=lg||'No activity yet.';
+    const b=[G('fwBkBar'),G('fwBar'),G('fwBar2')].find(x=>x&&!x.hidden);
+    $('wBarW').hidden=!b;if(b)$('wBar').style.width=b.value+'%';
+    const c=connected(),k=bkOk();
+    $('w2').disabled=!c;$('w3').disabled=!(c&&k);$('w4').disabled=!c;
+    if(c)done(1);if(k)done(2);
+  }catch(_){}},400);
+  async function loadPkg(){G('fwSite').click();return until(pkgOk,20000)}
+  $('w1').onclick=async()=>{E=await ready();if(!E){msg('The installer engine did not load.',1);return}
+    ed.contentWindow.confirm=m=>window.confirm(m);msg('Allow the MIDI prompt...');G('bUsb').click();
+    if(await until(connected,20000)){msg('Connected.');done(1)}else msg('Not connected. Check the cable, close other MIDI programs and try again.',1)};
+  $('w2').onclick=async()=>{msg('Backing up (the amp mutes briefly; keep it idle)...');G('fwBkBtn').click();
+    if(await until(()=>bkOk(),180000)){msg('Backup saved to your downloads.');done(2)}else msg('The backup did not finish: '+G('fwBkInfo').textContent,1)};
+  $('w3').onclick=async()=>{if(!await loadPkg()){msg('Could not load the hosted firmware.',1);return}
+    msg('Confirm the prompt, then keep USB connected. The unit will restart.');G('fwInstall').click();await sleep(1500);msg('Installing... watch the details below.')};
+  $('w4').onclick=async()=>{if(!connected()){msg('Reconnecting...');G('bUsb').click();if(!await until(connected,20000)){msg('Not connected: power-cycle the unit, then try again.',1);return}}
+    if(!await loadPkg()){msg('Could not load the hosted firmware.',1);return}
+    G('fwConfirm').textContent='';msg('Comparing flash with the release...');G('fwVerify').click();
+    if(await until(()=>/confirmed|MISMATCH|stopped/.test(G('fwConfirm').textContent),300000)){const t=G('fwConfirm').textContent;msg(t,/MISMATCH|stopped/.test(t));if(/confirmed/.test(t))done(4)}else msg('The check timed out.',1)};
+  $('wDl').onclick=e=>{e.preventDefault();const q=indexedDB.open('pocket-amp-onyx',1);
+    q.onsuccess=()=>{try{const r=q.result.transaction('backup').objectStore('backup').get('last');r.onsuccess=()=>{const d=r.result;if(!d){msg('No backup yet: run step 2 first.',1);return}
+      const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(d)],{type:'application/json'}));a.download='onyx-backup-'+String(d.created||'').slice(0,10)+'.json';a.click()}}catch(_){msg('No backup yet: run step 2 first.',1)}};
+    q.onerror=()=>msg('No backup yet: run step 2 first.',1)};
+})();
+</script>
 </body>
 </html>
