@@ -13,9 +13,10 @@
 
 #include <stdint.h>
 #include "../src/dsp/fixedpoint.h"
+#include "pa_config.h"
 
 /* Audio stream parameters (64 frames per block @ 44.1 kHz) */
-#define PA_AUDIO_SAMPLE_RATE      44100u
+#define PA_AUDIO_SAMPLE_RATE      ((uint32_t)PA_SAMPLE_RATE_HZ)
 #define PA_AUDIO_BLOCK_FRAMES     64u     /* 64 stereo frames per half-buffer IRQ */
 #define PA_AUDIO_SHN_FRAMES       128u    /* 128 stereo frames total in ping-pong buffer */
 #define PA_AUDIO_CHANNELS         2u      /* Stereo I2S slots (L + R) */

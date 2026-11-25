@@ -630,20 +630,29 @@ def show_gru_rows(rom: Rom):
 
 
 def show_wavenet(rom: Rom):
-    w = words(rom.read(0x01C7EF00, 128))
+    w = words(rom.read(0x01C7EF00, 256))   # BYTES: 64 words, to 0x01C7EFFF (the flash probe block starts at 0x01C7F000)
     if w[0] != 0x474E4457:
         print("WaveNet engine: never ran (no WaveNet capture was played since boot)")
         return
-    print("WaveNet engine (SRAM 0x01C7EF00; block = 64 samples, budget 1451 us):")
-    print(f"  blocks {w[3]}, last {w[1] / 24.0:.0f} us, longest {w[2] / 24.0:.0f} us ({w[2] / 24.0 / 64:.1f} us per sample; the sample period is 22.7 us)")
+    period = w[59] / 24.0 if 20000 < w[59] < 60000 else 1451.0           # the block period the firmware was built for (builds before 2026-11-25 do not publish it: 44.1 kHz)
+    rate = w[60] if 40000 <= w[60] <= 50000 else 44100
+    print(f"WaveNet engine (SRAM 0x01C7EF00; block = 64 samples at {rate} Hz, budget {period:.0f} us):")
+    print(f"  blocks {w[3]}, last {w[1] / 24.0:.0f} us, longest {w[2] / 24.0:.0f} us ({w[2] / 24.0 / 64:.1f} us per sample; the sample period is {period / 64:.1f} us)")
     print(f"  NaN resets {w[4]}, largest head output {w[6] / 1e6:.4f}, largest output {w[5] / 1e6:.4f}")
     print(f"  makeup x{w[7] / 1000.0:.3f}, voicing {w[8]}, amp+cab capture {w[9]}, input trim x{w[10] / 1000.0:.3f}")
     stall, jobs, total = w[11] / 24.0, w[12], w[13] / 24.0
     ptot, tp, tg = w[19] / 24.0, w[17] / 24.0, w[18] / 24.0
-    print(f"  engine: {'BLOCK, stock-style pipeline' if w[16] else 'not running'}; last normal block {total:.0f} us in {jobs} accelerator jobs; given up by the guard: {'YES' if w[14] else 'no'} (slow-block count {w[15]}; budget 1451 us, the guard counts blocks over 1458)")
+    print(f"  engine: {'BLOCK, stock-style pipeline' if w[16] else 'not running'}; last normal block {total:.0f} us in {jobs} accelerator jobs; given up by the guard: {'YES' if w[14] else 'no'} (slow-block count {w[15]})")
+    if w[59]:
+        print(f"  guard: moving average of the job {w[55] / 24.0:.0f} us against a period of {period:.0f} us (trips above {period * 1.005:.0f} us for 512 blocks in a row); {w[58]} of 512 blocks counted, {w[57]} jobs over 4 periods ignored, {w[56]} retries of 3")
     if w[16] and ptot:
         print(f"  one block in 256 is profiled (one in 32 up to Onyx 1.18) (its timer reads add about 100 us, so its total is {ptot:.0f} us): waiting inside the accelerator driver {stall:.0f} us, post-processing {tp:.0f} us, gather {tg:.0f} us, the rest {ptot - stall - tp - tg:.0f} us")
         print(f"  layer 1 chunk (32 rows) timed in the pipeline: gather {w[20] / 24.0:.1f} us, post-processing {w[22] / 24.0:.1f} us")
+        if w[59] and any(w[32:55]):
+            lt = [x / 24.0 for x in w[32:55]]
+            print("  time per layer in the profiled block (us, timer reads included): " + " ".join(f"{i}:{v:.0f}" for i, v in enumerate(lt)) + f"   (sum {sum(lt):.0f})")
+        if w[59]:
+            print(f"  biases folded into the rings: {bin(w[61]).count('1')} of 22 layers (mask {w[61]:#08x}; 0 = the accelerator self-test refused it, or a build without folding)")
         print(f"  matrices and job results in the low SRAM: {'YES' if w[24] else 'no (self-test failed or off)'}")
         print(f"  CPU stage: {'the STOCK-STYLE assembly (self-test passed)' if w[24] & 2 else 'the C version (the assembly self-test FAILED or this is an older build)'}")
 

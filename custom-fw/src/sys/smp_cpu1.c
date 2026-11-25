@@ -80,7 +80,7 @@ static void handoff(pa_fx_chain_t *chain, int32_t *L, int32_t *R, int n, int fro
         /* A late block is not a dead core. Steady state: core 1 finishes inside the block (core 0 waits 5 us at most), so 1.2 ms is slack; the first 4 jobs after the start keep the
          * old 12 ms (the one-off self-test and set-up, 5.4 ms measured). A job that is late is waited for again at the next block, with this block silent. If it is still not done
          * after SMP_LATE_MAX blocks in a row (~93 ms: a real hang, not a slow job) the old rule applies: core 1 is switched off and the work runs on core 0. */
-        if (pa_c1_wait_us(s_job, s_ok_jobs < 4u ? 12000u : 1200u) != 0) {
+        if (pa_c1_wait_us(s_job, s_ok_jobs < 4u ? 12000u : PA_US_SCALE(1200u)) != 0) {
             const uint32_t tr = plat_ticks24();
             if (s_swd_job_first) {
                 volatile uint32_t *r = &SWD[4u + 6u * s_swd_rec];
@@ -161,7 +161,7 @@ void pa_smp_update_demand(pa_fx_chain_t *chain) {
 }
 
 uint32_t pa_smp_cpu1_load_permille(void) {
-    const uint32_t budget = 34800u;                               /* TIMER4 ticks in one 64-sample block */
+    const uint32_t budget = PA_BLOCK_TICKS;                       /* TIMER4 ticks in one 64-sample block */
     uint32_t p = (pa_c1_job_ticks_last() * 1000u) / budget;
     if (p > 1000u) p = 1000u;
     static int32_t s_ema;                                          /* the last job alone jumps by 5-10 % from one block to the next: a steady figure for the screen */

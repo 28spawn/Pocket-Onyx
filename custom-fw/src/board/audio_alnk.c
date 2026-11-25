@@ -72,7 +72,7 @@ typedef struct {
 #define PA_BENCH_STATS ((volatile pa_bench_stats_t *)(uintptr_t)0x01C7C250u)
 /* The auto-bypass tripwire. It sat at 1.35 ms; the WaveNet amp with a cabinet, delay and reverb keeps this interrupt at 1.36-1.42 ms (core 0 waits for core 1 inside it),
  * which is inside the 1.451 ms block, so 8 such blocks in a row muted the NAM 60 ms after it was selected. A block that really overruns is over 1.451 ms; 1.44 leaves 11 us. */
-#define PA_ISR_BUDGET_CYC (1440u * 24u)        /* TIMER4 @ 24 MHz */
+#define PA_ISR_BUDGET_CYC (PA_US_SCALE(1440u) * 24u)        /* TIMER4 @ 24 MHz */
 /* Step breadcrumbs: one store of a step number to SRAM 0x01C7C3F8 (see pa_plat.h PA_ISR_CP);
  * the last one left after a stall says where the audio interrupt was. */
 #define PA_ISR_CP(n) PA_WRITE32(0x01C7C3F8u, (n))
@@ -135,9 +135,9 @@ volatile uint8_t g_pa_gov_swap;                    /* set by the audio thread wh
  * The load governor below does not see the stereo (its input has PA_STEREO_COST_US taken off in a stereo block), so the stereo never
  * costs the drive its oversampling or the cabinet its partitions. All four numbers are set from the estimate, not yet measured on the unit. */
 #define PA_STEREO_COST_US 180u
-#define PA_STEREO_OFF_US  1300u
-#define PA_STEREO_HOT_US  1400u
-#define PA_STEREO_ON_US   1080u
+#define PA_STEREO_OFF_US  PA_US_SCALE(1300u)
+#define PA_STEREO_HOT_US  PA_US_SCALE(1400u)
+#define PA_STEREO_ON_US   PA_US_SCALE(1080u)
 #define PA_STEREO_HOLD    2800u
 
 volatile uint32_t g_pa_alnk_t0, g_pa_alnk_in;     /* the audio interrupt's entry tick and whether it is running (read by the USB timer interrupt's holdoff record) */
@@ -158,7 +158,7 @@ void pa_alnk0_isr_c(void) {
     static uint32_t s_consec;
     if (dt > PA_ISR_BUDGET_CYC) {
         st->overruns = st->overruns + 1u;
-        if (s_consec == 0u && dt > 1430u * 24u) pa_evlog(PA_EV_ISR_LONG, dt / 24u, PA_READ32(0x01C7C3F8u));
+        if (s_consec == 0u && dt > PA_US_SCALE(1430u) * 24u) pa_evlog(PA_EV_ISR_LONG, dt / 24u, PA_READ32(0x01C7C3F8u));
         if (++s_consec >= 8u && !g_pa_audio.bypass) { g_pa_audio.bypass = 1; st->auto_bypass = 1u; pa_evlog(PA_EV_BYPASS, dt / 24u, 0u); }
     } else {
         s_consec = 0u;
@@ -178,8 +178,8 @@ void pa_alnk0_isr_c(void) {
         g_pa_gov_swap = 0u;
         const int ign = swapped || (dt > 2500u * 24u) || s_settle;
         if (swapped || dt > 2500u * 24u) s_settle = 8u; else if (s_settle) s_settle--;
-        if (s_ema == 0) s_ema = (int32_t)(950u * 24u);
-        if (s_raw_ema == 0) s_raw_ema = (int32_t)(950u * 24u);
+        if (s_ema == 0) s_ema = (int32_t)(PA_US_SCALE(950u) * 24u);
+        if (s_raw_ema == 0) s_raw_ema = (int32_t)(PA_US_SCALE(950u) * 24u);
         if (!ign) {
             s_ema += (dt_g - s_ema) >> 4;
             s_raw_ema += ((int32_t)dt - s_raw_ema) >> 4;
@@ -215,11 +215,11 @@ void pa_alnk0_isr_c(void) {
         if (s_since_down < 0xFFFFFFu) s_since_down++;
         if (s_steady < 0xFFFFFFu) s_steady++;
         if (s_steady > 40000u) s_calm_need = 700u;
-        if (s_ema > (int32_t)(1250u * 24u) && s_level < 2u && s_hold == 0u) {
+        if (s_ema > (int32_t)(PA_US_SCALE(1250u) * 24u) && s_level < 2u && s_hold == 0u) {
             s_level++; s_calm = 0u; s_hold = 300u; s_steady = 0u;
             if (s_since_down < 7000u && s_calm_need < 16000u) s_calm_need *= 2u;
             pa_evlog(PA_EV_GOVERNOR, s_level, (uint32_t)s_ema / 24u);
-        } else if (s_ema < (int32_t)(1130u * 24u) && s_level > 0u) {
+        } else if (s_ema < (int32_t)(PA_US_SCALE(1130u) * 24u) && s_level > 0u) {
             if (++s_calm >= s_calm_need) {
                 s_level--; s_calm = 0u; s_hold = 300u; s_since_down = 0u; s_steady = 0u;
                 pa_evlog(PA_EV_GOVERNOR, s_level, (uint32_t)s_ema / 24u);
@@ -289,6 +289,26 @@ static void pa_alnk0_isr_body(void) {
         }
     }
 }
+
+#if PA_SAMPLE_RATE_HZ != 44100
+/* ---- EXPERIMENTAL: the fixed 48 kHz codec clock (48 kHz builds only, build.ps1 -Rate48k) ----------------------------------------------------------------------------------------------------
+ * Found on the unit (2026-11-25) by the probe this replaces: of the 128 settings, 24 ran. CLK_CON2 source 0, 4, 8, 12 give 44,118 Hz (the 24 MHz crystal / 544); source 1, 5, 9, 13 give
+ * 48,077 Hz (25 MHz / 520, 0.16 % above 48 kHz); CON3 bits 2..4 (div) only halve and quarter those rates. Source 1 with div 0 is used. No probe, so no 2.5 s boot delay and no writes
+ * to clock registers that are not used. Marker at SRAM 0x01C7DB40: word 0 "FX48" (bytes of a little-endian dump), word 1 the source, word 2 the div. */
+#define PA_CK48 ((volatile uint32_t *)(uintptr_t)0x01C7DB40u)
+#define PA_CK48_SRC 1u
+#define PA_CK48_DIV 0u
+
+/* Called with ADR, LEN and CON1 set and the interrupt not attached. Sets the clock source and CON3, the link stopped. */
+static void pa_alnk_set_48k_clock(void) {
+    PA_WRITE16(JL_ALNK0_CON0, 0);
+    PA_WRITE32(0x00010014u, (PA_READ32(0x00010014u) & ~0x00000F00u) | (PA_CK48_SRC << 8));
+    PA_WRITE8(JL_ALNK0_CON3, (uint8_t)(0x83u | (PA_CK48_DIV << 2)));
+    PA_WRITE16(JL_ALNK0_CON0, PA_ALNK_CON0_MCLK_EN | PA_ALNK_CON0_SCLK_MASTER);
+    PA_CK48[1] = PA_CK48_SRC; PA_CK48[2] = PA_CK48_DIV;
+    PA_CK48[0] = 0x38345846u;                                                         /* "FX48" */
+}
+#endif
 
 /* Register IRQ 11 in pi32v2 vector table */
 static void pa_alnk0_register_irq(void) {
@@ -376,6 +396,10 @@ void pa_audio_init(pa_audio_block_cb_t cb) {
     PA_WRITE32(JL_ALNK0_ADR1, (uint32_t)(uintptr_t)g_alnk_rx_dma);
     PA_WRITE32(JL_ALNK0_ADR0, (uint32_t)(uintptr_t)g_alnk_tx_dma);
     PA_WRITE16(JL_ALNK0_CON1, PA_ALNK_CON1_FULL_DUPLEX);
+#if PA_SAMPLE_RATE_HZ != 44100
+    pa_alnk_set_48k_clock();                   /* EXPERIMENTAL: the fixed 48 kHz clock (see above) */
+    PA_WRITE16(JL_ALNK0_CON1, PA_ALNK_CON1_FULL_DUPLEX);
+#endif
 
     pa_alnk0_register_irq();
     s_en_wait = PA_AUDIO_EN_SETTLE_BLOCKS;     /* the audio interrupt switches the output stage on after this many blocks of silence */

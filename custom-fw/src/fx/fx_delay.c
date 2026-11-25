@@ -413,14 +413,14 @@ static uint32_t dly_len_from_knob(int type, int32_t val) {
     if (val > PA_Q21_ONE) val = PA_Q21_ONE;
     uint32_t lo = 1024u, hi = DLY_BUF_LEN - 128u;
     if (type == DELAY_TYPE_PINGPONG || type == DELAY_TYPE_REVERSE) hi = DLY_BUF_LEN / 2u - 64u;
-    if (type == DELAY_TYPE_SLAPBACK) { lo = 1764u; hi = 8820u; }
+    if (type == DELAY_TYPE_SLAPBACK) { lo = (uint32_t)PA_SAMPLE_RATE_HZ / 25u; hi = (uint32_t)PA_SAMPLE_RATE_HZ / 5u; }   /* 40 .. 200 ms */
     uint32_t len = lo + (uint32_t)(((uint64_t)(uint32_t)val * (hi - lo)) >> 21);
     if (len >= DLY_BUF_LEN) len = DLY_BUF_LEN - 1u;
     return len;
 }
 
 uint32_t pa_dly_time_ms(int type, int32_t knob_q21) {
-    return (dly_len_from_knob(type, knob_q21) * 1000u + 22050u) / 44100u;
+    return (dly_len_from_knob(type, knob_q21) * 1000u + (uint32_t)PA_SAMPLE_RATE_HZ / 2u) / (uint32_t)PA_SAMPLE_RATE_HZ;
 }
 
 static void delay_set_param(fx_node_t *nd, int id, int32_t val) {

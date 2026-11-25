@@ -33,6 +33,8 @@ int main(int argc, char **argv) {
     printf("weights %u, head_scale %.5f, input_trim %.3f, block engine ready: %d\n", count, g_blk.head_scale, g_blk.input_trim, pa_wavenet_block_ready(&g_blk));
     if (!pa_wavenet_block_ready(&g_blk)) { printf("FAIL block engine not ready (a weight did not fit Q24?)\n"); return 1; }
     g_ref.blk_ok = 0;                                  /* the reference runs the float per-sample path */
+    pa_wavenet_reset(&g_ref);                          /* its float ring shares memory with the block engine's: clear the folded offsets out of it */
+    { int nf = 0; for (int l = 0; l < PA_WN_NUM_LAYERS; l++) nf += (int)((g_blk.fold_mask >> l) & 1u); printf("biases folded into the rings: %d of 22 layers\n", nf); }
     if (getenv("WN_PERTURB")) { g_blk.blk_ok = 0; g_blk.input_trim *= 1.000001f; printf("PERTURB: both engines float, input trim x1.000001\n"); }
 
     const int blocks = 44100 * 3 / bn;
