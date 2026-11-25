@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (C) 2026 The Onyx Authors (@28spawn) */
 /* custom-fw/src/nam/pa_wavenet_asm.c - the CPU stage of the WaveNet block engine in pi32v2 assembly (device only): wn_asm_mix and wn_asm_head.
  *
  * ORIGIN. Written from the specification alone: the C reference wn_post_mix_c / wn_post_head_c in pa_wavenet.c (the arithmetic below is theirs), the pi32v2
@@ -40,6 +40,10 @@
  * COST, in issue slots (a pair counts once) per row, from the emulator (test/test_wn_asm_emu.py), against the C fallback's ~172 (mix) / ~66 (head) instructions
  * on its common path:   mix 28 (all z >= 0) .. 31 (random signs) .. 34 (all z < 0);   head 10 .. 13 .. 16.
  *
+ * PLACEMENT: the kernels run from SRAM (section .ramfn.wn, inside the 4 KB RAMFN window of app.ld: 268 bytes of the 328 the delay and the EQ leave free), not from the flash
+ * cache that core 0 and core 1 share. They are reached through pointers (wn_fn_mix / wn_fn_head in pa_wavenet.c), because a call instruction does not reach from the flash to the
+ * SRAM, and they make no call of their own. The boot copy of .ramfn (entry.S) puts them there before any audio runs; the load-time self-test then runs them from there.
+ *
  * The kernels are checked against the C reference in the emulator on every build, and again on the unit at load (wn_asm_selftest in pa_wavenet.c), which keeps
  * the C fallback if a single word disagrees.
  */
@@ -47,7 +51,7 @@
 
 #if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM) && !defined(PA_EMU_DLL) && !defined(__wasm__) && !defined(__EMSCRIPTEN__)
 __asm__(
-	".text\n"
+	".section .ramfn.wn,\"ax\"\n"
 	".globl wn_asm_mix\n"
 	".p2align 1\n"
 	"wn_asm_mix:\n"

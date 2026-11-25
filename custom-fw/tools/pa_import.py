@@ -173,7 +173,7 @@ def main() -> int:
     ap.add_argument("--out", default=str(INC), help="where to write the .inc (tests use this)")
     ap.add_argument("--allow-wavenet", action="store_true", help="link WaveNet captures and let the firmware load them (about 2x too slow on the unit: a block takes 3.1 ms and core 1 gets switched off - experiments only)")
     ap.add_argument("--ref-dbu", type=float, default=nam_loader.ADC_REF_DBU,
-                    help="the unit's ADC full scale in dBu (default %(default)s, an assumption); a capture's input trim is 10 ** ((this - its level) / 20): raise it for a hotter input, e.g. 15 gives trim 1.0 for a 15 dBu capture")
+                    help="calibrate each capture's recorded input level against this input reference in dBu: input trim = 10 ** ((this - its level) / 20). Not given: unity trim for every capture")
     ap.add_argument("--list", action="store_true", help="convert and report, write nothing")
     ap.add_argument("--clear", action="store_true", help="delete the generated .inc")
     a = ap.parse_args()
@@ -232,6 +232,6 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-# SPDX-License-Identifier: GPL-3.0-only
-# Copyright (C) 2026 The Onyx Authors (@28spawn)
+
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 The Onyx Authors (@28spawn)

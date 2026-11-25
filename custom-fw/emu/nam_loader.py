@@ -156,9 +156,9 @@ def pack_wavenet_blob(weights: List[float], head_scale: float = 1.0, is_amp_cab:
     return header + weights_bytes
 
 
-# Standard studio audio interface instrument input reference (Focusrite, Apollo, IK AXE I/O, etc. +12..+14 dBu)
-# Models trained at standard instrument levels will map to unity gain (~1.0).
-ADC_REF_DBU = 13.0
+# None: every capture is imported at unity input trim, as the NAM plugin plays it without input calibration (the web editor does the same).
+# A number is the input reference in dBu to calibrate a capture's recorded input level against (pa_import.py --ref-dbu).
+ADC_REF_DBU: Optional[float] = None
 
 
 def extract_input_level_dbu(meta: Dict[str, Any], data: Dict[str, Any]) -> Optional[float]:
@@ -311,7 +311,7 @@ def parse_nam_file(raw_bytes: bytes, filename: str = "model.nam") -> Tuple[bytes
             # Automatic Input Level Staging Calibration
             PA_ADC_REF_DBU = ADC_REF_DBU
             input_level_dbu = extract_input_level_dbu(meta, data)
-            if input_level_dbu is not None:
+            if input_level_dbu is not None and PA_ADC_REF_DBU is not None:
                 raw_trim = 10.0 ** ((PA_ADC_REF_DBU - input_level_dbu) / 20.0)
                 input_trim = round(max(0.60, min(1.80, raw_trim)), 4)
             else:
@@ -387,7 +387,7 @@ def parse_nam_file(raw_bytes: bytes, filename: str = "model.nam") -> Tuple[bytes
         # Automatic Input Level Staging Calibration
         PA_ADC_REF_DBU = ADC_REF_DBU
         input_level_dbu = extract_input_level_dbu(meta, data)
-        if input_level_dbu is not None:
+        if input_level_dbu is not None and PA_ADC_REF_DBU is not None:
             raw_trim = 10.0 ** ((PA_ADC_REF_DBU - input_level_dbu) / 20.0)
             input_trim = round(max(0.60, min(1.80, raw_trim)), 4)
         else:

@@ -49,8 +49,11 @@
 #define PA_WN_MIRROR_D1        48u                        /* the dilation-1 layers hand the accelerator a window of the ring itself: 32 rows + 14 taps */
 #define PA_WN_BLK_COLS         8539u                      /* sum over layers of (k - 1) * d + 64 + mirror (32) */
 #define PA_WN_BLK_RING_WORDS   (PA_WN_BLK_COLS * 3u)      /* 25,809 words */
-#define PA_WN_WQ_WORDS         1960u                      /* 21 layers x 75 + 2 x 156 + the head 49 = 1,936 */
+#define PA_WN_WQ_WORDS         1900u                      /* at most (nothing folded): layer 0 36 + 20 layers x 75 + 2 x 156 + the head 49 = 1,897 */
 #define PA_WN_BLK_MAXCOLS      47u                        /* 3 * 15 + 2 (x and 1.0) */
+#define PA_WN_L0_HIST          5u                         /* layer 0 sees the mono input through 6 taps (dilation 1): 5 older samples + the current one */
+#define PA_WN_FOLD_LIMIT       16.0                       /* a layer is folded only when every offset is below this (full scale = 1); the others keep their bias column */
+#define PA_WN_L0_COLS          7u                         /* layer 0's matrix row: those 6 taps (the mixin merged into the newest) + 1.0 for the bias, in place of 3 * 6 + 2 = 20 */
 #define PA_WN_BLK_HEAD_STEPS   (PA_WN_HEAD_TAPS - 1u + PA_WN_BLK_N)
 
 #ifndef PA_DC_HOLD_SAMPLES
@@ -96,15 +99,22 @@ typedef struct {
 
     /* Block engine state (blk_ok = 1 once the Q24 tables were built and every weight fitted; blk_bad = 1 once the run-time guard gave up on it) */
     uint8_t  blk_ok, blk_bad, blk_slow;
+    uint8_t  blk_retries;                                 /* times the audio core re-asked for this model after the guard gave up (kept across the reload: pa_audio_core.c) */
+    uint16_t blk_over;                                    /* consecutive judged blocks with the moving average above the trip level (the guard, pa_wavenet.c) */
+    uint32_t blk_avg;                                     /* moving average of the job time, TIMER4 ticks x 16 */
+    uint32_t blk_outliers;                                /* jobs over 4 block periods (the second core was held off): not averaged */
     uint32_t blk_n;                                       /* blocks run: one in 256 is profiled (WN_PROF_MASK, pa_wavenet.c) */
     int32_t  wq[PA_WN_WQ_WORDS];                          /* per layer: 3 conv vectors (3k words), mixin x3, bias x3 (Q24), 1x1 x9 (Q24), 1x1 bias x3 (Q21); then the head */
     float    rech[3];                                     /* the rechannel weights */
+    uint32_t fold_mask;                                   /* bit l: layer l's conv bias is folded into its ring (the ring holds h + foldc[l]; the matrix row has no 1.0 column) */
+    int32_t  foldc[PA_WN_NUM_LAYERS][3];                  /* that offset per channel, Q21 (0 for a layer that is not folded; layer 0 never is) */
     int32_t  head_q[3u * PA_WN_BLK_HEAD_STEPS];           /* head history: 15 old steps, then the block's accumulated activations (3 words a step) */
 #if defined(PA_HOST_BUILD) || defined(PA_HOST_SIM)
     int32_t  blk_m[2][PA_WN_CHUNK * PA_WN_BLK_MAXCOLS];   /* the gathered matrix of each chunk, one row a sample (the device keeps them in the low SRAM) */
     int32_t  blk_z[2][3u * PA_WN_CHUNK];                  /* each chunk's job results */
 #endif
-    int32_t  blk_x[PA_WN_BLK_N], blk_y[PA_WN_BLK_N];
+    int32_t  blk_xh[PA_WN_L0_HIST + PA_WN_BLK_N];         /* layer 0's mono input: the newest 5 samples of the block before, then this block's (the first 5 words carry over) */
+    int32_t  blk_y[PA_WN_BLK_N];
     uint8_t  blk_low;                                     /* 1: the matrices and job results live in the low SRAM (self-tested at load) */
     uint32_t blk_t[12];                                    /* profile of the last block: ticks waiting for the accelerator, jobs, total (TIMER4 ticks) */
 

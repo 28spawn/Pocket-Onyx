@@ -69,6 +69,7 @@ static inline uint32_t plat_ticks24(void) { return 0; }
 #endif
 
 static void wn_blk_build(pa_wavenet_model_t *m);
+static void wn_fold_prime(pa_wavenet_model_t *m);
 
 void pa_wavenet_reset(pa_wavenet_model_t *m) {
     if (!m) return;
@@ -77,6 +78,8 @@ void pa_wavenet_reset(pa_wavenet_model_t *m) {
     memset(m->ring_pos, 0, sizeof(m->ring_pos));
     memset(m->head_ring, 0, sizeof(m->head_ring));
     memset(m->head_q, 0, sizeof(m->head_q));
+    memset(m->blk_xh, 0, sizeof(m->blk_xh));
+    if (m->blk_ok) wn_fold_prime(m);                        /* a folded layer's ring rests at its offset, not at 0 */
     m->head_pos = 0;
     m->in_dc_x1 = m->in_dc_y1 = 0.0f;
     m->hpf_x1 = m->hpf_x2 = m->hpf_y1 = m->hpf_y2 = 0.0f;
@@ -457,28 +460,88 @@ static int32_t wn_blk_q(float v, int *bad, int frac) {
     return (int32_t)lrintf(x);
 }
 
+#if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM)
+static int wn_fold_selftest(void);
+#endif
+/* BIAS FOLDING. A conv is linear, so conv(h + c) = conv(h) + Wsum c, where Wsum[o][j] is the sum of the weights from channel j to output o over all taps. With c = Wsum^-1 b
+ * the bias is part of the ring's contents and the matrix needs no 1.0 column. The ring of layer l then holds h_l + c_l; the 1x1 mix of layer l, which writes ring l + 1 from
+ * ring l, adds c_(l+1) - c_l to its bias, so every ring stays exactly h + c (integers, nothing drifts), and a reset fills the ring with c. The head sums the activations, which
+ * are unchanged. c is solved from the QUANTISED weights, so the only error left is c's own rounding to Q21. A layer whose Wsum is near singular (large c) keeps its column. */
+static void wn_fold_solve(pa_wavenet_model_t *m) {
+    uint32_t w = 3u;
+    int bad = 0;
+    for (int l = 0; l < PA_WN_NUM_LAYERS; l++) {
+        const int k = g_pa_wn_specs[l].k;
+        const uint32_t conv_w = w, conv_b = conv_w + (uint32_t)(9 * k);
+        w = conv_b + 3u + 3u + 9u + 3u;
+        if (l == 0) continue;
+        double a[3][3], b[3], c[3];
+        for (int o = 0; o < 3; o++) {
+            for (int j = 0; j < 3; j++) {
+                int64_t sum = 0;
+                for (int ki = 0; ki < k; ki++) sum += wn_blk_q(m->weights[conv_w + (uint32_t)((o * 3 + j) * k + ki)], &bad, 24);
+                a[o][j] = (double)sum / 16777216.0;
+            }
+            b[o] = (double)wn_blk_q(m->weights[conv_b + (uint32_t)o], &bad, 24) / 16777216.0;
+        }
+        const double c00 = a[1][1] * a[2][2] - a[1][2] * a[2][1], c01 = a[1][2] * a[2][0] - a[1][0] * a[2][2], c02 = a[1][0] * a[2][1] - a[1][1] * a[2][0];
+        const double det = a[0][0] * c00 + a[0][1] * c01 + a[0][2] * c02;
+        if (bad || !(det > 1e-12 || det < -1e-12)) continue;
+        c[0] = (b[0] * c00 + b[1] * (a[0][2] * a[2][1] - a[0][1] * a[2][2]) + b[2] * (a[0][1] * a[1][2] - a[0][2] * a[1][1])) / det;
+        c[1] = (b[0] * c01 + b[1] * (a[0][0] * a[2][2] - a[0][2] * a[2][0]) + b[2] * (a[0][2] * a[1][0] - a[0][0] * a[1][2])) / det;
+        c[2] = (b[0] * c02 + b[1] * (a[0][1] * a[2][0] - a[0][0] * a[2][1]) + b[2] * (a[0][0] * a[1][1] - a[0][1] * a[1][0])) / det;
+        int ok = 1;
+        for (int j = 0; j < 3; j++) if (!(c[j] < PA_WN_FOLD_LIMIT && c[j] > -PA_WN_FOLD_LIMIT)) ok = 0;
+        if (!ok) continue;
+        for (int j = 0; j < 3; j++) m->foldc[l][j] = (int32_t)lrint(c[j] * 2097152.0);
+        m->fold_mask |= 1u << l;
+    }
+}
+
 static int wn_asm_selftest(void);
 static uint8_t s_wn_asm;                                  /* 1: the assembly CPU stage passed its self-test and is used */
 
 static void wn_blk_build(pa_wavenet_model_t *m) {
     int bad = 0;
     uint32_t w = 3u, o = 0u;
-    m->blk_ok = 0; m->blk_bad = 0; m->blk_slow = 0;
+    m->blk_ok = 0; m->blk_bad = 0; m->blk_slow = 0; m->blk_over = 0; m->blk_avg = 0; m->blk_outliers = 0;
     for (int c = 0; c < 3; c++) m->rech[c] = m->weights[c];
+    m->fold_mask = 0u;
+    memset(m->foldc, 0, sizeof(m->foldc));
+#if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM)
+    if (wn_fold_selftest()) wn_fold_solve(m);                              /* only when the accelerator is exact on the larger values a folded ring holds */
+#else
+    wn_fold_solve(m);
+#endif
     for (int l = 0; l < PA_WN_NUM_LAYERS; l++) {
         const int k = g_pa_wn_specs[l].k;
         const uint32_t conv_w = w, conv_b = conv_w + (uint32_t)(9 * k), mix_w = conv_b + 3u, l1_w = mix_w + 3u, l1_b = l1_w + 9u;
         w = l1_b + 3u;
+        if (l == 0) {
+            /* LAYER 0 IS MONO. Its input is the rechannel of one signal, rech[j] * x, so the 3 x 3 weights of each tap collapse to one: e[oc][ki] = sum_j W[oc][j][ki] * rech[j].
+             * The mixin multiplies the same x as the newest tap (ki = k - 1, the current sample), so it is added to that tap's weight. A row is then 6 taps + 1.0 (7 columns
+             * instead of 20). The ring of layer 0 is still written (it carries the residual); only the conv no longer reads it. */
+            for (int oc = 0; oc < 3; oc++) {
+                for (int ki = 0; ki < k; ki++) {
+                    double e = 0.0;
+                    for (int j = 0; j < 3; j++) e += (double)m->weights[conv_w + (uint32_t)((oc * 3 + j) * k + ki)] * (double)m->rech[j];
+                    if (ki == k - 1) e += (double)m->weights[mix_w + (uint32_t)oc];
+                    m->wq[o++] = wn_blk_q((float)e, &bad, 24);
+                }
+                m->wq[o++] = wn_blk_q(m->weights[conv_b + (uint32_t)oc], &bad, 24);
+            }
+        } else
         for (int oc = 0; oc < 3; oc++) {                                   /* the stock's matrix has 3k + 2 columns: the taps, then x (the mixin) and 1.0 (the bias) */
             for (int ki = 0; ki < k; ki++)
                 for (int j = 0; j < 3; j++) m->wq[o++] = wn_blk_q(m->weights[conv_w + (uint32_t)((oc * 3 + j) * k + ki)], &bad, 24);
             m->wq[o++] = wn_blk_q(m->weights[mix_w + (uint32_t)oc], &bad, 24);
-            m->wq[o++] = wn_blk_q(m->weights[conv_b + (uint32_t)oc], &bad, 24);
+            if (!((m->fold_mask >> l) & 1u)) m->wq[o++] = wn_blk_q(m->weights[conv_b + (uint32_t)oc], &bad, 24);
         }
         for (int j = 0; j < 3; j++)                                        /* column-major: one input's three weights are adjacent (the CPU stage walks them with one pointer) */
             for (int oc = 0; oc < 3; oc++) m->wq[o++] = wn_blk_q(m->weights[l1_w + (uint32_t)(oc * 3 + j)], &bad, 24);
         for (int oc = 0; oc < 3; oc++) {                                   /* the 1x1 bias as the start value of a 64-bit accumulator: Q21 << 24, low word first */
-            const int64_t b64 = (int64_t)wn_blk_q(m->weights[l1_b + (uint32_t)oc], &bad, 21) * 16777216LL;
+            const int32_t shift = (l + 1 < PA_WN_NUM_LAYERS) ? m->foldc[l + 1][oc] - m->foldc[l][oc] : 0;   /* the next ring's offset in place of this one's */
+            const int64_t b64 = ((int64_t)wn_blk_q(m->weights[l1_b + (uint32_t)oc], &bad, 21) + shift) * 16777216LL;
             m->wq[o++] = (int32_t)(uint32_t)(uint64_t)b64;
             m->wq[o++] = (int32_t)(b64 >> 32);
         }
@@ -525,6 +588,28 @@ static int wn_lowmem_selftest(void) {
 }
 #endif
 
+#if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM)
+/* A folded ring holds values up to the fold limit instead of about 1: one job of 19 columns whose partial sums are that large and nearly cancel must be exact. */
+static int wn_fold_selftest(void) {
+    int32_t *A = WN_LOW_MA, *B = WN_LOW_MB, *D = WN_LOW_ZA;
+    for (int r = 0; r < 4; r++) for (int j = 0; j < 19; j++) A[r * 19 + j] = (j < 18) ? (20 << 21) + (r * 19 + j) * 4099 : (1 << 20);
+    for (int j = 0; j < 19; j++) B[j] = (j < 9) ? (2 << 24) - j * 12345 : (j < 18) ? -(2 << 24) + j * 23456 : (1 << 23);
+    for (int i = 0; i < 8; i++) D[i] = 0x7FEEDBAC;
+    pa_hw_vec_cmd_t c;
+    c.config = PA_HW_CFG_MATVEC; c.src_a = A; c.src_b = B; c.dst = D;
+    c.ctrl = (24u << 24) | (4u << 12) | 19u; c.stride = (4u << 20) | 76u;
+    pa_hw_accel_submit_lean(&c);
+    pa_hw_accel_wait_lean();
+    if (pa_hw_accel_broken()) return 0;
+    for (int r = 0; r < 4; r++) {
+        int64_t acc = 0;
+        for (int j = 0; j < 19; j++) acc += (int64_t)A[r * 19 + j] * B[j];
+        if (D[r] != (int32_t)((acc + (1LL << 23)) >> 24)) return 0;
+    }
+    return D[4] == 0x7FEEDBAC;
+}
+#endif
+
 int pa_wavenet_block_ready(const pa_wavenet_model_t *m) { return m && m->blk_ok && !m->blk_bad && !pa_hw_accel_broken(); }
 
 /* One accelerator job, asynchronous: pa_hw_accel_submit() first waits for the job before it, so the time it takes is the time the CPU stalled on the accelerator. */
@@ -541,6 +626,17 @@ static inline uint32_t wn_R(int l) { return ((uint32_t)g_pa_wn_specs[l].k - 1u) 
 static inline uint32_t wn_MIR(int l) { (void)l; return PA_WN_MIRROR; }
 #define WN_ONE_Q21 0x200000                                       /* 1.0 in Q21: the matrix's bias column */
 
+/* every column (and mirror) of a folded layer's ring starts at the layer's offset: h = 0 */
+static void wn_fold_prime(pa_wavenet_model_t *m) {
+    uint32_t cb = 0u;
+    for (int l = 0; l < PA_WN_NUM_LAYERS; l++) {
+        const uint32_t n = wn_R(l) + wn_MIR(l);
+        if ((m->fold_mask >> l) & 1u)
+            for (uint32_t c = 0; c < n; c++) for (int j = 0; j < 3; j++) m->ring_q[3u * (cb + c) + (uint32_t)j] = m->foldc[l][j];
+        cb += n;
+    }
+}
+
 static inline void wn_put(int32_t *ring, uint32_t R, uint32_t mir, uint32_t c, int32_t v0, int32_t v1, int32_t v2) {
     int32_t *q = &ring[3u * c];
     q[0] = v0; q[1] = v1; q[2] = v2;
@@ -556,11 +652,19 @@ typedef struct {
     uint32_t R, k, cols;
     uint32_t row;                                                   /* next matrix row */
     uint32_t s[15];                                                 /* ring column of the next row's tap ki (oldest .. newest) */
+    const int32_t *xw;                                              /* layer 0 only: the mono input, the next row's oldest tap (the row is xw[0..5], then 1.0) */
+    uint8_t mono, fold;                                             /* fold: the row has no 1.0 column */
 } wn_g_t;
+
+/* The matrix columns of layer l: layer 0 is mono (PA_WN_L0_COLS), the others 3k taps + x + 1.0. The words of its weights in wq: 3 vectors of cols, then the 1x1 (9) and its bias (6). */
+static inline uint32_t wn_cols(const pa_wavenet_model_t *m, int l) { return l == 0 ? PA_WN_L0_COLS : 3u * (uint32_t)g_pa_wn_specs[l].k + 2u - ((m->fold_mask >> l) & 1u); }
+static inline uint32_t wn_lwords(const pa_wavenet_model_t *m, int l) { return 3u * wn_cols(m, l) + 15u; }
 
 static void wn_g_init(wn_g_t *g, pa_wavenet_model_t *m, int l, uint32_t col_base, uint32_t first_row, int32_t *M, const int32_t *xp) {
     const uint32_t k = g_pa_wn_specs[l].k, d = g_pa_wn_specs[l].d;
-    g->k = k; g->cols = 3u * k + 2u; g->R = wn_R(l);
+    g->mono = (uint8_t)(l == 0); g->fold = (uint8_t)((m->fold_mask >> l) & 1u);
+    if (g->mono) { g->cols = PA_WN_L0_COLS; g->k = k; g->R = 0u; g->ring = 0; g->M = M; g->row = 0u; g->xp = xp; g->xw = xp - PA_WN_L0_HIST; return; }
+    g->k = k; g->cols = wn_cols(m, l); g->R = wn_R(l);
     g->ring = &m->ring_q[3u * col_base]; g->M = M; g->row = 0u; g->xp = xp;
     uint32_t c = (uint32_t)m->ring_pos[l] + 1u + first_row;           /* the column of the first row of this chunk */
     if (c >= g->R) c -= g->R;
@@ -571,15 +675,16 @@ static void wn_g_init(wn_g_t *g, pa_wavenet_model_t *m, int l, uint32_t col_base
     }
 }
 
-static inline void wn_gather6(int32_t *d, const int32_t *ring, const uint32_t *s, uint32_t rows, const int32_t *xp) {
+static inline __attribute__((always_inline)) void wn_gather6(int32_t *d, const int32_t *ring, const uint32_t *s, uint32_t rows, const int32_t *xp, const int fold) {
     const int32_t *p0 = ring + 3u * s[0], *p1 = ring + 3u * s[1], *p2 = ring + 3u * s[2], *p3 = ring + 3u * s[3], *p4 = ring + 3u * s[4], *p5 = ring + 3u * s[5];
     for (uint32_t r = 0; r < rows; r++) {
         WN_COPY12X2(p0, p1, d); WN_COPY12X2(p2, p3, d); WN_COPY12X2(p4, p5, d);
-        d[0] = xp[r]; d[1] = WN_ONE_Q21; d += 2;
+        if (fold) *d++ = xp[r];
+        else { d[0] = xp[r]; d[1] = WN_ONE_Q21; d += 2; }
     }
 }
 
-static void wn_gather_gen(int32_t *M, uint32_t cols, uint32_t k, const int32_t *ring, const uint32_t *s, uint32_t rows, const int32_t *xp) {
+static void wn_gather_gen(int32_t *M, uint32_t cols, uint32_t k, const int32_t *ring, const uint32_t *s, uint32_t rows, const int32_t *xp, int fold) {
     uint32_t ki = 0;
     for (; ki + 1u < k; ki += 2u) {                                 /* two taps at a time: they are adjacent in a matrix row */
         const int32_t *p = ring + 3u * s[ki], *q = ring + 3u * s[ki + 1u];
@@ -592,13 +697,23 @@ static void wn_gather_gen(int32_t *M, uint32_t cols, uint32_t k, const int32_t *
         for (uint32_t r = 0; r < rows; r++) { WN_COPY12(p, d); d += cols - 3u; }
     }
     int32_t *d = M + 3u * k;
-    for (uint32_t r = 0; r < rows; r++) { d[0] = xp[r]; d[1] = WN_ONE_Q21; d += cols; }
+    if (fold) { for (uint32_t r = 0; r < rows; r++) { d[0] = xp[r]; d += cols; } }
+    else      { for (uint32_t r = 0; r < rows; r++) { d[0] = xp[r]; d[1] = WN_ONE_Q21; d += cols; } }
 }
 
 static void wn_g_run(wn_g_t *g, uint32_t rows) {
     int32_t *dst = g->M + g->row * g->cols;
-    if (g->k == 6u) wn_gather6(dst, g->ring, g->s, rows, g->xp);
-    else            wn_gather_gen(dst, g->cols, g->k, g->ring, g->s, rows, g->xp);
+    if (g->mono) {                                                  /* layer 0: a row is 6 consecutive samples of the mono input, then 1.0 */
+        const int32_t *p = g->xw;
+        for (uint32_t r = 0; r < rows; r++) {
+            dst[0] = p[0]; dst[1] = p[1]; dst[2] = p[2]; dst[3] = p[3]; dst[4] = p[4]; dst[5] = p[5]; dst[6] = WN_ONE_Q21;
+            dst += PA_WN_L0_COLS; p++;
+        }
+        g->xw += rows; g->row += rows; g->xp += rows;
+        return;
+    }
+    if (g->k == 6u) { if (g->fold) wn_gather6(dst, g->ring, g->s, rows, g->xp, 1); else wn_gather6(dst, g->ring, g->s, rows, g->xp, 0); }
+    else            wn_gather_gen(dst, g->cols, g->k, g->ring, g->s, rows, g->xp, g->fold);
     for (uint32_t ki = 0; ki < g->k; ki++) { uint32_t sc = g->s[ki] + rows; if (sc >= g->R) sc -= g->R; g->s[ki] = sc; }
     g->row += rows; g->xp += rows;
 }
@@ -741,11 +856,12 @@ static void wn_P(const int32_t *lw, const int32_t *zc, uint32_t r0c, int32_t *ha
  *   phase B of layer l: the accelerator runs chunk B's three jobs;       the CPU post-processes chunk A of layer l (writing layer l + 1's ring) and gathers chunk A of layer l + 1
  * The CPU's share of each phase is cut in thirds, one third behind each job. A dilation-1 layer needs no gather: its jobs read a window of the ring.
  * x_in_f: the conditioned, trimmed, clamped input; y_raw: the head output before the head scale and the post filters. */
+static uint32_t s_wn_lt[PA_WN_NUM_LAYERS];                          /* ticks each layer took in the last profiled block, timer reads included */
 static void wn_block_run(pa_wavenet_model_t *m, const float *x_in_f, float *y_raw, uint32_t n) {
     const uint32_t t0 = plat_ticks24();
     uint32_t stall = 0, jobs = 0, t_p = 0, t_g = 0, tq, t_g1 = 0, t_p1 = 0;
     const int prof = ((m->blk_n++ & WN_PROF_MASK) == 0u);            /* the timer reads cost about 100 us a block: profile one block in WN_PROF_MASK + 1 */
-    int32_t *xq = m->blk_x, *H = m->head_q, *hacc = H + 3u * (PA_WN_HEAD_TAPS - 1u), *yq = m->blk_y;
+    int32_t *xq = m->blk_xh + PA_WN_L0_HIST, *H = m->head_q, *hacc = H + 3u * (PA_WN_HEAD_TAPS - 1u), *yq = m->blk_y;
 #if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM)
     int32_t *MA = WN_LOW_MA, *MB = WN_LOW_MB, *zA = WN_LOW_ZA, *zB = WN_LOW_ZB;          /* the matrices and the job results live in the low SRAM (blk_low) */
 #else
@@ -755,16 +871,14 @@ static void wn_block_run(pa_wavenet_model_t *m, const float *x_in_f, float *y_ra
     const uint32_t nA = n > PA_WN_CHUNK ? PA_WN_CHUNK : n, nB = n - nA;
     const uint32_t thA[4] = { 0u, nA / 3u, (2u * nA) / 3u, nA }, thB[4] = { nA, nA + nB / 3u, nA + (2u * nB) / 3u, n };
 
-    static uint32_t colb[PA_WN_NUM_LAYERS], wo[PA_WN_NUM_LAYERS], whw, lay_ok;      /* the layout is a constant of the spec table: computed once */
+    static uint32_t colb[PA_WN_NUM_LAYERS], wo[PA_WN_NUM_LAYERS], lay_ok;      /* the ring layout is a constant of the spec table (computed once); the weight offsets depend on the folded layers */
+    uint32_t whw = 0u;
     if (!lay_ok) {
-        uint32_t cb = 0u, w = 0u;
-        for (int l = 0; l < PA_WN_NUM_LAYERS; l++) {
-            colb[l] = cb; cb += wn_R(l) + wn_MIR(l);
-            wo[l] = w; w += 9u * g_pa_wn_specs[l].k + 21u;
-        }
-        whw = w;                                                    /* the head's offset: the rechannel weights are in m->rech, not in wq */
+        uint32_t cb = 0u;
+        for (int l = 0; l < PA_WN_NUM_LAYERS; l++) { colb[l] = cb; cb += wn_R(l) + wn_MIR(l); }
         lay_ok = 1u;
     }
+    for (int l = 0; l < PA_WN_NUM_LAYERS; l++) { wo[l] = whw; whw += wn_lwords(m, l); }    /* the head follows the layers: the rechannel weights are in m->rech, not in wq */
     const int32_t *whead = &wq[whw];
 
     {   /* layer 0's input, straight into its ring */
@@ -787,10 +901,10 @@ static void wn_block_run(pa_wavenet_model_t *m, const float *x_in_f, float *y_ra
     for (uint32_t i = 0; i < 3u; i++) WN_TIMED(t_g, wn_g_run(&gA, thA[i + 1u] - thA[i]));           /* the one serial gather: layer 0, chunk A */
 
     for (int l = 0; l < PA_WN_NUM_LAYERS; l++) {
-        const uint32_t k = g_pa_wn_specs[l].k, cols = 3u * k + 2u, step = cols * 4u;
+        const uint32_t tl0 = prof ? plat_ticks24() : 0u;                 /* the profiled block also times each layer (published at 0x01C7EF80) */
+        const uint32_t cols = wn_cols(m, l), step = cols * 4u;
         const int32_t *L = &wq[wo[l]], *lw = L + 3u * cols;
-        const uint32_t kp = g_pa_wn_specs[l > 0 ? l - 1 : 0].k;
-        const int32_t *lwp = &wq[wo[l > 0 ? l - 1 : 0]] + 3u * (3u * kp + 2u);
+        const int32_t *lwp = &wq[wo[l > 0 ? l - 1 : 0]] + 3u * wn_cols(m, l > 0 ? l - 1 : 0);
         /* phase A: chunk A's three jobs; the CPU post-processes chunk B of the layer before and gathers chunk B of this one */
         if (nB) {
             wn_g_init(&gB, m, l, colb[l], nA, MB, xq + nA);
@@ -819,6 +933,7 @@ static void wn_block_run(pa_wavenet_model_t *m, const float *x_in_f, float *y_ra
                 if (l + 1 < PA_WN_NUM_LAYERS) WN_TIMED(t_g, wn_g_run(&gA, thA[i + 1u] - thA[i]));
             }
         }
+        if (prof) s_wn_lt[l] = plat_ticks24() - tl0;
     }
     /* the head: a sliding 48-word window over the accumulated activations, in two jobs; chunk B's last layer is post-processed behind the first */
     wn_submit(&stall, prof, H, 12u, whead, yq, 4u, nA, 3u * PA_WN_HEAD_TAPS); jobs++;
@@ -835,6 +950,7 @@ static void wn_block_run(pa_wavenet_model_t *m, const float *x_in_f, float *y_ra
     s_wn_hb = hb;
     if (y_raw) for (uint32_t t = 0; t < nA; t++) y_raw[t] = (float)(yq[t] + hb) * (1.0f / Q21F);
     for (uint32_t i = 0; i < 3u * (PA_WN_HEAD_TAPS - 1u); i++) H[i] = H[3u * n + i];          /* carry the newest 15 steps */
+    for (uint32_t i = 0; i < PA_WN_L0_HIST; i++) m->blk_xh[i] = m->blk_xh[n + i];            /* carry the newest 5 input samples for layer 0's taps */
     for (int l = 0; l < PA_WN_NUM_LAYERS; l++) {
         uint32_t p = (uint32_t)m->ring_pos[l] + n;                  /* n <= 64 <= R: one subtraction */
         const uint32_t R = wn_R(l);
@@ -1034,8 +1150,19 @@ void pa_wavenet_process_block_q21(pa_wavenet_model_t *m, int32_t *samples_q21, i
         if (((m->blk_n - 1u) & WN_PROF_MASK) != 0u) {                 /* blk_n was counted up by wn_block_run: this tests the block it just ran */
             const uint32_t tj = plat_ticks24() - t_start;
             m->blk_t[5] = tj;
-            if (tj > PA_US_SCALE(35000u)) { if (++m->blk_slow >= 16u) { m->blk_bad = 1u; m->active = 0u; } }
-            else if (tj < PA_US_SCALE(33600u) && m->blk_slow) m->blk_slow--;
+            /* THE GUARD, on a moving average of the block period's own length (PA_BLOCK_TICKS: it follows the codec rate, nothing here is written for 44.1 kHz): an engine whose
+             * AVERAGE job is longer than the period falls further behind every block, one whose average fits does not, whatever single blocks do. So: an average over about 64 blocks
+             * (x16, in ticks), tripping when it has sat above the period + 0.5 % for 512 judged blocks in a row (0.68 s); it starts the count again as soon as the average is back at or under that level.
+             * A job over four periods (core 1 was held off, a flash operation) is counted apart and not averaged: it says nothing about the engine. */
+            if (tj > 4u * PA_BLOCK_TICKS) m->blk_outliers++;
+            else {
+                const uint32_t x = tj << 4;
+                m->blk_avg = m->blk_avg ? (uint32_t)((int32_t)m->blk_avg + (((int32_t)x - (int32_t)m->blk_avg) >> 6)) : x;
+                const uint32_t trip = (PA_BLOCK_TICKS + PA_BLOCK_TICKS / 200u) << 4;
+                if (m->blk_avg > trip) { if (++m->blk_over >= 512u) { m->blk_bad = 1u; m->active = 0u; } }
+                else m->blk_over = 0u;          /* consecutive: an average back at or under the trip level starts the count again */
+            }
+            m->blk_slow = (uint8_t)(m->blk_over >> 5);                  /* the old counter's slot in the readout: 0..16 */
         }
         if (defer) { s_wn_post_makeup = makeup; s_wn_post_pending = 1u; }
         else {
@@ -1097,11 +1224,13 @@ void pa_wavenet_process_block_q21(pa_wavenet_model_t *m, int32_t *samples_q21, i
          * and the head output before the makeup (x 1e6), makeup x 1000, voicing, is_amp_cab, input_trim x 1000 */
         volatile uint32_t *D = (volatile uint32_t *)(uintptr_t)0x01C7EF00u;
         static uint8_t dg_init;
-        if (!dg_init) { dg_init = 1; for (int q = 0; q < 32; q++) D[q] = 0u; }            /* SRAM is not cleared at boot: the counters started from whatever was there */
+        if (!dg_init) { dg_init = 1; for (int q = 0; q < 64; q++) D[q] = 0u; }            /* SRAM is not cleared at boot: the counters started from whatever was there */
         D[1] = dt_ticks; if (dt_ticks > D[2]) D[2] = dt_ticks; D[3] = D[3] + 1u; D[4] = wn_dg_nan;
         D[5] = (uint32_t)(wn_dg_out * 1.0e6f); D[6] = (uint32_t)(wn_dg_in * 1.0e6f);
         D[7] = (uint32_t)(makeup * 1000.0f); D[8] = m->voicing_profile; D[9] = m->is_amp_cab; D[10] = (uint32_t)(m->input_trim * 1000.0f);
         D[11] = m->blk_t[0]; D[12] = m->blk_t[1]; D[13] = m->blk_t[5]; D[14] = (uint32_t)m->blk_bad; D[15] = (uint32_t)m->blk_slow; D[16] = (uint32_t)use_blk; D[17] = m->blk_t[2]; D[18] = m->blk_t[3]; D[19] = m->blk_t[6]; D[20] = m->blk_t[7]; D[21] = m->blk_t[8]; D[22] = m->blk_t[9]; D[23] = m->blk_t[10]; D[24] = (uint32_t)m->blk_low | ((uint32_t)s_wn_asm << 1);
+        for (int l = 0; l < PA_WN_NUM_LAYERS; l++) D[32 + l] = s_wn_lt[l];                   /* 0x01C7EF80..: ticks per layer (23 words) */
+        D[55] = m->blk_avg >> 4; D[56] = m->blk_retries; D[57] = m->blk_outliers; D[58] = m->blk_over; D[59] = PA_BLOCK_TICKS; D[60] = PA_SAMPLE_RATE_HZ; D[61] = m->fold_mask;   /* the guard's average, retries, outliers, count, the block period, the rate */
         D[0] = 0x474E4457u;                                     /* "WDNG" little-endian bytes W D N G */
     }
 #endif

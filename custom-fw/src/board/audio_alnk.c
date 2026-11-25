@@ -291,65 +291,22 @@ static void pa_alnk0_isr_body(void) {
 }
 
 #if PA_SAMPLE_RATE_HZ != 44100
-/* ---- EXPERIMENTAL: the codec clock probe (48 kHz builds only, build.ps1 -Rate48k) --------------------------------------------------------------------------------------------------------------
- * The 44.1 kHz setting is known: the clock source field of CLK_CON2 (bits 8..11) at 0 and ALNK0 CON3 at 0x83, which gives 44,118 Hz (the 24 MHz crystal / 544). How this chip makes 48 kHz is not
- * known from any source in this tree, so this probe finds it on the unit: for every clock source (0..15) and every value of CON3 bits 2..4 (cleared at 44.1 kHz, a divider by their place),
- * it runs the link for at most 20 ms with the interrupt not yet attached, counts the receive channel's finished halves by polling, and works out the frame rate from TIMER4. The setting
- * nearest 48,000 Hz within 0.5 % is kept; if none is that close, the 44.1 kHz setting is restored and the DSP (written for 48 kHz) runs 8.8 % off: the header says so.
- * The output stage (PA2) is off for all of it (pa_audio_init holds it low), so a wrong clock is not heard. A clock source that does not run gives no halves and is skipped.
- * RISK: bits 8..11 of CLK_CON2 may route other clocks too; a setting that stops something the boot needs would hang here, before the audio starts. This is an experimental build.
- * Results at SRAM 0x01C7DB40 (48 words; read with tools/jl_ram_read.py at that address):
- *   [0] "CK48"  [1] settings tried  [2] settings that ran  [3] the chosen setting: source | div << 4 | ok << 8 (ok 1 = within 0.5 % of 48 kHz; 0 = the 44.1 kHz setting is back)
- *   [4] the chosen setting's measured rate (Hz)  [5] the probe's time (ms)  [6..47] the settings that ran: source | div << 4 | rate (Hz) << 8, in the order tried */
+/* ---- EXPERIMENTAL: the fixed 48 kHz codec clock (48 kHz builds only, build.ps1 -Rate48k) ----------------------------------------------------------------------------------------------------
+ * Found on the unit (2026-11-25) by the probe this replaces: of the 128 settings, 24 ran. CLK_CON2 source 0, 4, 8, 12 give 44,118 Hz (the 24 MHz crystal / 544); source 1, 5, 9, 13 give
+ * 48,077 Hz (25 MHz / 520, 0.16 % above 48 kHz); CON3 bits 2..4 (div) only halve and quarter those rates. Source 1 with div 0 is used. No probe, so no 2.5 s boot delay and no writes
+ * to clock registers that are not used. Marker at SRAM 0x01C7DB40: word 0 "FX48" (bytes of a little-endian dump), word 1 the source, word 2 the div. */
 #define PA_CK48 ((volatile uint32_t *)(uintptr_t)0x01C7DB40u)
-#define PA_CK48_N 42u
+#define PA_CK48_SRC 1u
+#define PA_CK48_DIV 0u
 
-static uint32_t pa_alnk_try_rate(uint32_t src, uint32_t div) {
+/* Called with ADR, LEN and CON1 set and the interrupt not attached. Sets the clock source and CON3, the link stopped. */
+static void pa_alnk_set_48k_clock(void) {
     PA_WRITE16(JL_ALNK0_CON0, 0);
-    PA_WRITE8(JL_ALNK0_CON2, 0x0Fu);                                    /* clear any pending half */
-    PA_WRITE32(0x00010014u, (PA_READ32(0x00010014u) & ~0x00000F00u) | (src << 8));
-    PA_WRITE8(JL_ALNK0_CON3, (uint8_t)(0x83u | (div << 2)));
+    PA_WRITE32(0x00010014u, (PA_READ32(0x00010014u) & ~0x00000F00u) | (PA_CK48_SRC << 8));
+    PA_WRITE8(JL_ALNK0_CON3, (uint8_t)(0x83u | (PA_CK48_DIV << 2)));
     PA_WRITE16(JL_ALNK0_CON0, PA_ALNK_CON0_MCLK_EN | PA_ALNK_CON0_SCLK_MASTER);
-    PA_WRITE16(JL_ALNK0_CON0, PA_ALNK_CON0_MCLK_EN | PA_ALNK_CON0_SCLK_MASTER | PA_ALNK_CON0_EN);
-    const uint32_t t0 = plat_ticks24();
-    uint32_t n = 0, tf = 0, tl = 0;
-    while ((uint32_t)(plat_ticks24() - t0) < 20u * 24000u && n < 12u) {
-        const uint8_t pnd = (uint8_t)(PA_READ8(JL_ALNK0_CON2) >> 4);
-        if (!pnd) continue;
-        PA_WRITE8(JL_ALNK0_CON2, pnd);
-        if (pnd & (1u << PA_ALNK_RX_CH)) { tl = plat_ticks24(); if (n == 0u) tf = tl; n++; }
-    }
-    PA_WRITE16(JL_ALNK0_CON0, 0);
-    PA_WRITE8(JL_ALNK0_CON2, 0x0Fu);
-    if (n < 3u || tl == tf) return 0u;
-    return (uint32_t)(((uint64_t)(n - 1u) * PA_AUDIO_BLOCK_FRAMES * 24000000u + (tl - tf) / 2u) / (tl - tf));
-}
-
-/* Called with ADR, LEN and CON1 set and the interrupt not attached. Leaves the chosen clock source and CON3, the link stopped. */
-static void pa_alnk_clock_probe(void) {
-    volatile uint32_t *R = PA_CK48;
-    const uint32_t t_start = plat_ticks24();
-    for (uint32_t i = 0; i < 48u; i++) R[i] = 0u;
-    uint32_t tried = 0, ran = 0, best = 0u, best_rate = 0u, best_err = 0xFFFFFFFFu;
-    for (uint32_t src = 0; src < 16u; src++) {
-        for (uint32_t div = 0; div < 8u; div++) {
-            plat_wdt_feed();
-            const uint32_t rate = pa_alnk_try_rate(src, div);
-            tried++;
-            if (!rate) continue;
-            if (ran < PA_CK48_N) R[6u + ran] = src | (div << 4) | (rate << 8);
-            ran++;
-            const uint32_t err = rate > 48000u ? rate - 48000u : 48000u - rate;
-            if (err < best_err) { best_err = err; best = src | (div << 4); best_rate = rate; }
-        }
-    }
-    const uint32_t ok = (best_rate != 0u && best_err * 200u <= 48000u) ? 1u : 0u;   /* within 0.5 % */
-    if (!ok) { best = 0u; best_rate = pa_alnk_try_rate(0u, 0u); }                    /* back to the 44.1 kHz setting */
-    PA_WRITE32(0x00010014u, (PA_READ32(0x00010014u) & ~0x00000F00u) | ((best & 0xFu) << 8));
-    PA_WRITE8(JL_ALNK0_CON3, (uint8_t)(0x83u | (((best >> 4) & 7u) << 2)));
-    PA_WRITE16(JL_ALNK0_CON0, PA_ALNK_CON0_MCLK_EN | PA_ALNK_CON0_SCLK_MASTER);
-    R[1] = tried; R[2] = ran; R[3] = best | (ok << 8); R[4] = best_rate; R[5] = (plat_ticks24() - t_start) / 24000u;
-    R[0] = 0x38344B43u;                                                               /* "CK48" (the bytes of a little-endian dump) */
+    PA_CK48[1] = PA_CK48_SRC; PA_CK48[2] = PA_CK48_DIV;
+    PA_CK48[0] = 0x38345846u;                                                         /* "FX48" */
 }
 #endif
 
@@ -440,7 +397,7 @@ void pa_audio_init(pa_audio_block_cb_t cb) {
     PA_WRITE32(JL_ALNK0_ADR0, (uint32_t)(uintptr_t)g_alnk_tx_dma);
     PA_WRITE16(JL_ALNK0_CON1, PA_ALNK_CON1_FULL_DUPLEX);
 #if PA_SAMPLE_RATE_HZ != 44100
-    pa_alnk_clock_probe();                     /* EXPERIMENTAL: finds the 48 kHz clock and leaves it set (see above) */
+    pa_alnk_set_48k_clock();                   /* EXPERIMENTAL: the fixed 48 kHz clock (see above) */
     PA_WRITE16(JL_ALNK0_CON1, PA_ALNK_CON1_FULL_DUPLEX);
 #endif
 

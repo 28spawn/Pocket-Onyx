@@ -37,6 +37,8 @@ volatile uint8_t g_pa_overload_force;     /* tests: 1 = behave as overloaded (th
 #define PA_SETTINGS_QUIET_MS   5000u    /* the settings are written this long after the last change... */
 #define PA_SETTINGS_MIN_GAP_MS 8000u    /* ...and never more often than this */
 static volatile uint32_t s_flash_ops;      /* flash operations that quiesced the audio (pa_audio_core_flash_end): each costs the overruns a swap does, and the overload rule must not read them as overload */
+static uint8_t s_retry_swap;                /* the swap that is pending was asked for by the WaveNet retry below, not by the person: it must not reset the retry count */
+int pa_audio_core_swap_pending(void);
 static volatile uint32_t s_swap_done_seq;   /* counts the swaps the audio thread has applied: the main loop redraws the screen for each one (the screen is drawn from the chain, which a swap changes) */
 static uint32_t pa_perf_permille(uint32_t modelled);   /* the measured CPU load on the device, the model elsewhere (below) */
 #if !defined(PA_HOST_BUILD) && !defined(PA_HOST_SIM)
@@ -300,13 +302,20 @@ fx_node_t *pa_amp_node_create(pa_nam_model_t *gru, pa_wavenet_model_t *wn, int *
 /* ---- the click-free mute crossfade (Blk-02) --------------------------------
  * The UI thread must never rewrite chain state while the audio thread is
  * running it, so a preset/model change is done like this:
- *   UI: request mute -> ISR ramps the gain to 0 over 4 blocks -> ISR stops
+ *   UI: request mute -> ISR ramps the gain to 0 over 8 ms -> ISR stops
  *       touching the chain -> UI applies the preset -> UI releases -> ISR ramps
  *       the gain back in. Without this every preset change clicks.
  * The state machine lives here so the device, the emulator and the WASM build
  * all crossfade identically. */
-#define PA_XF_BLOCKS   12                                  /* 12 x 64 = 768 samples = 17.4 ms */
-#define PA_XF_STEP_Q21 (PA_Q21_ONE / (PA_XF_BLOCKS * PA_BLOCK_N))
+/* The fade-out is 8 ms and the fade-in 16 ms (both used to be 17.4 ms): the old amp is gone sooner, and the new one comes in over twice as long, which hides the start of a capture's own
+ * transient. Counted in samples of the codec rate, so a 48 kHz build fades for the same time. */
+#define PA_XF_OUT_SAMPLES ((PA_SAMPLE_RATE_HZ * 8u) / 1000u)
+#define PA_XF_IN_SAMPLES  ((PA_SAMPLE_RATE_HZ * 16u) / 1000u)
+#define PA_XF_STEP_OUT_Q21 (PA_Q21_ONE / (int32_t)PA_XF_OUT_SAMPLES)
+#define PA_XF_STEP_IN_Q21  (PA_Q21_ONE / (int32_t)PA_XF_IN_SAMPLES)
+/* The warm-up before the fade-in: a WaveNet's receptive field is about 5,000 samples (its rings are that long), so after a reset it needs 100 blocks (6,400 samples, 145 ms) of the live
+ * input before its output is what the capture would give; any other amp keeps the short hold of its output DC blocker. */
+#define PA_XF_WARM_WN_SAMPLES (100 * PA_BLOCK_N)
 /* PA_XF_WARM: after the swap the chain RUNS again but the gain stays 0 for PA_DC_HOLD_SAMPLES (the amp's output DC blocker only tracks in that time, include/pa_model.h): the amp settles on the live
  * input under the mute and the fade-in then starts from a warm amp. Measured on the unit and in the emulator: with a silent input every swap put a burst of 0.01-0.05 of full scale (the amp's
  * resting DC through a blocker that had restarted at zero), echoed by the delay and the reverb for 400 ms; with the hold it is under 0.002. */
@@ -320,7 +329,14 @@ void pa_audio_core_request_mute(void) {
     if (s_xf_state == PA_XF_IDLE || s_xf_state == PA_XF_FADE_IN || s_xf_state == PA_XF_WARM) s_xf_state = PA_XF_FADE_OUT;
 }
 int pa_audio_core_is_muted(void) { return s_xf_state == PA_XF_MUTED; }
-void pa_audio_core_release_mute(void) { if (s_xf_state == PA_XF_MUTED) { s_xf_warm_left = (int32_t)PA_DC_HOLD_SAMPLES; s_xf_state = PA_XF_WARM; } }
+void pa_audio_core_release_mute(void) {
+    extern pa_wavenet_model_t g_wn_model;
+    extern int                g_active_amp_engine;
+    if (s_xf_state == PA_XF_MUTED) {
+        s_xf_warm_left = (g_active_amp_engine == 1 && g_wn_model.active) ? (int32_t)PA_XF_WARM_WN_SAMPLES : (int32_t)PA_DC_HOLD_SAMPLES;
+        s_xf_state = PA_XF_WARM;
+    }
+}
 
 /* The public names (declared in pa_fx.h) so that EVERY platform uses this one
  * state machine. Previously the device had a copy in main.c and the WASM shim
@@ -333,12 +349,12 @@ void pa_audio_release_mute(void) { pa_audio_core_release_mute(); }
 static void pa_audio_core_xf_apply(int32_t *L, int32_t *R, int n) {
     for (int i = 0; i < n; i++) {
         if (s_xf_state == PA_XF_FADE_OUT) {
-            s_xf_gain -= PA_XF_STEP_Q21;
+            s_xf_gain -= PA_XF_STEP_OUT_Q21;
             if (s_xf_gain <= 0) { s_xf_gain = 0; s_xf_state = PA_XF_MUTED; }
         } else if (s_xf_state == PA_XF_WARM) {
             if (--s_xf_warm_left <= 0) s_xf_state = PA_XF_FADE_IN;              /* the gain is 0 until then */
         } else if (s_xf_state == PA_XF_FADE_IN) {
-            s_xf_gain += PA_XF_STEP_Q21;
+            s_xf_gain += PA_XF_STEP_IN_Q21;
             if (s_xf_gain >= PA_Q21_ONE) { s_xf_gain = PA_Q21_ONE; s_xf_state = PA_XF_IDLE; }
         }
         L[i] = q21_mul(L[i], s_xf_gain);
@@ -841,6 +857,23 @@ void pa_audio_core_tick(pa_fx_chain_t *chain, pa_ui_ctx_t *ui, pa_drums_t *drums
         if (s_swap_done_seq != s_swap_seen) { s_swap_seen = s_swap_done_seq; ui->dirty = 1; }
     }
 
+    /* 7c. THE WAVENET RETRY. When the engine's guard has given up on a capture (the amp falls back to the GRU loaded before), ask for the same capture again after 20 s, 60 s and 180 s,
+     * at most three times: the normal swap (fade out, load, warm up, fade in) does it, a load re-arms the guard, and a capture that is still too slow is given up again after about
+     * 0.7 s. The count (g_wn_model.blk_retries) is published with the guard's state (jl_ram_read.py slots) and restarts at a model the person picks. */
+    {   extern pa_wavenet_model_t g_wn_model;
+        static uint32_t s_gave_up_ms; static uint8_t s_was_bad;
+        static const uint32_t k_retry_ms[3] = { 20000u, 60000u, 180000u };
+        if (g_wn_model.blk_bad && ui->slot_type[PA_SLOT_AMP] >= PA_STOCK_AMP_COUNT && !pa_audio_core_swap_pending()) {
+            if (!s_was_bad) { s_was_bad = 1u; s_gave_up_ms = now; }
+            if (g_wn_model.blk_retries < 3u && (uint32_t)(now - s_gave_up_ms) >= k_retry_ms[g_wn_model.blk_retries]) {
+                g_wn_model.blk_retries++;
+                s_was_bad = 0u;
+                s_retry_swap = 1u;
+                pa_audio_core_request_model(ui, chain, PA_SLOT_AMP, ui->slot_type[PA_SLOT_AMP]);
+            }
+        } else s_was_bad = 0u;
+    }
+
     /* 8. Publish the telemetry and render. */
     if (bsp && bsp->pool_used) ui->sram_used_bytes = bsp->pool_used();
     if (meter) ui->cpu_total_permille = pa_perf_permille(cpu_meter_total_permille(meter));
@@ -863,7 +896,8 @@ void pa_audio_core_flush_settings(pa_ui_ctx_t *ui) {
  * many blocks, so scrolling through models is ONE silent gap and one swap, not a fade-out, a swap and a half fade-in for every click (the bursts and the flutter). A preset change does not wait. */
 #define PA_SWAP_SETTLE_BLOCKS 24u                              /* 24 x 1.45 ms = 35 ms */
 static uint8_t s_pend_preset, s_pend_ucab, s_settle;
-static uint8_t s_applied_type[PA_SLOT_COUNT];              /* the model each slot was last SWAPPED to (tests and the readout; the UI's own slot_type is what was asked for) */
+static uint8_t s_good_amp = 0xFFu;                          /* the amp (stock index, or PA_STOCK_AMP_COUNT + user slot) that last loaded without a fault: what a failed load puts back (0xFF: none yet) */
+static uint8_t s_applied_type[PA_SLOT_COUNT];            /* the model each slot was last SWAPPED to (tests and the readout; the UI's own slot_type is what was asked for) */
 static uint8_t s_pend_have[PA_SLOT_COUNT], s_pend_type[PA_SLOT_COUNT];
 static int swap_pending(void) {
     if (s_pend_preset || s_pend_ucab) return 1;
@@ -905,6 +939,8 @@ static void pa_audio_core_apply_model(pa_fx_chain_t *chain, pa_ui_ctx_t *ui,
 
     if (slot == PA_SLOT_AMP) {
         uint8_t effective_type = type;
+        if (!s_retry_swap) g_wn_model.blk_retries = 0u;                        /* a model the person picked starts the retry count again */
+        s_retry_swap = 0u;
         if (type < PA_STOCK_AMP_COUNT) {
             if (chain->slots[PA_SLOT_AMP] && chain->slots[PA_SLOT_AMP]->state)
                 pa_stock_load_amp(type, (pa_nam_model_t *)chain->slots[PA_SLOT_AMP]->state, NULL);
@@ -916,16 +952,27 @@ static void pa_audio_core_apply_model(pa_fx_chain_t *chain, pa_ui_ctx_t *ui,
             g_wn_model.is_amp_cab = 0;
         } else {
             uint8_t u_idx = (uint8_t)(type - PA_STOCK_AMP_COUNT);
+            const uint32_t amp_was_on = chain->slots[PA_SLOT_AMP] ? chain->slots[PA_SLOT_AMP]->active : 1u;
             const int ld_rc = pa_user_nam_load_into_dsp(u_idx, &g_nam_model, &g_wn_model);
             if (ld_rc != 0) {
                 pa_evlog(PA_EV_LOAD_FAIL, (uint32_t)(-ld_rc), u_idx);          /* otherwise the fallback below is silent */
-                /* Fallback to stock amp model 0 if user capture is missing or corrupted */
-                pa_stock_load_amp(0, &g_nam_model, NULL);
-                g_active_amp_engine = 0;
-                g_wn_model.active = 0;
-                g_wn_model.is_amp_cab = 0;
-                effective_type = 0;
-                if (ui) ui->slot_type[PA_SLOT_AMP] = 0;
+                /* ROLLBACK: the load overwrote the engines, so put back the amp that was sounding (it was loaded without a fault a moment ago); only when that cannot be
+                 * done, or there was none, fall back to stock amp model 0. A failed load also left the AMP slot switched off (it is muted for the weight transfer):
+                 * it goes back to the state it had. */
+                uint8_t back = 0u;
+                if (s_good_amp != 0xFFu && s_good_amp != type) {
+                    if (s_good_amp < PA_STOCK_AMP_COUNT) back = s_good_amp;
+                    else if (pa_user_nam_load_into_dsp((uint8_t)(s_good_amp - PA_STOCK_AMP_COUNT), &g_nam_model, &g_wn_model) == 0) back = s_good_amp;
+                }
+                if (back < PA_STOCK_AMP_COUNT) {
+                    pa_stock_load_amp(back, &g_nam_model, NULL);
+                    g_active_amp_engine = 0;
+                    g_wn_model.active = 0;
+                    g_wn_model.is_amp_cab = 0;
+                }
+                pa_fx_chain_set_slot_enabled_now(chain, PA_SLOT_AMP, amp_was_on ? 1 : 0);
+                effective_type = back;
+                if (ui) ui->slot_type[PA_SLOT_AMP] = back;
             } else {
                 if (ui) pa_user_nam_get_amp_defaults(u_idx, ui->slot_params[PA_SLOT_AMP]);      /* ui is the module's s_ui: null until the UI context is registered */
                 if (g_wn_model.is_amp_cab) {
@@ -934,6 +981,7 @@ static void pa_audio_core_apply_model(pa_fx_chain_t *chain, pa_ui_ctx_t *ui,
                 }
             }
         }
+        s_good_amp = effective_type;                                           /* what sounds now is what a later failed load restores */
         pa_amp_set_model_profile(effective_type);
         for (int k = 0; ui && k < 6; k++)
             pa_fx_chain_set_param(chain, PA_SLOT_AMP, k, ui->slot_params[PA_SLOT_AMP][k]);
@@ -1078,7 +1126,7 @@ static void pa_audio_core_run_pending(pa_fx_chain_t *chain, pa_ui_ctx_t *ui) {
         pa_preset_apply_to_chain(&s_swap_preset, chain);
         g_pa_user_cab_active = 0u;                            /* the preset's own cabinet is loaded */
     }
-    if (had_preset) { s_applied_type[PA_SLOT_AMP] = s_swap_preset.amp_model_idx; s_applied_type[PA_SLOT_CAB] = s_swap_preset.cab_model_idx; }
+    if (had_preset) { s_applied_type[PA_SLOT_AMP] = s_swap_preset.amp_model_idx; s_applied_type[PA_SLOT_CAB] = s_swap_preset.cab_model_idx; s_good_amp = s_swap_preset.amp_model_idx; }
     for (int sl = 0; sl < PA_SLOT_COUNT; sl++) {              /* the picks made since (or without) a preset, in slot order */
         if (!s_pend_have[sl]) continue;
         const uint8_t ty = s_pend_type[sl];

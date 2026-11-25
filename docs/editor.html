@@ -270,8 +270,9 @@ function stripNam(f, filename) {
 // ---- a .nam file (JSON) -> the unit's WaveNet blob: 'WAVE', weight count u32, head scale f32, flags u32 (1 = the capture has its cabinet baked in), input trim f32, then the f32 weights.
 // Same rules as emu/nam_loader.py: a ToneHunt A2 SlimmableContainer is read for its LITE submodel (1870 / 1871 weights, 7,504 bytes: the Full one, 12,146 weights, is 48 KB and does not fit the unit),
 // the head scale is appended when the weights are 1870, the name comes from the metadata, a capture whose name says CAB (and not "cab free" / "no cab") is flagged as having its cabinet, and a
-// recorded input level calibrates the input trim against the unit's ADC reference (4 dBu). ----
-const NAM_ADC_REF_DBU = 4.0;
+// capture is imported at UNITY input trim, as the NAM plugin plays it without input calibration (a recorded input level is applied only if a reference in dBu is set here:
+// with the former 4 dBu a capture recorded at 15 dBu was driven 11 dB low and lost highs). ----
+const NAM_ADC_REF_DBU = null;
 // A capture names its cabinet: "CAB", a full rig ("Full Rig", a leading "FR "), or the microphone that recorded the speaker (SM57, MD421, R121 ...). Many captures carry no gear_type at all.
 function namHasBakedCab(gear, name, file) {
   const names = [name.toLowerCase(), file.toLowerCase()];
@@ -313,7 +314,7 @@ function namJson(f, filename) {
   if (weights.some((x) => !Number.isFinite(x))) return { error: "the weights contain a value that is not a number" };
   const meta = m.metadata || data.metadata || {}, name = String(meta.name || meta.gear_model || filename || "NAM");
   const gear = String(meta.gear_type || "").toLowerCase(), cab = namHasBakedCab(gear, name, filename || "");
-  const lvl = namInputLevel(meta, data), trim = lvl === null ? 1.0 : Number((Math.pow(10, (NAM_ADC_REF_DBU - lvl) / 20)).toFixed(4));
+  const lvl = namInputLevel(meta, data), trim = lvl === null || NAM_ADC_REF_DBU === null ? 1.0 : Number((Math.pow(10, (NAM_ADC_REF_DBU - lvl) / 20)).toFixed(4));
   const loud = namLoudness(meta, data), mk = namMakeupDb(loud, cab);
   const out = new Uint8Array(20 + weights.length * 4), dv = new DataView(out.buffer);
   // flags: bit 0 the cabinet is baked in, bit 1 a makeup is given, bits 8..15 the makeup as a signed quarter-dB (an older firmware reads bit 0 only)
