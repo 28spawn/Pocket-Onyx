@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Onyx is open-source custom firmware for the M-VAVE / Donner guitar amp modeler: install, back up and restore from your browser.">
+<title>Onyx · Custom firmware installer</title>
+<style>
+:root{--bg:#0e0f12;--panel:#17191e;--line:#2a2d35;--text:#e8e9ec;--mute:#9aa0ab;--acc:#f5b83d;--warn:#ff7a59}
+@media (prefers-color-scheme:light){:root{--bg:#f6f4ee;--panel:#fff;--line:#dcd8cc;--text:#1b1c1f;--mute:#5d626c;--acc:#b36b00;--warn:#c0391b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 system-ui,-apple-system,Segoe UI,sans-serif}
+.wrap{max-width:960px;margin:0 auto;padding:0 16px}
+header{display:flex;justify-content:space-between;align-items:center;padding:20px 0}
+.brand{font-weight:800;letter-spacing:.04em;color:var(--text);text-decoration:none}
+.brand span{color:var(--acc)}
+a{color:var(--acc)}
+.hero{display:grid;grid-template-columns:1.3fr 1fr;gap:32px;align-items:center;padding:32px 0 48px}
+@media(max-width:720px){.hero{grid-template-columns:1fr}}
+.eyebrow{color:var(--acc);font-size:.78rem;letter-spacing:.12em;font-weight:700;margin:0 0 8px}
+h1{font-size:clamp(2rem,6vw,3.2rem);line-height:1.1;margin:0 0 16px}
+h2{margin:48px 0 12px;font-size:1.6rem}
+.btn{display:inline-block;padding:11px 18px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text);text-decoration:none;font-weight:600;margin:4px 6px 4px 0}
+.btn.pri{background:var(--acc);color:#111;border-color:var(--acc)}
+.shot{width:100%;max-width:320px;image-rendering:pixelated;border:1px solid var(--line);border-radius:10px;background:#000;justify-self:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
+.grid figure{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px}
+.grid img{width:100%;image-rendering:pixelated;border-radius:6px;background:#000}
+.grid figcaption{font-size:.85rem;color:var(--mute);margin-top:6px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}
+ol.steps{padding-left:20px}ol.steps li{margin:8px 0}
+.warn{color:var(--warn)}
+code{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:.88em;word-break:break-all}
+ul{padding-left:20px}
+footer{margin:56px 0 32px;color:var(--mute);font-size:.88rem;border-top:1px solid var(--line);padding-top:20px}
+#support{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <a class="brand" href="./"><span>●</span> ONYX</a>
+  <a href="https://github.com/28spawn/Pocket-Onyx">GitHub ↗</a>
+</header>
+
+<section class="hero">
+  <div>
+    <p class="eyebrow">CUSTOM FIRMWARE · EARLY ACCESS</p>
+    <h1>Onyx: new firmware for your amp modeler.</h1>
+    <p>Open-source firmware for the M-VAVE / Donner amp modeler, with a rebuilt on-device interface, a full 8-block signal chain, an EQ editor, tuner and groove tools. Install it, back up your unit and go back to stock, all from your browser.</p>
+    <a class="btn pri" href="#install">Install Onyx ↓</a>
+    <a class="btn" href="editor.html">Open the Web Editor</a>
+  </div>
+  <img class="shot" src="assets/02_list_view.png" alt="Onyx chain list on the device screen">
+</section>
+
+<h2>What you get</h2>
+<div class="grid">
+  <figure><img src="assets/02_list_view.png" alt=""><figcaption>Chain list view</figcaption></figure>
+  <figure><img src="assets/04_param_edit.png" alt=""><figcaption>Parameter editing</figcaption></figure>
+  <figure><img src="assets/05_eq_editor.png" alt=""><figcaption>EQ editor</figcaption></figure>
+  <figure><img src="assets/06_tuner.png" alt=""><figcaption>Tuner</figcaption></figure>
+  <figure><img src="assets/07_groove.png" alt=""><figcaption>Groove</figcaption></figure>
+  <figure><img src="assets/08_bank_mode.png" alt=""><figcaption>Bank mode</figcaption></figure>
+</div>
+
+<h2 id="install">Install from browser</h2>
+<div class="card">
+  <p id="support" class="warn"><b>This browser can't do it.</b> Web MIDI with SysEx is needed: use desktop Chrome or Edge.</p>
+  <p class="warn"><b>Always back up first.</b> Installing writes to the unit's flash. Keep USB connected until it finishes.</p>
+  <ol class="steps">
+    <li><b>Connect</b> the amp over USB and close any program holding its MIDI port.</li>
+    <li><b>Backup:</b> open the Web Editor, Firmware tab, and back up the critical regions of your unit.</li>
+    <li><b>Install:</b> click <i>Use Onyx 1.19 (hosted on this site)</i>, then <i>Install this firmware</i>. The running firmware verifies the package, stages the loader, and the unit restarts.</li>
+    <li><b>Verify:</b> use <i>Verify Flash</i> for a byte-for-byte readback.</li>
+  </ol>
+  <a class="btn pri" href="editor.html#firmware">Open installer</a>
+  <a class="btn" href="firmware/Onyx_1.19.fwsc" download>Download Onyx_1.19.fwsc</a>
+  <a class="btn" href="firmware/Onyx_1.19.bin" download>Download Onyx_1.19.bin</a>
+  <p style="color:var(--mute);font-size:.88rem">SHA-256 values are in <a href="firmware/SHA256SUMS">SHA256SUMS</a>. This is release 1.19, USB-only, with the radio disabled.</p>
+</div>
+
+<h2>Before you plug in</h2>
+<ul>
+  <li>Desktop <b>Chrome or Edge</b> only (Web MIDI with SysEx).</li>
+  <li>The unit should be on a charged battery.</li>
+  <li>Return to the original firmware any time with <i>Restore Factory Firmware</i> in the Web Editor and your backup or the official vendor <code>.fwsc</code>.</li>
+  <li>If a unit won't boot, the ROM download mode can't be disabled by bad firmware. See the <a href="https://github.com/28spawn/Pocket-Onyx/blob/main/RECOVERY.md">recovery guide</a>.</li>
+</ul>
+
+<footer>
+  <p><b>Use at your own risk.</b> Onyx is unofficial, experimental firmware provided as-is with no warranty. Flashing can brick a device and may void the manufacturer's warranty. Not affiliated with M-VAVE or Donner.</p>
+  <p><a href="https://github.com/28spawn/Pocket-Onyx">Source</a> · <a href="https://github.com/28spawn/Pocket-Onyx/blob/main/LICENSING.md">Licensing</a> · <a href="firmware/NOTICE.md">Notices</a></p>
+</footer>
+</div>
+<script>if(!navigator.requestMIDIAccess)document.getElementById('support').style.display='block'</script>
+</body>
+</html>
