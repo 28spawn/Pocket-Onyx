@@ -61,6 +61,7 @@ h2:first-child { margin-top:0; }
 .kv b { color:var(--text); font-weight:500; }
 #log { background:var(--bg); border:1px solid var(--line); border-radius:var(--r); margin-top:16px; padding:8px; height:130px; overflow:auto; font:12px/1.4 ui-monospace,Consolas,monospace; color:var(--mid); white-space:pre-wrap; }
 progress { width:100%; height:8px; }
+body.stock-mode #chain, body.stock-mode #levels, body.stock-mode #levelTitle, body.stock-mode #pPrev, body.stock-mode #pNext, body.stock-mode #pRead, body.stock-mode #pSave, body.stock-mode #pSelLabel { display:none !important; }
 </style>
 </head>
 <body>
@@ -77,9 +78,15 @@ progress { width:100%; height:8px; }
 <section id="t-chain">
   <div class="pre" style="margin-bottom:12px"><span class="big" id="pName">-</span><span class="note" id="pIdx"></span>
     <button id="pPrev">&lsaquo; prev</button><button id="pNext">next &rsaquo;</button><button id="pRead" title="Read the unit's current preset and settings now (live sync is off)">read unit</button><button id="pSave" title="CC 88: save the current sound in the current preset">save</button>
-    <label class="note">preset <select id="pSel"></select></label></div>
+    <label class="note" id="pSelLabel">preset <select id="pSel"></select></label></div>
+  <div id="stockPanel" hidden>
+    <h2>Stock firmware controls</h2>
+    <p class="note">The stock firmware does not support Onyx’s editor protocol. These controls use standard MIDI messages supported by the stock unit. Preset changes are sent without reading the current preset back.</p>
+    <div class="pre" style="margin:10px 0 16px"><button id="stockPrev">&lsaquo; previous preset</button><label class="note">preset <select id="stockProgram"></select></label><button id="stockNext">next preset &rsaquo;</button></div>
+    <h2>Stock effect toggles</h2><div class="pre" id="stockToggles"></div>
+  </div>
   <div class="chain" id="chain"></div>
-  <h2>Level</h2>
+  <h2 id="levelTitle">Level</h2>
   <div class="grid" id="levels"></div>
 </section>
 <section id="t-global" hidden><div class="grid" id="globals"></div></section>
@@ -122,7 +129,7 @@ progress { width:100%; height:8px; }
 <section id="t-fw" hidden>
   <div id="fwWarn" style="border:2px solid #e05a5a;border-radius:8px;padding:12px 14px;margin:0 0 14px">
     <div style="font-weight:700;font-size:1.05rem;color:#e05a5a">&#9888; Back up your unit's critical flash regions before you install any different firmware</div>
-    <p class="note" style="margin:6px 0">An update or a flash tool can erase what nothing can make again: the stock record log with the <b>radio calibration</b> (without it Bluetooth does not start; one run of a flash tool erased it once), the Bluetooth MAC and RF calibration (BTIF), the factory calibration (USER), <code>key_mac</code>, and the boot head. The backup is about 60 KB, takes under a minute with the amp idle, and is saved to your computer.</p>
+    <p class="note" style="margin:6px 0">An update or a flash tool can erase what nothing can make again: the stock record log with the <b>radio calibration</b> (without it Bluetooth does not start; one run of a flash tool erased it once), the Bluetooth MAC and RF calibration (BTIF), the factory calibration (USER), <code>key_mac</code>, and the boot head. The browser backup needs Onyx firmware; stock firmware does not expose its flash-read command. On stock, use the PC tool route below to dump the whole chip before flashing.</p>
     <div class="pre"><button id="fwBkBtn" class="pri" disabled>Back up the critical regions</button>
       <label class="note">or use a saved one <input type="file" id="fwBkLoad" accept=".json,.pabackup"></label></div>
     <progress id="fwBkBar" max="100" value="0" hidden></progress>
@@ -734,8 +741,8 @@ const hex = (a) => Array.from(a, (b) => b.toString(16).padStart(2, "0")).join(" 
 
 // ---- transports ----
 const MIDI_SVC = "03b80e5a-ede8-4b33-a751-6ce34ec4c700", MIDI_CHR = "7772e5db-3868-4112-a1a9-f2669d106bf3";
-let link = null, rx = [], waiter = null, state = null, names = { amp: [], cab: [], firstAmp: 20, firstCab: 20, rev: 0 }, busy = false;
-function onFrame(fr) { if (diagWait) { const d = diagParse(fr); if (d) { diagWait(d); return; } } const r = parseReply(fr); if (!r) return; if (waiter && waiter.type === r.type) { const w = waiter; waiter = null; w.res(r.data); } }
+let link = null, rx = [], waiter = null, rawWait = null, state = null, names = { amp: [], cab: [], firstAmp: 20, firstCab: 20, rev: 0 }, busy = false;
+function onFrame(fr) { if (rawWait && rawWait(fr)) return; if (diagWait) { const d = diagParse(fr); if (d) { diagWait(d); return; } } const r = parseReply(fr); if (!r) return; if (waiter && waiter.type === r.type) { const w = waiter; waiter = null; w.res(r.data); } }
 async function openMidi() {
   if (!navigator.requestMIDIAccess) throw new Error("Web MIDI is not available in this browser (use Chrome or Edge)");
   const acc = await navigator.requestMIDIAccess({ sysex: true });
@@ -779,6 +786,17 @@ const TABS = [["chain", "Chain"], ["global", "Global"], ["groove", "Groove / Sto
 const COLORS = ["#8c8c99", "#e0a030", "#ff7a1a", "#b070e0", "#5fb0e0", "#40c0a0", "#e05a8a", "#6a8cff"];
 const nav = $("tabs");
 TABS.forEach(([id, t], i) => { const b = document.createElement("button"); b.textContent = t; b.onclick = () => { TABS.forEach(([x]) => $("t-" + x).hidden = x !== id); [...nav.children].forEach((c, j) => c.className = j === i ? "sel" : ""); }; if (!i) b.className = "sel"; nav.appendChild(b); });
+function stockMode(on) {
+  document.body.classList.toggle("stock-mode", on); $("stockPanel").hidden = !on;
+  [...nav.children].forEach((b, i) => { b.hidden = on && ![0, 5].includes(i); });
+  if (on) { $("t-chain").hidden = false; $("t-fw").hidden = true; [...nav.children].forEach((b, i) => b.className = i === 0 ? "sel" : ""); }
+}
+for (let i = 0; i < 80; i++) { const o = document.createElement("option"); o.value = i; o.textContent = "P" + String(i + 1).padStart(2, "0"); $("stockProgram").appendChild(o); }
+["DYN", "AMP", "MOD", "DLY", "REV", "CAB"].forEach((name, i) => { const b = document.createElement("button"); b.textContent = "Toggle " + name; b.onclick = () => sendShort(cc(20 + i, 127)); $("stockToggles").appendChild(b); });
+function stockChooseProgram(index) { index = Math.max(0, Math.min(79, index)); $("stockProgram").value = index; sendShort(pc(index)); }
+$("stockProgram").onchange = () => stockChooseProgram(Number($("stockProgram").value));
+$("stockPrev").onclick = () => stockChooseProgram(Number($("stockProgram").value) - 1);
+$("stockNext").onclick = () => stockChooseProgram(Number($("stockProgram").value) + 1);
 
 const sendQueue = {}; let dragging = null;
 function throttled(key, fn) { clearTimeout(sendQueue[key]); sendQueue[key] = setTimeout(fn, 40); }
@@ -938,17 +956,39 @@ async function refresh() {
   if (!link || busy) return;
   try { state = decodeState(await request(80, [], 0x60)); render(); renderStore(); } catch (e) { log("state: " + e.message); }
 }
+async function identify(ms) {
+  let done; const p = new Promise((r) => { done = r; }), t = setTimeout(() => done(null), ms);
+  rawWait = (fr) => { const id = otaIdentity(fr); if (!id) return false; done(id); return true; };
+  try { await link.sendFrame(OTA_QUERY); return await p; } catch (_) { return null; } finally { clearTimeout(t); rawWait = null; }
+}
 async function connect(open) {
+  stockMode(false);
   try {
     link = await open(); link.ble = open === openBle;
     setStatus(true, "connected: " + link.name); log("connected to " + link.name);
-    await readNames(0); await readNames(1);
+    try { await readNames(0); } catch (e) {
+      if (!/^no reply/.test(e.message) || link.ble) throw e;
+      const id = await identify(1500);
+      if (id && id.text === OFFICIAL_PRODUCT && !id.ota) {
+        try {
+          const info = await request(17, [], 0x29, 1500);
+          stockMode(true); state = null; buildCode = ""; bk.status = "unknown"; bk.doc = null; bk.ident = null;
+          $("pName").textContent = "Stock firmware"; $("pIdx").textContent = "M-VAVE Pocket AMP";
+          $("fwBkInfo").textContent = "The stock firmware does not provide the flash-read command this backup needs. Use the Firmware tab's PC tool route to dump the whole chip in download mode.";
+          setStatus(true, "connected: " + link.name + " · stock MIDI mode");
+          log("stock firmware answered command 17 (" + info.length + " bytes); basic MIDI controls are ready; browser flash backup is unavailable on stock");
+          fwRefresh(); return;
+        } catch (_) { /* an identity reply alone is not enough to accept this as the MIDI control port */ }
+      }
+      throw e;
+    }
+    await readNames(1);
     try { const d = await request(81, [255, 0], 0x61); buildCode = String.fromCharCode(...d.slice(5, 5 + d[3])); log("firmware build " + buildCode); } catch (_) { buildCode = ""; }   // the pack-and-build code (own field: the OTA ID block the vendor updater reads is not touched)
     log(names.amp.filter((x) => x).length + " amp models, " + names.cab.filter((x) => x).length + " cabinets");
     await refresh();
     if (state) { const t = "P" + String(state.preset + 1).padStart(2, "0") + "  " + (state.name || "(empty)"); setStatus(true, "connected: " + link.name + (buildCode ? " (build " + buildCode + ")" : "") + "  |  " + t); toast("On the unit now: " + t); log("preset on the unit: " + t); }
   } catch (e) { log("connect: " + e.message); setStatus(false, e.message); link = null; }
-  try { await bkInit(); } catch (_) { /* the page works without it */ }
+  if (!document.body.classList.contains("stock-mode")) try { await bkInit(); } catch (_) { /* the page works without it */ }
   fwRefresh();
 }
 $("bUsb").onclick = () => connect(openMidi);
@@ -1201,6 +1241,10 @@ function bkSave(doc) {
 }
 async function bkMake() {
   if (!link || link.ble || bk.running || busy) return;
+  if (document.body.classList.contains("stock-mode")) {
+    $("fwBkInfo").textContent = "The stock firmware does not provide the flash-read command this backup needs. Use the Firmware tab's PC tool route to dump the whole chip in download mode.";
+    return;
+  }
   bk.running = true; fwRefresh(); const bar = $("fwBkBar"); bar.hidden = false; bar.value = 0;
   const total = BACKUP_RANGES.reduce((a, r) => a + r.len, 0) * 2; let done = 0;
   try {
@@ -1240,7 +1284,10 @@ const fwRefresh = () => {
   const gate = flashGate(bk.status, $("fwBkAccept").checked);
   $("fwInstall").disabled = !(idle && fwPkg && gate.allowed); $("fwRestore").disabled = !(idle && fwOrig && gate.allowed);
   $("fwInstall").title = $("fwRestore").title = gate.allowed ? "" : gate.reason;
-  $("fwAcceptRow").hidden = bk.status === "ok"; $("fwBkBtn").disabled = !(link && !link.ble && !oneRunning && !bk.running);
+  const stock = document.body.classList.contains("stock-mode");
+  $("fwAcceptRow").hidden = bk.status === "ok"; $("fwBkBtn").disabled = !(link && !link.ble && !oneRunning && !bk.running && !stock);
+  $("fwBkBtn").title = stock ? "The stock firmware does not provide the flash-read command; use the PC tool route to dump the whole chip." : "";
+  if (stock) $("fwBkInfo").textContent = "The stock firmware does not provide the flash-read command this backup needs. Use the Firmware tab's PC tool route to dump the whole chip in download mode.";
 };
 function fwPlan() {
   const el = $("fwPlan"); if (!fwImage || !fwDump) { el.textContent = "needs the firmware file and a dump file for the dry run"; return; }
