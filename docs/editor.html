@@ -60,7 +60,7 @@ h2:first-child { margin-top:0; }
 .kv { font-variant-numeric:tabular-nums; color:var(--mid); font-size:.82rem; }
 .kv b { color:var(--text); font-weight:500; }
 #log { background:var(--bg); border:1px solid var(--line); border-radius:var(--r); margin-top:16px; padding:8px; height:130px; overflow:auto; font:12px/1.4 ui-monospace,Consolas,monospace; color:var(--mid); white-space:pre-wrap; }
-progress { width:100%; height:8px; }
+progress { width:100%; height:14px; accent-color:var(--acc); }
 body.stock-mode #chain, body.stock-mode #levels, body.stock-mode #levelTitle, body.stock-mode #pPrev, body.stock-mode #pNext, body.stock-mode #pRead, body.stock-mode #pSave, body.stock-mode #pSelLabel { display:none !important; }
 </style>
 </head>
@@ -131,8 +131,10 @@ body.stock-mode #chain, body.stock-mode #levels, body.stock-mode #levelTitle, bo
     <div style="font-weight:700;font-size:1.05rem;color:#e05a5a">&#9888; Back up your unit's critical flash regions before you install any different firmware</div>
     <p class="note" style="margin:6px 0">An update or a flash tool can erase what nothing can make again: the stock record log with the <b>radio calibration</b> (without it Bluetooth does not start; one run of a flash tool erased it once), the Bluetooth MAC and RF calibration (BTIF), the factory calibration (USER), <code>key_mac</code>, and the boot head. The browser backup needs Onyx firmware; stock firmware does not expose its flash-read command. On stock, use the PC tool route below to dump the whole chip before flashing.</p>
     <div class="pre"><button id="fwBkBtn" class="pri" disabled>Back up the critical regions</button>
+      <button id="fwBkStockBtn" hidden>Try read-only stock backup</button>
       <label class="note">or use a saved one <input type="file" id="fwBkLoad" accept=".json,.pabackup"></label></div>
     <progress id="fwBkBar" max="100" value="0" hidden></progress>
+    <div class="kv" id="fwBkProgress" aria-live="polite"></div>
     <div class="kv" id="fwBkInfo">connect over USB to check for a backup of this unit</div>
     <div class="kv" id="fwCalInfo"></div>
     <label class="note" id="fwAcceptRow"><input type="checkbox" id="fwBkAccept"> I have read the warning and I accept the risk of flashing <b>without</b> a backup of this unit</label>
@@ -147,6 +149,7 @@ body.stock-mode #chain, body.stock-mode #levels, body.stock-mode #levelTitle, bo
   <div class="drop"><input type="file" id="fwOrigFile" accept=".fwsc"><div class="kv" id="fwOrigInfo">pick the unmodified <code>Pocket AMP.fwsc</code> from m-vave.com/download (it is checked by its SHA-256 and never sent anywhere)</div></div>
   <div class="pre"><button id="fwRestore" class="pri" disabled>Restore the original firmware</button><span class="note">also the way out of a stuck update: if the unit is in update mode this continues it</span></div>
   <progress id="fwBar2" max="100" value="0" hidden></progress>
+  <div class="kv" id="fwWriteProgress" aria-live="polite"></div>
   <div class="kv" id="fwOneInfo"></div>
   <details style="margin-top:18px"><summary class="note">The PC tool route (keeps stored captures and cabinets, dumps and checks the whole chip first)</summary>
     <div class="drop"><input type="file" id="fwDumpFile" accept=".bin"><div class="kv" id="fwDumpInfo">optional, instant dry run: a whole-chip dump file (<code>dump1.bin</code> from the download-mode dump, 1 MB)</div></div>
@@ -157,6 +160,7 @@ body.stock-mode #chain, body.stock-mode #levels, body.stock-mode #levelTitle, bo
   <h2>Check what the unit holds</h2>
   <div class="pre"><button id="fwVerify" disabled>Compare the unit's flash with the file</button><label class="note"><input type="checkbox" id="fwFull"> every byte (a few minutes) instead of every sector at four places (about 10 s)</label></div>
   <progress id="fwBar" max="100" value="0" hidden></progress>
+  <div class="kv" id="fwVerifyProgress" aria-live="polite"></div>
   <div class="kv" id="fwConfirm">connect over USB, pick the firmware file above, then compare.</div>
 </section>
 <div id="toast"></div>
@@ -1251,22 +1255,66 @@ async function bkMake() {
     $("fwBkInfo").textContent = "The stock firmware does not provide the flash-read command this backup needs. Use the Firmware tab's PC tool route to dump the whole chip in download mode.";
     return;
   }
-  bk.running = true; fwRefresh(); const bar = $("fwBkBar"); bar.hidden = false; bar.value = 0;
-  const total = BACKUP_RANGES.reduce((a, r) => a + r.len, 0) * 2; let done = 0;
+  bk.running = true; fwRefresh(); const bar = $("fwBkBar"), progress = $("fwBkProgress"); bar.hidden = false; bar.value = 0; progress.textContent = "Starting backup… 0%";
+  const onePass = BACKUP_RANGES.reduce((a, r) => a + r.len, 0), total = onePass * 2; let done = 0;
   try {
     $("fwBkInfo").textContent = "Reading the critical regions (the amp mutes briefly; keep it idle)...";
-    const pass = async () => { const out = []; for (const r of BACKUP_RANGES) out.push({ addr: r.addr, bytes: await flashReadRange(r.addr, r.len, (n) => { done += n; bar.value = Math.round(100 * done / total); }) }); return out; };
-    const a = await pass(), b = await pass();                     // twice: the two reads must agree byte for byte
+    const pass = async (passNo) => { const out = []; for (const r of BACKUP_RANGES) { progress.textContent = `Pass ${passNo} of 2 · reading ${r.name} · ${Math.round(100 * done / total)}%`;
+      out.push({ addr: r.addr, bytes: await flashReadRange(r.addr, r.len, (n) => { done += n; bar.value = Math.round(100 * done / total); progress.textContent = `Pass ${passNo} of 2 · ${r.name} · ${Math.round(done / 1024)} / ${Math.round(total / 1024)} KB · ${bar.value}%`; }) }); } return out; };
+    const a = await pass(1), b = await pass(2);                    // twice: the two reads must agree byte for byte
     for (let i = 0; i < a.length; i++) if (bkHex(a[i].bytes) !== bkHex(b[i].bytes)) throw new Error("the two reads of " + BACKUP_RANGES[i].name + " differ: nothing saved, try again");
     const doc = await backupDocBuild(a, { build: buildCode });
     const v = await backupDocVerify(doc); if (!v.ok) throw new Error(v.problems.join("; "));
     bk.doc = doc; bk.ident = backupDocIdentity(doc); bk.status = "ok"; bk.cal = calLogStatus(a[2].bytes);
     await bkDb("readwrite", (st) => st.put(doc, "last")); bkSave(doc);
+    bar.value = 100; progress.textContent = "Backup complete · both reads matched · file saved to Downloads · 100%";
     log("backup of the critical regions saved (" + (total / 2 / 1024).toFixed(0) + " KB, read twice, identical)"); toast("Backup saved");
-  } catch (e) { $("fwBkInfo").innerHTML = '<span class="warn">the backup stopped: ' + e.message + "</span>"; log("backup: " + e.message); bk.status = bk.doc ? bk.status : "none"; }
-  bk.running = false; bar.hidden = true; bkShow();
+  } catch (e) { progress.textContent = `Backup stopped at ${bar.value}% · ${e.message}`; $("fwBkInfo").innerHTML = '<span class="warn">the backup stopped: ' + e.message + "</span>"; log("backup: " + e.message); bk.status = bk.doc ? bk.status : "none"; }
+  bk.running = false; bkShow();
 }
 $("fwBkBtn").onclick = bkMake;
+async function bkTryStock() {
+  if (!link || link.ble || bk.running || busy || !document.body.classList.contains("stock-mode")) return;
+  const bar = $("fwBkBar"), progress = $("fwBkProgress"); bk.running = true; busy = true; fwRefresh(); bar.hidden = false; bar.value = 0;
+  progress.textContent = "Checking whether stock allows a read-only flash read… 0%";
+  try {
+    const probe = await diagCall(0x0B5000, 16, 1200);
+    if (probe.refused || probe.addr !== 0x0B5000 || probe.data.length !== 16) throw new Error("stock firmware did not return the requested flash bytes");
+    bk.stockProbeFailed = false;
+    const onePass = BACKUP_RANGES.reduce((n, r) => n + r.len, 0), total = onePass * 2; let done = 0;
+    const pass = async (passNo) => {
+      const out = [];
+      for (const r of BACKUP_RANGES) {
+        progress.textContent = "Pass " + passNo + " of 2 · reading " + r.name + " · " + bar.value + "%";
+        const bytes = new Uint8Array(r.len);
+        for (let off = 0; off < r.len; off += 16) {
+          const n = Math.min(16, r.len - off);
+          const d = r.addr === 0x0B5000 && off === 0 && passNo === 1 ? probe : await diagRead(r.addr + off, n);
+          if (d.refused || d.addr !== r.addr + off || d.data.length !== n) throw new Error("invalid flash reply at 0x" + (r.addr + off).toString(16));
+          bytes.set(d.data, off); done += n; bar.value = Math.round(100 * done / total);
+          if (done % 512 === 0 || done === total) progress.textContent = "Pass " + passNo + " of 2 · " + r.name + " · " + Math.round(done / 1024) + " / " + Math.round(total / 1024) + " KB · " + bar.value + "%";
+        }
+        out.push({ addr: r.addr, bytes });
+      }
+      return out;
+    };
+    const a = await pass(1), b = await pass(2);
+    for (let i = 0; i < a.length; i++) if (bkHex(a[i].bytes) !== bkHex(b[i].bytes)) throw new Error("the two reads of " + BACKUP_RANGES[i].name + " differ; no backup was saved");
+    const doc = await backupDocBuild(a, { build: "stock firmware · USB diagnostic read" }), v = await backupDocVerify(doc);
+    if (!v.ok) throw new Error(v.problems.join("; "));
+    bk.doc = doc; bk.ident = backupDocIdentity(doc); bk.status = "ok"; bk.cal = calLogStatus(a[2].bytes);
+    await bkDb("readwrite", (st) => st.put(doc, "last")); bkSave(doc);
+    bar.value = 100; progress.textContent = "Stock backup complete · two reads matched · saved to Downloads · 100%";
+    log("stock flash backup saved after two identical read-only passes"); toast("Backup saved");
+  } catch (e) {
+    bk.stockProbeFailed = true;
+    progress.textContent = "Stock backup stopped at " + bar.value + "% · " + e.message;
+    $("fwBkInfo").innerHTML = '<span class="warn">The stock firmware did not provide a usable flash read: ' + e.message + '. No backup was saved. Stock ROM download mode uses a mass-storage USB interface that this browser cannot claim; the PC dump tool is required for stock.</span>';
+    log("stock backup: " + e.message);
+  }
+  bk.running = false; busy = false; bkShow();
+}
+$("fwBkStockBtn").onclick = bkTryStock;
 $("fwBkAccept").onchange = () => fwRefresh();
 $("fwBkLoad").onchange = async (e) => {
   const f = e.target.files[0]; if (!f) return;
@@ -1292,8 +1340,9 @@ const fwRefresh = () => {
   $("fwInstall").title = $("fwRestore").title = gate.allowed ? "" : gate.reason;
   const stock = document.body.classList.contains("stock-mode");
   $("fwAcceptRow").hidden = bk.status === "ok"; $("fwBkBtn").disabled = !(link && !link.ble && !oneRunning && !bk.running && !stock);
+  $("fwBkStockBtn").hidden = !stock; $("fwBkStockBtn").disabled = !(link && !link.ble && !oneRunning && !bk.running && stock);
   $("fwBkBtn").title = stock ? "The stock firmware does not provide the flash-read command; use the PC tool route to dump the whole chip." : "";
-  if (stock) $("fwBkInfo").textContent = "The stock firmware does not provide the flash-read command this backup needs. Use the Firmware tab's PC tool route to dump the whole chip in download mode.";
+  if (stock && bk.status !== "ok" && !bk.stockProbeFailed) { $("fwBkInfo").textContent = "Stock firmware cannot use the normal browser backup. Try a read-only stock flash probe below; if stock refuses it, use the PC dump tool in ROM download mode."; if (!bk.running) $("fwBkProgress").textContent = "No stock backup is running."; }
 };
 function fwPlan() {
   const el = $("fwPlan"); if (!fwImage || !fwDump) { el.textContent = "needs the firmware file and a dump file for the dry run"; return; }
@@ -1382,36 +1431,39 @@ async function otaServe(l, srv, finishAddr, idleMs, onProg) {
 async function oneClick(pkg, label, kind) {                // kind: "install" | "restore"
   if (!flashGate(bk.status, $("fwBkAccept").checked).allowed) { toast("Back up the critical regions first, or accept the risk"); return; }   // the same lock as the buttons: nothing flashes around it
   if (oneRunning) return; oneRunning = true; fwRefresh();
-  const info = $("fwOneInfo"), bar = $("fwBar2"), say = (t) => { info.innerHTML = t; log(t.replace(/<[^>]+>/g, "")); }, srv = new PkgServer(pkg.image);
-  bar.hidden = false; bar.value = 0; busy = true;
+  const info = $("fwOneInfo"), bar = $("fwBar2"), progress = $("fwWriteProgress"), say = (t) => { info.innerHTML = t; log(t.replace(/<[^>]+>/g, "")); }, showProgress = (t, v) => { if (v !== undefined) bar.value = Math.max(bar.value, Math.min(100, v)); progress.textContent = `${t} · ${bar.value}%`; }, srv = new PkgServer(pkg.image);
+  bar.hidden = false; bar.value = 0; progress.textContent = "Connecting to the device… 0%"; busy = true;
   const wasLink = link; if (link && link.close) { try { link.close(); } catch (_) { /* the editor's own port: the update talks to the unit itself */ } } link = null; setStatus(false, "updating: " + label);
   try {
     const acc = await navigator.requestMIDIAccess({ sysex: true });
     let ota = null, unit = await otaFind(acc, false, 4000);
+    showProgress("Looking for the unit", 0);
     if (!unit) ota = await otaFind(acc, true, 4000);        // already in update mode (a cut-off update): continue it
     if (!unit && !ota) throw new Error("the unit did not answer (USB data cable, directly connected, no other program holding the MIDI port: close MIDIberry and other tabs)");
     if (unit) {
+      showProgress("Stage 1 of 2 · preparing the update", 0);
       say("found " + unit.id.text + ": step 1, the unit checks the package and stages the update loader...");
       if (!/^Pocket AMP/i.test(unit.id.text)) { unit.l.close(); throw new Error("this unit reports " + unit.id.text + ": it is not a Pocket AMP"); }
       unit.l.send(OTA_UPGRADE); await sleep(2000);
-      const s1 = await otaServe(unit.l, srv, OTA_VERIFY_DONE, 8000, (r) => { bar.value = Math.min(20, Math.round(20 * r.addr / pkg.image.length)); }); unit.l.close();
+      const s1 = await otaServe(unit.l, srv, OTA_VERIFY_DONE, 8000, (r) => showProgress(`Stage 1 of 2 · ${Math.min(100, Math.round(100 * r.addr / pkg.image.length))}% of package checked`, Math.min(20, Math.round(20 * r.addr / pkg.image.length)))); unit.l.close();
       if (!s1.finished) throw new Error(s1.lost ? "the unit disconnected during step 1 (" + s1.served + " requests): nothing was written" : "the unit stopped asking during step 1 (" + s1.served + " requests): nothing was written. Is it running a firmware with the update session (this build or the original)?");
-      say("step 1 done: the unit restarts into the update loader..."); await sleep(3000);
+      showProgress("Stage 1 complete · waiting for update loader", 20); say("step 1 done: the unit restarts into the update loader..."); await sleep(3000);
       ota = await otaFind(acc, true, 30000);
       if (!ota) throw new Error("the update loader did not appear. Replug the USB cable and press the button again: the unit stays in update mode until it is finished.");
     }
-    say("update loader found (" + ota.id.text + "): step 2, writing. Do not unplug.");
+    showProgress("Stage 2 of 2 · writing firmware · do not unplug", 20); say("update loader found (" + ota.id.text + "): step 2, writing. Do not unplug.");
     ota.l.send(OTA_UPGRADE); await sleep(2000);
-    const s2 = await otaServe(ota.l, srv, OTA_FINISH, 180000, (r) => { bar.value = 20 + Math.min(79, Math.round(80 * (r.addr + r.len) / pkg.image.length)); }); ota.l.close();
+    const s2 = await otaServe(ota.l, srv, OTA_FINISH, 180000, (r) => showProgress(`Stage 2 of 2 · writing · ${Math.min(100, Math.round(100 * (r.addr + r.len) / pkg.image.length))}% of package`, 20 + Math.min(79, Math.round(80 * (r.addr + r.len) / pkg.image.length)))); ota.l.close();
     if (!s2.finished) throw new Error("the loader " + (s2.lost ? "was disconnected" : "stopped asking") + " after " + s2.served + " requests. Replug the USB cable and press the button again: the write continues.");
-    bar.value = 100; say("written (" + s2.served + " blocks). The unit restarts..."); await sleep(3000);
+    bar.value = 100; showProgress("Write complete · waiting for device restart", 100); say("written (" + s2.served + " blocks). The unit restarts..."); await sleep(3000);
     const back = await otaFind(acc, false, 40000);
     if (!back) throw new Error("the unit did not come back: power-cycle it (unplug USB, then plug it in)");
     back.l.close();
+    showProgress("Firmware write complete · device restarted and answered · 100%", 100);
     say("<b>done: the unit is back (" + back.id.text + ").</b> " + (kind === "restore" ? "It runs the original firmware: this editor needs the custom one." : "Connect from the top of the page to see the build code."));
     toast(kind === "restore" ? "The original firmware is back" : "Firmware installed");
-  } catch (e) { say('<span class="warn">' + e.message + "</span>"); }
-  busy = false; bar.hidden = true; oneRunning = false; fwRefresh();
+  } catch (e) { progress.textContent = `Stopped at ${bar.value}% · ${e.message}`; say('<span class="warn">' + e.message + "</span>"); }
+  busy = false; oneRunning = false; fwRefresh();
 }
 $("fwInstall").onclick = () => {
   if (!fwPkg) return;
@@ -1437,19 +1489,25 @@ $("fwRestore").onclick = () => {
 async function fwCompare() {
   const el = $("fwConfirm"); if (!link || link.ble || !fwImage) return;
   setStatus(true, "connected: " + link.name); el.innerHTML = "Comparing the unit's flash with the file...";
-  const full = $("fwFull").checked, bad = [], bar = $("fwBar"), plain = scramble(fwImage, APP_BASE); bar.hidden = false; bar.value = 0; busy = true;
+  const full = $("fwFull").checked, bad = [], bar = $("fwBar"), progress = $("fwVerifyProgress"), plain = scramble(fwImage, APP_BASE), offsets = verifyOffsets(full), sectorCount = Math.ceil((USER_STORE_BASE - APP_BASE) / SECTOR), bytesPerSector = offsets.reduce((n, x) => n + x[1], 0), totalBytes = sectorCount * bytesPerSector;
+  let checked = 0; bar.hidden = false; bar.value = 0; progress.textContent = "Starting comparison · 0%"; busy = true;
   try {
+    let sectorNo = 0;
     for (let a = APP_BASE; a < USER_STORE_BASE; a += SECTOR) {
-      for (const [off, len] of verifyOffsets(full)) for (let o = off; o < off + len; o += 16) {
+      sectorNo++;
+      for (const [off, len] of offsets) for (let o = off; o < off + len; o += 16) {
         const got = await diagRead(a + o, 16), want = plain.subarray(a + o - APP_BASE, a + o - APP_BASE + 16);
+        checked += got.length;
         if (got.some((v, i) => v !== want[i])) { bad.push(a); o = off + len; break; }
+        if (checked % 256 === 0) { bar.value = Math.round(100 * checked / totalBytes); progress.textContent = `Comparing · sector ${sectorNo} of ${sectorCount} · ${bar.value}%`; }
       }
-      bar.value = Math.round(100 * (a - APP_BASE) / IMAGE_SIZE);
+      bar.value = Math.round(100 * Math.min(checked, totalBytes) / totalBytes); progress.textContent = `Comparing · sector ${sectorNo} of ${sectorCount} · ${bar.value}%`;
     }
+    bar.value = 100; progress.textContent = "Comparison complete · 100%";
     el.innerHTML = bad.length ? '<span class="warn">MISMATCH in ' + bad.length + " sector(s), first at 0x" + bad[0].toString(16) + ": the unit does not hold this file.</span>" : "<b>confirmed: the unit holds this firmware</b> (" + (full ? "every byte" : "every sector, checked at four places") + " compared).";
     log(bad.length ? "firmware check: mismatch" : "firmware check: confirmed");
-  } catch (e) { el.innerHTML = '<span class="warn">the check stopped: ' + e.message + "</span>"; }
-  busy = false; bar.hidden = true;
+  } catch (e) { progress.textContent = "Comparison stopped at " + bar.value + "% · " + e.message; el.innerHTML = '<span class="warn">the check stopped: ' + e.message + "</span>"; }
+  busy = false;
 }
 $("fwVerify").onclick = fwCompare;
 }
