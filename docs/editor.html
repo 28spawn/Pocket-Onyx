@@ -970,15 +970,12 @@ async function connect(open) {
       if (!/^no reply/.test(e.message) || link.ble) throw e;
       const id = await identify(1500);
       if (id && id.text === OFFICIAL_PRODUCT && !id.ota) {
-        try {
-          const info = await request(17, [], 0x29, 1500);
-          stockMode(true); state = null; buildCode = ""; bk.status = "unknown"; bk.doc = null; bk.ident = null;
-          $("pName").textContent = "Stock firmware"; $("pIdx").textContent = "M-VAVE Pocket AMP";
-          $("fwBkInfo").textContent = "The stock firmware does not provide the flash-read command this backup needs. Use the Firmware tab's PC tool route to dump the whole chip in download mode.";
-          setStatus(true, "connected: " + link.name + " · stock MIDI mode");
-          log("stock firmware answered command 17 (" + info.length + " bytes); basic MIDI controls are ready; browser flash backup is unavailable on stock");
-          fwRefresh(); return;
-        } catch (_) { /* an identity reply alone is not enough to accept this as the MIDI control port */ }
+        stockMode(true); state = null; buildCode = ""; bk.status = "unknown"; bk.doc = null; bk.ident = null;
+        $("pName").textContent = "Stock firmware"; $("pIdx").textContent = "M-VAVE Pocket AMP";
+        $("fwBkInfo").textContent = "The stock firmware does not provide the flash-read command this backup needs. Use the Firmware tab's PC tool route to dump the whole chip in download mode.";
+        setStatus(true, "connected: " + link.name + " · stock MIDI mode");
+        log("the stock firmware identity query answered; basic MIDI controls are ready; browser flash backup is unavailable on stock");
+        fwRefresh(); return;
       }
       throw e;
     }
