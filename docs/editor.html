@@ -977,7 +977,16 @@ async function connect(open) {
         log("the stock firmware identity query answered; basic MIDI controls are ready; browser flash backup is unavailable on stock");
         fwRefresh(); return;
       }
-      throw e;
+      // Some stock revisions expose the USB-MIDI endpoint and accept ordinary
+      // program-change/CC messages, but do not answer either editor SysEx or
+      // the updater identity query. Keep the selected USB link and expose only
+      // the basic controls; do not claim that the firmware was identified.
+      stockMode(true); state = null; buildCode = ""; bk.status = "unknown"; bk.doc = null; bk.ident = null;
+      $("pName").textContent = "Basic MIDI controls"; $("pIdx").textContent = "Firmware not identified";
+      $("fwBkInfo").textContent = "This firmware did not answer the editor's SysEx queries. Basic MIDI program and effect controls are available; flash backup and firmware tools require a recognized firmware.";
+      setStatus(true, "connected: " + link.name + " · basic MIDI (firmware not identified)");
+      log("no reply to editor command 81 or updater identity query; USB MIDI is open, so basic program/CC controls are enabled; firmware and flash backup are not identified");
+      fwRefresh(); return;
     }
     await readNames(1);
     try { const d = await request(81, [255, 0], 0x61); buildCode = String.fromCharCode(...d.slice(5, 5 + d[3])); log("firmware build " + buildCode); } catch (_) { buildCode = ""; }   // the pack-and-build code (own field: the OTA ID block the vendor updater reads is not touched)
